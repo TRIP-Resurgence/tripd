@@ -4,8 +4,11 @@ Modern TRIP (RFC 3219) LS routing daemon implementation
 
 ## Resources
 
+ - [RFC 1771 (1995) A Border Gateway Protocol 4 (BGP-4)](https://datatracker.ietf.org/doc/html/rfc1771)
  - [RFC 2871 (2000) A Framework for Telephony Routing over IP](https://datatracker.ietf.org/doc/html/rfc2871)
  - [RFC 3219 (2002) Telephony Routing over IP (TRIP)](https://datatracker.ietf.org/doc/html/rfc3219)
+ - [RFC 5115 (2008) Telephony Routing over IP (TRIP) Attribute for Resource Priority](https://datatracker.ietf.org/doc/html/rfc5115)
+ - [RFC 5140 (2008) A Telephony Gateway REgistration Protocol (TGREP)](https://datatracker.ietf.org/doc/html/rfc5140)
  - [Vovida Networks (2003) VOCAL](https://web.archive.org/web/20070918023126/http://www.vovida.org/downloads/vocal/1.5.0/vocal-1.5.0.tar.gz) C++98 TRIP implementation, almost lost media
  - [Columbia University TRIP implementation documentation](https://www.cs.columbia.edu/~hgs/research/projects/TRIP-LS/TRIP.html) code is lost media
  - [Cisco (2000) TRIP Tutorial at Packetizer.com](https://www.packetizer.com/voip/trip/)
