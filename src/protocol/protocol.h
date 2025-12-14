@@ -22,6 +22,7 @@
 #define _PROTOCOL_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 /* message header */
 
@@ -35,7 +36,7 @@ enum msg_type {
 typedef struct {
     uint16_t    msg_len;
     uint8_t     msg_type;
-    uint8_t     msg[];
+    uint8_t     msg_val[];
 } msg_t;
 
 
@@ -54,7 +55,7 @@ typedef struct {
 typedef struct {
     uint8_t         open_ver;
     uint8_t         open_reserved;
-    uint16_t        open_hold_time;
+    uint16_t        open_hold;
     uint32_t        open_itad;
     uint32_t        open_id;
     uint16_t        open_opts_len;
@@ -77,11 +78,10 @@ typedef struct {
 typedef struct {
     uint16_t    routetype_af;
     uint16_t    routetype_app_proto;
-} msg_open_opt_capinfo_routetype_t;
+} capinfo_routetype_t;
 
-typedef struct {
-    uint32_t    sendrecv_info;
-} msg_open_opt_capinfo_sendrecv_t;
+#define CAPINFO_SENDRECV_NULL   (uint32_t)-1
+typedef uint32_t capinfo_sendrecv_t;
 
 
 /* message UPDATE
@@ -169,7 +169,7 @@ enum app_proto {
     APP_PROTO_H323_225_0_RAS,       /* H.323-H.225.0-RAS */
     APP_PROTO_H323_225_0_ANNEXG,    /* H.323-H.225.0-Annex-G */
     /* vendor */
-    APP_PROTO_IAX = 32768
+    APP_PROTO_IAX2 = 32768          /* vendor asterisk specific IAX2 */
 };
 
 typedef struct {
@@ -179,9 +179,13 @@ typedef struct {
     char        addr[];
 } route_t;
 
+typedef route_t attr_withdrawnroutes_t[];
+
 /* attribute ReachableRoutes
  * list of unpadded routes (see above)
  */
+
+typedef route_t attr_reachableroutes_t[];
 
 /* attribute NextHopServer
  * server: host [":" port] 
@@ -190,7 +194,7 @@ typedef struct {
  */
 
 typedef struct {
-    uint32_t    nextitad;
+    uint32_t    next_itad;
     uint16_t    serverlen;
     char        server[];
 } attr_nexthopserver_t;
@@ -245,14 +249,14 @@ typedef community_t attr_communities_t[];
  * list of peer ITADs
  */
 
-typedef uint32_t attr_itad_topology_t[];
+typedef uint32_t attr_itadtopology_t[];
 
 /* attribute ConvertedRoute
  * no value
  */
 
 
-/* future RFC5115 and RFC5140 attributes here */
+/* future RFC5115 and RFC5140 attributes go here */
 
 
 /* message KEEPALIVE 
@@ -271,12 +275,12 @@ enum notif_code {
     NOTIF_CODE_CEASE
 };
 
-enum notif_code_msg_subcode {
+enum notif_subcode_msg {
     NOTIF_SUBCODE_MSG_BAD_LEN,
     NOTIF_SUBCODE_MSG_BAD_TYPE
 };
 
-enum notif_code_open_subcode {
+enum notif_subcode_open {
     NOTIF_SUBCODE_OPEN_UNSUP_VERSION,
     NOTIF_SUBCODE_OPEN_BAD_ITAD,
     NOTIF_SUBCODE_OPEN_BAD_ID,
@@ -286,7 +290,7 @@ enum notif_code_open_subcode {
     NOTIF_SUBCODE_OPEN_CAP_MISMATCH,
 };
 
-enum notif_code_update_subcode {
+enum notif_subcode_update {
     NOTIF_SUBCODE_UPDATE_MALFORM_ATTR,
     NOTIF_SUBCODE_UPDATE_UNK_WELLKNOWN_ATTR,
     NOTIF_SUBCODE_UPDATE_MISS_WELLKNOWN_ATTR,
@@ -300,6 +304,31 @@ typedef struct {
     uint8_t     notif_error_subcode;
     uint8_t     notif_data[];
 } msg_notif_t;
+
+
+/* serialization/deserialization functions */
+
+/* runtime errors */
+
+typedef enum runtime_errors_e {
+    ERROR_BUFF = -1,            /* invalid buffer */
+    ERROR_BUFFLEN = -2,         /* not enough buffer */
+    ERROR_HOLD = -3,            /* hold time must be 0 or at least 3 seconds */
+    ERROR_ITAD = -4,            /* ITAD must not be 0 (reserved) */
+} runtime_error_t;
+
+runtime_error_t new_msg_open(void *buff, size_t len, uint16_t hold,
+    uint32_t itad, uint32_t id, const capinfo_routetype_t *capinfo_routetypes,
+    size_t routetypes_size, capinfo_sendrecv_t capinfo_sendrecv);
+
+runtime_error_t new_msg_update(void *buff, size_t len,
+    const msg_update_attr_t **attrs, size_t attrs_size);
+
+runtime_error_t new_msg_keepalive(void *buff, size_t len);
+
+runtime_error_t new_msg_notification(void *buff, size_t len, uint8_t error_code,
+    uint8_t error_subcode, size_t datalen, const void *data);
+
 
 #endif /* _PROTOCOL_H */
 

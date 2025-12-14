@@ -1,6 +1,6 @@
 # trip
 
-Modern TRIP (RFC 3219) LS routing daemon implementation
+Modern TRIP (RFC 3219) LS routing daemon implementation in C99
 
 ## Resources
 
