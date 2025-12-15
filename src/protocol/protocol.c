@@ -25,6 +25,9 @@
 #include <string.h>
 
 
+/* ============================ SERIALIZATION =============================== */
+
+
 /* message OPEN */
 
 runtime_error_t
@@ -85,7 +88,7 @@ new_msg_open(void *buff, size_t len,
 
     if (capinfo_routetypes) {
         msg_open_opt_capinfo_t *opt_capinfo = end;
-        opt_capinfo->cap_code = CAP_CODE_ROUTE_TYPES;
+        opt_capinfo->cap_code = CAP_CODE_ROUTETYPE;
         opt_capinfo->cap_len = sizeof(capinfo_routetype_t) * routetypes_size;
         memcpy(opt_capinfo->cap_val, capinfo_routetypes, opt_capinfo->cap_len);
         end += capinfo_routetypes_size;
@@ -93,7 +96,7 @@ new_msg_open(void *buff, size_t len,
 
     if (capinfo_trans != CAPINFO_TRANS_NULL) {
         msg_open_opt_capinfo_t *opt_capinfo = end;
-        opt_capinfo->cap_code = CAP_CODE_SEND_RECV;
+        opt_capinfo->cap_code = CAP_CODE_TRANS;
         opt_capinfo->cap_len = sizeof(capinfo_trans_t);
         *(capinfo_trans_t*)&opt_capinfo->cap_val = capinfo_trans;
         end += capinfo_trans_size;
@@ -498,4 +501,119 @@ new_msg_notification(void *buff, size_t len,
 
     return msg_size;
 }
+
+
+/* =========================== DESERIALIZATION ============================== */
+
+/* really just validates and returns a pointer of type
+ * len: received bytes 
+ */
+
+/* message
+ * does not validate length - must be validated by specific deserializers
+ */
+
+runtime_error_t
+parse_msg(const void *buff, size_t len, const msg_t **msg_out, const void **val)
+{
+    if (len < sizeof(msg_t))
+        return ERROR_INCOMPLETE;
+
+    const msg_t *msg = buff;
+
+    if (msg->msg_type < MSG_TYPE_OPEN || msg->msg_type > MSG_TYPE_KEEPALIVE)
+        return ERROR_MSGTYPE;
+
+    *msg_out = msg;
+    *val = msg->msg_val;
+
+    return sizeof(msg_t);
+}
+
+runtime_error_t
+parse_msg_open(const void *buff, size_t len,
+    const msg_open_t **open_out, const void **opts)
+{
+    if (len < sizeof(msg_open_t))
+        return ERROR_INCOMPLETE;
+    
+    const msg_open_t *open = buff;
+
+    if (open->open_ver != 1)
+        return ERROR_VERSION;
+
+    if (open->open_hold != 0 && open->open_hold < 3)
+        return ERROR_HOLD;
+
+    if (open->open_itad == 0)
+        return ERROR_ITAD;
+
+    *open_out = open;
+    *opts = open->open_opts;
+
+    return sizeof(msg_open_t);
+}
+
+runtime_error_t
+parse_msg_open_opt(const void *buff, size_t len,
+    const msg_open_opt_t **opt_out, const void **val)
+{
+    if (len < sizeof(msg_open_opt_t))
+        return ERROR_INCOMPLETE;
+
+    const msg_open_opt_t *opt = buff;
+
+    if (opt->opt_type != OPEN_OPT_TYPE_CAPABILITY_INFO)
+        return ERROR_OPT;
+
+    *opt_out = opt;
+    *val = opt->opt_val;
+
+    return sizeof(msg_open_opt_t);
+}
+
+runtime_error_t
+parse_capinfo_t(const void *buff, size_t len,
+    const capinfo_t **capinfo_out, const void **val)
+{
+    if (len < sizeof(capinfo_t))
+        return ERROR_INCOMPLETE;
+
+    const capinfo_t *capinfo = buff;
+
+    if (capinfo->capinfo_code < CAPINFO_CODE_ROUTE_TYPES ||
+        capinfo->capinfo_code > CAPINFO_CODE_TRANS)
+    {
+        return ERROR_CAPINFOCODE;
+    }
+
+    *capinfo_out = capinfo;
+    *val = capinfo->capinfo_val;
+
+    return sizeof(capinfo_t);
+}
+
+runtime_error_t
+parse_capinfo_routetype_t(const void *buff, size_t len,
+    const capinfo_routetype_t **routetype_out)
+{
+    if (len < sizeof(capinfo_routetype_t))
+        return ERROR_INCOMPLETE;
+
+    const capinfo_routetype_t *routetype = buff;
+
+    if (routetype->routetype_af < AF_DECIMAL ||
+        routetype->routetype_af > AF_CARRIER)
+    {
+        return ERROR_AF;
+    }
+
+    if (!((routetype->routetype_app_proto >= APP_PROTO_SIP &&
+        routetype->routetype_app_proto <= APP_PROTO_H323_225_0_ANNEXG) ||
+        routetype->routetype_app_proto == APP_PROTO_IAX2))
+    {
+        return ERROR_APPPROTO;
+    }
+}
+
 

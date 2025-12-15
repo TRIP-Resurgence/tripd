@@ -27,7 +27,7 @@
 /* message header */
 
 enum msg_type {
-    MSG_TYPE_OPEN,
+    MSG_TYPE_OPEN = 1,
     MSG_TYPE_UPDATE,
     MSG_TYPE_NOTIFICATION,
     MSG_TYPE_KEEPALIVE
@@ -63,16 +63,16 @@ typedef struct {
 } msg_open_t;
 
 
-enum cap_code {
-    CAP_CODE_ROUTE_TYPES = 1,
-    CAP_CODE_SEND_RECV
+enum capinfo_code {
+    CAPINFO_CODE_ROUTETYPE = 1,
+    CAPINFO_CODE_TRANS
 };
 
 typedef struct {
-    uint16_t    cap_code;
-    uint16_t    cap_len;
-    uint8_t     cap_val[];
-} msg_open_opt_capinfo_t;
+    uint16_t    capinfo_code;
+    uint16_t    capinfo_len;
+    uint8_t     capinfo_val[];
+} capinfo_t;
 
 
 typedef struct {
@@ -339,6 +339,10 @@ typedef enum runtime_errors_e {
     ERROR_ITAD = -4,                /* ITAD must not be 0 (reserved) */
     ERROR_NOTIF_ERROR_CODE = -5,    /* invalid NOTIFICATION error code */
     ERROR_NOTIF_ERROR_SUBCODE = -6  /* invalid NOTIFICATION error subcode */
+    /* deserialization specific */
+    ERROR_INCOMPLETE = -10,         /* passed an incomplete message, recv more*/
+    ERROR_MSGTYPE = -11             /* invalid message type */
+    ERROR_VERSION = -12             /* unsupported protocol version */
 } runtime_error_t;
 
 

@@ -5,7 +5,7 @@ Modern TRIP (RFC 3219) LS routing daemon implementation in C99
 ## Design
 
  - protocol: static library for serialization and deserialization of protocol messages, thread safe static library with no allocation
- - lsfunctions: 
+ - lsfunctions: trip state machine and session management
 
 ## Resources
 
