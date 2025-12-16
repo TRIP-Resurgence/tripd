@@ -25,6 +25,52 @@
 #include <string.h>
 
 
+/* utils */
+
+#define CHECK_HOLD(x) ((x == 0) || (x < 3))
+#define CHECK_AF(x) ((x < AF_DECIMAL) || (x > AF_CARRIER))
+#define CHECK_APP_PROTO(x) (((x < APP_PROTO_SIP) \
+    || (x > APP_PROTO_H323_225_0_ANNEXG)) && \
+    (x != APP_PROTO_IAX2))
+#define CHECK_ITADPATH_TYPE(x) ((x < ITADPATH_TYPE_AP_SET) || \
+    (x > ITADPATH_TYPE_AP_SEQUENCE))
+
+int
+check_notif_error_code_subcode(uint8_t code, uint8_t subcode)
+{
+    switch (error_code) {
+    case NOTIF_CODE_ERROR_MSG:
+        if (error_subcode < NOTIF_SUBCODE_MSG_BAD_LEN ||
+            error_subcode > NOTIF_SUBCODE_MSG_BAD_TYPE)
+        {
+            return ERROR_NOTIF_ERROR_SUBCODE;
+        }
+    break;
+    case NOTIF_CODE_ERROR_OPEN:
+        if (error_subcode < NOTIF_SUBCODE_OPEN_UNSUP_VERSION ||
+            error_subcode > NOTIF_SUBCODE_OPEN_CAP_MISMATCH)
+        {
+            return ERROR_NOTIF_ERROR_SUBCODE;
+        }
+    break;
+    case NOTIF_CODE_ERROR_UPDATE:
+        if (error_subcode < NOTIF_SUBCODE_UPDATE_MALFORM_ATTR ||
+            error_subcode > NOTIF_SUBCODE_UPDATE_INVAL_ATTR)
+        {
+            return ERROR_NOTIF_ERROR_SUBCODE;
+        }
+    break;
+    case NOTIF_CODE_ERROR_EXPIRED:  /* RFC does not define subcodes for these */
+    case NOTIF_CODE_ERROR_STATE:
+    case NOTIF_CODE_CEASE:
+    break;
+    default: return ERROR_NOTIF_ERROR_CODE;
+    }
+
+    return 0;
+}
+
+
 /* ============================ SERIALIZATION =============================== */
 
 
@@ -160,19 +206,18 @@ new_attr_withdrawnroutes(void *buff, size_t len,
         return ERROR_BUFFLEN;
 
     void *end = buff;
+
+    msg_update_attr_t *attr = end;
+    attr->attr_flags = ATTR_FLAG_WELL_KNOWN | ATTR_FLAG_LSENCAP;
+    attr->attr_type = ATTR_TYPE_WITHDRAWNROUTES;
+    attr->attr_len = attr_size - sizeof(msg_update_attr_t);
+
     if (lsencap) {
-        msg_update_attr_lsencap_t *attr = end;
-        attr->attr_flags = ATTR_FLAG_WELL_KNOWN;
-        attr->attr_type = ATTR_TYPE_WITHDRAWNROUTES;
-        attr->attr_len = attr_size - sizeof(msg_update_attr_lsencap_t);
-        attr->attr_id = id;
-        attr->attr_seq = seq;
+        msg_update_attr_lsencap_t *attr_lsencap = end;
+        attr_lsencap->attr_id = id;
+        attr_lsencap->attr_seq = seq;
         end += sizeof(msg_update_attr_lsencap_t);
     } else {
-        msg_update_attr_t *attr = end;
-        attr->attr_flags = ATTR_FLAG_WELL_KNOWN | ATTR_FLAG_LSENCAP;
-        attr->attr_type = ATTR_TYPE_WITHDRAWNROUTES;
-        attr->attr_len = attr_size - sizeof(msg_update_attr_t);
         end += sizeof(msg_update_attr_t);
     }
 
@@ -459,36 +504,9 @@ new_msg_notification(void *buff, size_t len,
     if (len < msg_size)
         return ERROR_BUFFLEN;
 
-    if (error_code < NOTIF_CODE_ERROR_MSG || error_code > NOTIF_CODE_CEASE)
-
-    switch (error_code) {
-    case NOTIF_CODE_ERROR_MSG:
-        if (error_subcode < NOTIF_SUBCODE_MSG_BAD_LEN ||
-            error_subcode > NOTIF_SUBCODE_MSG_BAD_TYPE)
-        {
-            return ERROR_NOTIF_ERROR_SUBCODE;
-        }
-    break;
-    case NOTIF_CODE_ERROR_OPEN:
-        if (error_subcode < NOTIF_SUBCODE_OPEN_UNSUP_VERSION ||
-            error_subcode > NOTIF_SUBCODE_OPEN_CAP_MISMATCH)
-        {
-            return ERROR_NOTIF_ERROR_SUBCODE;
-        }
-    break;
-    case NOTIF_CODE_ERROR_UPDATE:
-        if (error_subcode < NOTIF_SUBCODE_UPDATE_MALFORM_ATTR ||
-            error_subcode > NOTIF_SUBCODE_UPDATE_INVAL_ATTR)
-        {
-            return ERROR_NOTIF_ERROR_SUBCODE;
-        }
-    break;
-    case NOTIF_CODE_ERROR_EXPIRED:  /* RFC does not define subcodes for these */
-    case NOTIF_CODE_ERROR_STATE:
-    case NOTIF_CODE_CEASE:
-    break;
-    default: return ERROR_NOTIF_ERROR_CODE;
-    }
+    int checkres = check_notif_error_code_subcode(error_code, error_subcode);
+    if (checkres)
+        return checkres;
 
     msg_t *msg = buff;
     msg->msg_len = sizeof(msg_notif_t) + datalen;
@@ -506,15 +524,16 @@ new_msg_notification(void *buff, size_t len,
 /* =========================== DESERIALIZATION ============================== */
 
 /* really just validates and returns a pointer of type
+ * does not validate length, returns consumed bytes
+ * buff: in place
  * len: received bytes 
  */
 
 /* message
- * does not validate length - must be validated by specific deserializers
  */
 
 runtime_error_t
-parse_msg(const void *buff, size_t len, const msg_t **msg_out, const void **val)
+parse_msg(const void *buff, size_t len, const msg_t **msg_out)
 {
     if (len < sizeof(msg_t))
         return ERROR_INCOMPLETE;
@@ -525,14 +544,16 @@ parse_msg(const void *buff, size_t len, const msg_t **msg_out, const void **val)
         return ERROR_MSGTYPE;
 
     *msg_out = msg;
-    *val = msg->msg_val;
 
     return sizeof(msg_t);
 }
 
+/* message OPEN
+ */
+
 runtime_error_t
 parse_msg_open(const void *buff, size_t len,
-    const msg_open_t **open_out, const void **opts)
+    const msg_open_t **open_out)
 {
     if (len < sizeof(msg_open_t))
         return ERROR_INCOMPLETE;
@@ -549,14 +570,13 @@ parse_msg_open(const void *buff, size_t len,
         return ERROR_ITAD;
 
     *open_out = open;
-    *opts = open->open_opts;
 
     return sizeof(msg_open_t);
 }
 
 runtime_error_t
 parse_msg_open_opt(const void *buff, size_t len,
-    const msg_open_opt_t **opt_out, const void **val)
+    const msg_open_opt_t **opt_out)
 {
     if (len < sizeof(msg_open_opt_t))
         return ERROR_INCOMPLETE;
@@ -567,14 +587,13 @@ parse_msg_open_opt(const void *buff, size_t len,
         return ERROR_OPT;
 
     *opt_out = opt;
-    *val = opt->opt_val;
 
     return sizeof(msg_open_opt_t);
 }
 
 runtime_error_t
 parse_capinfo_t(const void *buff, size_t len,
-    const capinfo_t **capinfo_out, const void **val)
+    const capinfo_t **capinfo_out)
 {
     if (len < sizeof(capinfo_t))
         return ERROR_INCOMPLETE;
@@ -588,7 +607,6 @@ parse_capinfo_t(const void *buff, size_t len,
     }
 
     *capinfo_out = capinfo;
-    *val = capinfo->capinfo_val;
 
     return sizeof(capinfo_t);
 }
@@ -614,6 +632,251 @@ parse_capinfo_routetype_t(const void *buff, size_t len,
     {
         return ERROR_APPPROTO;
     }
+
+    *routetype_out = routetype;
+
+    return sizeof(capinfo_routetype_t);
+}
+
+runtime_error_t
+parse_capinfo_routetype_t(const void *buff, size_t len,
+    const capinfo_trans_t **trans_out)
+{
+    if (len < sizeof(capinfo_trans_t))
+        return ERROR_INCOMPLETE;
+
+    const capinfo_trans_t *trans = buff;
+
+    if (*trans < CAPINFO_TRANS_SEND_RECV || *trans > CAPINFO_TRANS_RECV)
+        return ERROR_TRANS;
+
+    *trans_out = trans;
+
+    return sizeof(capinfo_trans_t);
+}
+
+
+/* message UPDATE
+ * list of attributes
+ */
+
+/* if returns 0, its a link-state encapsulated attribute,
+ * call parse_msg_update_attr_lsencap
+ */
+runtime_error_t
+parse_msg_update_attr(const void *buff, size_t len,
+    const msg_update_attr_t **attr_out)
+{
+    if (len < sizeof(msg_update_attr_t))
+        return ERROR_INCOMPLETE;
+    
+    const msg_update_attr_t *attr = buff;
+
+    if (attr->attr_type < ATTR_TYPE_WITHDRAWNROUTES ||
+        attr->attr_type < ATTR_TYPE_CARRIER)
+    {
+        return ERROR_ATTRTYPE;
+    }
+
+    if ((attr->attr_type < ATTR_TYPE_WITHDRAWNROUTES ||
+        attr->attr_type < ATTR_TYPE_CARRIER) &&
+        !IS_ATTR_FLAG_WELL_KNOWN(attr->flags))
+    {
+        return ERROR_ATTRFLAG;
+    }
+
+
+    *attr_out = attr;
+
+    if (IS_ATTR_FLAG_LSENCAP(attr->flags))
+        return 0;
+    else
+        return sizeof(msg_update_attr_t);
+}
+
+/* call parse_msg_update_attr() first to check attr */
+runtime_error_t
+parse_msg_update_attr_lsencap(const void *buff, size_t len,
+    const msg_update_attr_lsencap_t **attr_out)
+{
+    if (len < sizeof(msg_update_attr_lsencap_t))
+        return ERROR_INCOMPLETE;
+
+    const msg_update_attr_lsencap_t *attr = buff;
+
+    if (!IS_ATTR_FLAG_LSENCAP(attr->flags))
+        return ERROR_ATTR_FLAG_LSENCAP;
+
+    *attr_out = attr;
+
+    return sizeof(msg_update_attr_lsencap_t);
+}
+
+
+/* attributes */
+
+/* attribute WithdrawnRoutes
+ * attribute ReachableRoutes
+ */
+
+runtime_error_t
+parse_route(const void *buff, size_t len,
+    const route_t **route_out)
+{
+    if (len < sizeof(route_t))
+        return ERROR_INCOMPLETE;
+
+    const route_t *route = buff;
+
+    if (CHECK_AF(route->route_af))
+        return ERROR_AF;
+    if (CHECK_APP_PROTO(route->route_app_proto))
+        return ERROR_APP_PROTO;
+
+    *route_out = route;
+
+    return sizeof(route_t);
+}
+
+
+/* attribute AdvertisementPath
+ * attribute RoutedPath
+ */
+
+runtime_error_t
+parse_itadpath(const void *buff, size_t len,
+    const itadpath_t **itadpath_out)
+{
+    if (len < sizeof(itadpath_t))
+        return ERROR_INCOMPLETE;
+
+    const itadpath_t *itadpath = buff;
+
+    if (CHECK_ITADPATH_TYPE(itadpath->itadpath_type))
+        return ERROR_ITADPATH_TYPE;
+
+    *itadpath_out = itadpath;
+
+    return sizeof(itadpath_t);
+}
+
+
+/* attribute AtomicAggregate
+ * (empty)
+ */
+
+
+/* attribute LocalPreference
+ */
+
+runtime_error_t
+parse_attr_localpref(const void *buff, size_t len,
+    const attr_localpref_t **localpref_out)
+{
+    if (len < sizeof(attr_localpref_t))
+        return ERROR_INCOMPLETE;
+
+    *localpref_out = buff;
+
+    return sizeof(attr_localpref_t);
+}
+
+
+/* attribute MultiExitDiscriminator
+ */
+
+runtime_error_t
+parse_attr_multiexitdisc(const void *buff, size_t len,
+    const attr_multiexitdisc_t **multiexitdisc_out)
+{
+    if (len < sizeof(attr_multiexitdisc_t))
+        return ERROR_INCOMPLETE;
+
+    *multiexitdisc_out = buff;
+
+    return sizeof(attr_multiexitdisc_t);
+}
+
+
+
+/* attribute Communnity
+ * list of communities
+ */
+runtime_error_t
+parse_community(const void *buff, size_t len,
+    const community_t **community_out)
+{
+    if (len < sizeof(community_t))
+        return ERROR_INCOMPLETE;
+    
+    const community_t *community = buff;
+
+    if (community->community_itad == 0x00000000 &&
+        community->community_id != 0xffffff01)
+    {
+        return ERROR_COMMUNITY_ITAD;
+    }
+
+    *community_out = community;
+
+    return sizeof(community_t);
+}
+
+
+/* attribute ITAD Topology
+ * list of ITADs
+ */
+
+runtime_error_t
+parse_itad(const void *buff, size_t len,
+    const uint32_t **itad_out)
+{
+    if (len < sizeof(uint32_t))
+        return ERROR_INCOMPLETE;
+
+    const uint32_t *itad = buff;
+
+    if (*itad == 0)
+        return ERROR_ITAD;
+
+    *itad_out = itad;
+
+    return sizeof(uint32_t);
+}
+
+
+/* attribute ITAD Topology
+ * (empty)
+ */
+
+
+
+/* message KEEPALIVE
+ * (empty, no parser)
+ */
+
+
+/* message NOTIFICATION
+ */
+
+runtime_error_t
+parse_msg_notif(const void *buff, size_t len,
+    const msg_notif_t **notif_out, const void **data)
+{
+    if (len < sizeof(msg_notif_t))
+        return ERROR_INCOMPLETE;
+
+    const msg_notif_t *notif = buff;
+
+    int checkres = check_notif_error_code_subcode(notif->notif_error_code,
+        notif->notif_error_subcode);
+    if (checkres)
+        return checkres;
+
+    *notif_out = notif;
+    *data = notif->notif_data;
+
+    return sizeof(msg_notif_t);
 }
 
 

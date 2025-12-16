@@ -80,7 +80,13 @@ typedef struct {
     uint16_t    routetype_app_proto;
 } capinfo_routetype_t;
 
-#define CAPINFO_TRANS_NULL   (uint32_t)-1
+
+enum capinfo_trans {
+    CAPINFO_TRANS_SEND_RECV = 1,
+    CAPINFO_TRANS_SEND,
+    CAPINFO_TRANS_RECV
+};
+
 typedef uint32_t capinfo_trans_t;
 
 
@@ -188,12 +194,14 @@ typedef struct {
 
 typedef route_t attr_withdrawnroutes_t[];
 
+
 /* attribute ReachableRoutes
  * flags: well-known, [link-state encapsulation]
  * list of unpadded routes (see above)
  */
 
 typedef route_t attr_reachableroutes_t[];
+
 
 /* attribute NextHopServer
  * flags: well-known
@@ -207,6 +215,7 @@ typedef struct {
     uint16_t    nexthopserver_serverlen;
     char        nexthopserver_server[];
 } attr_nexthopserver_t;
+
 
 /* attribute AdvertisementPath
  * flags: well-known
@@ -227,6 +236,7 @@ typedef struct {
 
 typedef itadpath_t attr_advertisementpath_t;
 
+
 /* attribute RoutedPath
  * flags: well-known
  * mandatory if ReachableRoutes present
@@ -235,21 +245,25 @@ typedef itadpath_t attr_advertisementpath_t;
 
 typedef itadpath_t attr_routedpath_t;
 
+
 /* attribute AtomicAggregate
  * flags: well-known
  * no value
  */
+
 
 /* attribute LocalPreference
  */
 
 typedef uint32_t attr_localpref_t;
 
+
 /* attribute MultiExitDiscriminator
  * flags: well-known
  */
 
 typedef uint32_t attr_multiexitdisc_t;
+
 
 /* attribute Communities
  * flags: well-known, transitive
@@ -265,12 +279,14 @@ typedef struct {
 
 typedef community_t attr_communities_t[];
 
+
 /* attribute ITAD Topology
  * flags: well-known, link-state encapsulated
  * list of peer ITADs
  */
 
 typedef uint32_t attr_itadtopology_t[];
+
 
 /* attribute ConvertedRoute
  * flags: well-known
