@@ -21,9 +21,48 @@
 #ifndef _LS_PEER_SESSION_H
 #define _LS_PEER_SESSION_H
 
+#include <protocol/protocol.h>
+
+#include <sys/socket.h>
+
+
+typedef enum {
+    STATE_IDLE,
+    STATE_CONNECT,
+    STATE_ACTIVE,
+    STATE_OPENSENT,
+    STATE_OPENCONFIRM,
+    STATE_ESTABLISHED
+} session_state_t;
+
 typedef struct {
-    int fd;
-} ls_peer_session_t;
+    pthread_t           session_thread;
+    void               *session_buff;
+    session_state_t     session_state;
+    uint32_t            session_itad, session_id;
+    uint16_t            hold;
+
+    capinfo_transmode_t session_type;
+
+    struct sockaddr     session_peer_addr;
+    int                 session_fd;
+
+    uint32_t            session_peer_itad, session_peer_id;
+} session_t;
+
+
+/* sessions start with no data exchanged yet */
+
+/* initiate connection to peer */
+session_t *session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
+    const struct sockaddr *peer_addr);
+
+/* connection request received from peer */
+session_t *session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
+    capinfo_transmode_t transmode, const struct sockaddr *peer_addr, int fd);
+
+session_state_t session_get_state(const session_t *session);
+
 
 #endif /* _LS_PEER_SESSION_H */
 

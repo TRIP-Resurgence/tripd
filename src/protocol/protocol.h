@@ -24,6 +24,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+
+#define MAX_MSG_SIZE    4096
+
+
 /* message header */
 
 enum msg_type {
@@ -65,7 +69,7 @@ typedef struct {
 
 enum capinfo_code {
     CAPINFO_CODE_ROUTETYPE = 1,
-    CAPINFO_CODE_TRANS
+    CAPINFO_CODE_TRANSMODE
 };
 
 typedef struct {
@@ -81,7 +85,7 @@ typedef struct {
 } capinfo_routetype_t;
 
 
-enum capinfo_trans {
+enum capinfo_transmode {
     CAPINFO_TRANS_SEND_RECV = 1,
     CAPINFO_TRANS_SEND,
     CAPINFO_TRANS_RECV
@@ -89,7 +93,7 @@ enum capinfo_trans {
 
 #define CAPINFO_TRANS_NULL   (uint32_t)-1 /* only for serializer */
 
-typedef uint32_t capinfo_trans_t;
+typedef uint32_t capinfo_transmode_t;
 
 
 /* message UPDATE
@@ -268,7 +272,7 @@ typedef uint32_t attr_multiexitdisc_t;
 
 
 /* attribute Communities
- * flags: well-known, transitive
+ * flags: well-known, transmodeitive
  * list of communities
  */
 
@@ -374,12 +378,44 @@ typedef enum runtime_errors_e {
     ERROR_COMMUNITY_ITAD = -22      /* reserved community ITAD with bad ID */
 } runtime_error_t;
 
+extern const char *runtime_error_strs[];
 
-/* message serializers */
+
+/* objects */
+
+extern const capinfo_routetype_t supported_routetypes[];
+extern const size_t supported_routetypes_size;
+
+
+/* macros */
+
+#define PROTO_TRY(o, a) \
+    r = o; \
+    if (r < 0) { \
+        fprintf(stderr, "[DEBUG] %s:%s:%s: %s\n", \
+            __FILE__, __func__, __LINE__, runtime_error_strs[-r]); \
+        a; \
+    }
+
+#define PROTO_TRY_PARSE(o, a) \
+    r = o; \
+    if (r < 0) { \
+        if (r == ERROR_INCOMPLETE) \
+            continue; \
+        fprintf(stderr, "[DEBUG] %s:%s:%s: %s\n", \
+            __FILE__, __func__, __LINE__, runtime_error_strs[-r]); \
+        a; \
+    }
+
+
+
+/* message serializers
+ * sizes are in element count, not bytes
+ */
 
 runtime_error_t new_msg_open(void *buff, size_t len, uint16_t hold,
     uint32_t itad, uint32_t id, const capinfo_routetype_t *capinfo_routetypes,
-    size_t routetypes_size, capinfo_trans_t capinfo_trans);
+    size_t routetypes_size, capinfo_transmode_t capinfo_transmode);
 
 runtime_error_t new_msg_update(void *buff, size_t len,
     const msg_update_attr_t **attrs, size_t attrs_size);
@@ -444,8 +480,8 @@ runtime_error_t parse_capinfo_t(const void *buff, size_t len,
 runtime_error_t parse_capinfo_routetype(const void *buff, size_t len,
     const capinfo_routetype_t **routetype_out);
 
-runtime_error_t parse_capinfo_trans(const void *buff, size_t len,
-    const capinfo_trans_t **trans_out);
+runtime_error_t parse_capinfo_transmode(const void *buff, size_t len,
+    const capinfo_transmode_t **transmode_out);
 
 
 /* message UPDATE

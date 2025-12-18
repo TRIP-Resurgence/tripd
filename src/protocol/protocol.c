@@ -25,6 +25,51 @@
 #include <string.h>
 
 
+/* objects */
+
+const char *runtime_error_strs[] = {
+    "no error",
+    /* serialization and deserialization */
+    "invalid buffer",
+    "not enough buffer",
+    "hold time must be 0 or at least 3 s",
+    "ITAD must not be 0 (reserved)",
+    "invalid NOTIFICATION error code",
+    "invalid NOTIFICATION error subcode",
+    /* deserialization specific */
+    "passed an incomplete message, recv more"
+    "invalid message type",
+    "unsupported protocol version",
+    "unsupported OPEN option param",
+    "unsupported capability info code",
+    "unsupported address family",
+    "unsupported application protocol",
+    "invalid send/recv capability",
+    "unsupported attribute type",
+    "attribute should have well-known",
+    "attribute must be link-state encapsulated",
+    "unsupported ITAD path type",
+    "reserved community ITAD with bad ID"
+};
+
+const capinfo_routetype_t supported_routetypes[] = {
+    { AF_DECIMAL,   APP_PROTO_SIP },
+    { AF_DECIMAL,   APP_PROTO_H323_225_0_Q931 },
+    { AF_DECIMAL,   APP_PROTO_H323_225_0_RAS },
+    { AF_DECIMAL,   APP_PROTO_H323_225_0_ANNEXG },
+    { AF_DECIMAL,   APP_PROTO_IAX2 },
+
+    { AF_E164,      APP_PROTO_SIP },
+    { AF_E164,      APP_PROTO_H323_225_0_Q931 },
+    { AF_E164,      APP_PROTO_H323_225_0_RAS },
+    { AF_E164,      APP_PROTO_H323_225_0_ANNEXG },
+    { AF_E164,      APP_PROTO_IAX2 },
+};
+
+const size_t supported_routetypes_size = sizeof(supported_routetypes) /
+    sizeof(capinfo_routetype_t);
+
+
 /* utils */
 
 #define CHECK_HOLD(x) ((x == 0) || (x < 3))
@@ -80,23 +125,23 @@ runtime_error_t
 new_msg_open(void *buff, size_t len,
     uint16_t hold, uint32_t itad, uint32_t id,
     const capinfo_routetype_t *capinfo_routetypes, size_t routetypes_size,
-    capinfo_trans_t capinfo_trans)
+    capinfo_transmode_t capinfo_transmode)
 {
     if (!buff)
         return ERROR_BUFF;
 
-    size_t capinfo_routetypes_size = 0, capinfo_trans_size = 0,
+    size_t capinfo_routetypes_size = 0, capinfo_transmode_size = 0,
         opt_size = 0;
 
     if (capinfo_routetypes)
         capinfo_routetypes_size = sizeof(capinfo_t) +
             (sizeof(capinfo_routetype_t) * routetypes_size);
-    if (capinfo_trans != CAPINFO_TRANS_NULL)
-        capinfo_trans_size += sizeof(capinfo_t) +
-            sizeof(capinfo_trans_t);
-    if (capinfo_routetypes || capinfo_trans != CAPINFO_TRANS_NULL)
+    if (capinfo_transmode != CAPINFO_TRANS_NULL)
+        capinfo_transmode_size += sizeof(capinfo_t) +
+            sizeof(capinfo_transmode_t);
+    if (capinfo_routetypes || capinfo_transmode != CAPINFO_TRANS_NULL)
         opt_size = sizeof(msg_open_opt_t) + capinfo_routetypes_size +
-            capinfo_trans_size;
+            capinfo_transmode_size;
     size_t msg_size = sizeof(msg_t) + sizeof(msg_open_t) + opt_size;
 
     if (len < msg_size)
@@ -125,7 +170,7 @@ new_msg_open(void *buff, size_t len,
     msg_open->open_opts_len = msg_size - sizeof(msg_t) - sizeof(msg_open_t);
 
     void *end = msg_open->open_opts;
-    if (capinfo_routetypes || capinfo_trans != CAPINFO_TRANS_NULL)  {
+    if (capinfo_routetypes || capinfo_transmode != CAPINFO_TRANS_NULL)  {
         msg_open_opt_t *opt = end;
         opt->opt_type = OPEN_OPT_TYPE_CAPABILITY_INFO;
         opt->opt_len = opt_size - sizeof(msg_open_opt_t);
@@ -140,12 +185,12 @@ new_msg_open(void *buff, size_t len,
         end += capinfo_routetypes_size;
     }
 
-    if (capinfo_trans != CAPINFO_TRANS_NULL) {
+    if (capinfo_transmode != CAPINFO_TRANS_NULL) {
         capinfo_t *capinfo = end;
-        capinfo->capinfo_code = CAPINFO_CODE_TRANS;
-        capinfo->capinfo_len = sizeof(capinfo_trans_t);
-        *(capinfo_trans_t*)&capinfo->capinfo_val = capinfo_trans;
-        end += capinfo_trans_size;
+        capinfo->capinfo_code = CAPINFO_CODE_TRANSMODE;
+        capinfo->capinfo_len = sizeof(capinfo_transmode_t);
+        *(capinfo_transmode_t*)&capinfo->capinfo_val = capinfo_transmode;
+        end += capinfo_transmode_size;
     }
 
     return msg_size;
@@ -602,7 +647,7 @@ parse_capinfo_t(const void *buff, size_t len,
     const capinfo_t *capinfo = buff;
 
     if (capinfo->capinfo_code < CAPINFO_CODE_ROUTETYPE ||
-        capinfo->capinfo_code > CAPINFO_CODE_TRANS)
+        capinfo->capinfo_code > CAPINFO_CODE_TRANSMODE)
     {
         return ERROR_CAPINFO_CODE;
     }
@@ -640,20 +685,20 @@ parse_capinfo_routetype(const void *buff, size_t len,
 }
 
 runtime_error_t
-parse_capinfo_trans(const void *buff, size_t len,
-    const capinfo_trans_t **trans_out)
+parse_capinfo_transmode(const void *buff, size_t len,
+    const capinfo_transmode_t **transmode_out)
 {
-    if (len < sizeof(capinfo_trans_t))
+    if (len < sizeof(capinfo_transmode_t))
         return ERROR_INCOMPLETE;
 
-    const capinfo_trans_t *trans = buff;
+    const capinfo_transmode_t *transmode = buff;
 
-    if (*trans < CAPINFO_TRANS_SEND_RECV || *trans > CAPINFO_TRANS_RECV)
+    if (*transmode < CAPINFO_TRANS_SEND_RECV || *transmode > CAPINFO_TRANS_RECV)
         return ERROR_TRANS;
 
-    *trans_out = trans;
+    *transmode_out = transmode;
 
-    return sizeof(capinfo_trans_t);
+    return sizeof(capinfo_transmode_t);
 }
 
 
