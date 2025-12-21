@@ -20,13 +20,12 @@
 
 */
 
-#include "ls_peer_session.h"
-
-#include "util.h"
+#include "session.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include <unistd.h>
 #include <pthread.h>
@@ -157,7 +156,7 @@ connect_loop(void *arg)
 
 session_t *
 session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
-    capinfo_transmode_t transmode, const struct sockaddr *peer_addr)
+    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr)
 {
     /* allocate resources */
     session_t *session = malloc(sizeof(session_t));
@@ -167,7 +166,7 @@ session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
     session->session_itad = itad;
     session->session_id = id;
 
-    memcpy(&session->session_peer_addr, peer_addr, sizeof(struct sockaddr));
+    memcpy(&session->session_peer_addr, peer_addr, sizeof(struct sockaddr_in6));
     session->session_fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
 
     pthread_create(&session->session_thread, NULL, &connect_loop, session);
@@ -176,7 +175,7 @@ session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
 
 session_t *
 session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
-    capinfo_transmode_t transmode, const struct sockaddr *peer_addr, int fd)
+    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr, int fd)
 {
     /* allocate resources */
     session_t *session = malloc(sizeof(session_t));
@@ -186,7 +185,7 @@ session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
     session->session_itad = itad;
     session->session_id = id;
 
-    memcpy(&session->session_peer_addr, peer_addr, sizeof(struct sockaddr));
+    memcpy(&session->session_peer_addr, peer_addr, sizeof(struct sockaddr_in6));
     session->session_fd = fd;
 
     pthread_create(&session->session_thread, NULL, &session_loop, session);

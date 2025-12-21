@@ -18,36 +18,34 @@
 
 */
 
-#ifndef _MANAGER_H
-#define _MANAGER_H
+#ifndef _LOCATOR_H
+#define _LOCATOR_H
+
+#include <protocol/protocol.h>
 
 #include <netinet/in.h>
 
-#include "session.h"
-#include "locator.h"
-
 
 typedef struct {
-    pthread_t   manager_thread;
-    int         manager_fd;
+    struct sockaddr_in6     peer_addr;
+    uint32_t                peer_itad;
+    uint16_t                peer_hold;
+    capinfo_transmode_t     peer_transmode;
+} peer_t;
 
-    uint32_t    manager_itad;
-    uint32_t    manager_id;
-    locator_t  *manager_locator;
-
-    session_t **manager_sessions;
-    size_t      manager_sessions_size;
-} manager_t;
-
-/* create manager and bind socket */
-manager_t *manager_new(uint32_t itad, uint32_t id,
-    const struct sockaddr_in6 *listen_addr);
-
-/* run accept loop in thread */
-void manager_run(manager_t *manager);
-
-void manager_destroy(manager_t *manager);
+typedef struct {
+    peer_t     *locator_peers;
+    size_t      locator_peers_size;
+} locator_t;
 
 
-#endif /* _MANAGER_H */
+locator_t *locator_new();
+
+int locator_lookup(locator_t *locator, const peer_t **peer,
+    const struct sockaddr_in6 *addr);
+
+void locator_destroy(locator_t *locator);
+
+
+#endif /* _LOCATOR_H */
 

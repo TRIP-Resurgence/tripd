@@ -16,38 +16,43 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+    tripd.c: daemon
+
 */
 
-#ifndef _MANAGER_H
-#define _MANAGER_H
+#include <protocol/protocol.h>
 
-#include <netinet/in.h>
+#include <functions/locator.h>
+#include <functions/manager.h>
 
-#include "session.h"
-#include "locator.h"
+#include <stdio.h>
 
-
-typedef struct {
-    pthread_t   manager_thread;
-    int         manager_fd;
-
-    uint32_t    manager_itad;
-    uint32_t    manager_id;
-    locator_t  *manager_locator;
-
-    session_t **manager_sessions;
-    size_t      manager_sessions_size;
-} manager_t;
-
-/* create manager and bind socket */
-manager_t *manager_new(uint32_t itad, uint32_t id,
-    const struct sockaddr_in6 *listen_addr);
-
-/* run accept loop in thread */
-void manager_run(manager_t *manager);
-
-void manager_destroy(manager_t *manager);
+#include <unistd.h>
+#include <arpa/inet.h>
 
 
-#endif /* _MANAGER_H */
+int
+main(int arg, char **argv)
+{
+    printf("tripd\n");
+
+    struct sockaddr_in6 listen_addr = {
+        AF_INET6,
+        htons(PROTO_TCP_PORT),
+        0
+    };
+    inet_pton(AF_INET6, "[::1]", &listen_addr.sin6_addr);
+
+    manager_t *manager = manager_new(10, 1234, &listen_addr);
+    if (!manager)
+        return 1;
+    
+    manager_run(manager);
+
+    while (1) {
+        sleep(1000);
+    }
+
+    return 0;
+}
 

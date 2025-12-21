@@ -389,6 +389,8 @@ extern const size_t supported_routetypes_size;
 
 /* macros */
 
+#define PROTO_TCP_PORT  6069
+
 #define PROTO_TRY(o, a) \
     r = o; \
     if (r < 0) { \
