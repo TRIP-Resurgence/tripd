@@ -21,9 +21,10 @@
 #ifndef _COMMANDS_H
 #define _COMMANDS_H
 
+#include "parser.h"
 
 /* common context */
-int cmd_end(parser_t *parser, int no, const char *args);;
+int cmd_end(parser_t *parser, int no, const char *args);
 int cmd_exit(parser_t *parser, int no, const char *args);
 
 /* base context */
@@ -34,13 +35,16 @@ int cmd_show(parser_t *parser, int no, const char *args);
 /* config context */
 int cmd_config_log(parser_t *parser, int no, const char *args);
 int cmd_config_bind(parser_t *parser, int no, const char *args);
+int cmd_config_prefixlist(parser_t *parser, int no, const char *args);
 int cmd_config_trip(parser_t *parser, int no, const char *args);
+
+/* prefixlist context */
+int cmd_config_prefixlist_prefix(parser_t *parser, int no, const char *args);
 
 /* trip context */
 int cmd_config_trip_lsid(parser_t *parser, int no, const char *args);
 int cmd_config_trip_timers(parser_t *parser, int no, const char *args);
 int cmd_config_trip_peer(parser_t *parser, int no, const char *args);
-int cmd_config_trip_prefix(parser_t *parser, int no, const char *args);
 
 #endif /* _COMMANDS_H */
 

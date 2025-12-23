@@ -22,17 +22,36 @@
 
 #include <protocol/protocol.h>
 
-#include <commands/parser.h>
+#include <command/parser.h>
 
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
 
+#include <unistd.h>
 
+#define CONFIG_FILE "../tripd.conf"
 
 int
 main(int arg, char **argv)
 {
     printf("tripd\n");
 
+
+    parser_t *parser = parser_init(stdout);
+
+    /* read config */
+    parser_parse_cmd(parser, "enable");
+    parser_parse_cmd(parser, "configure");
+
+    FILE *conff = fopen(CONFIG_FILE, "r");
+    if (!conff) {
+        fprintf(stderr, "Error opening config file %s: %s\n",
+            CONFIG_FILE, strerror(errno));
+        return 1;
+    }
+    parser_parse_file(parser, conff);
+    fclose(conff);
 
     while (1) {
         sleep(1000);

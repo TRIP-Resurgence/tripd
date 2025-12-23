@@ -22,22 +22,26 @@
 
 #include "commands.h"
 
+#include <arpa/inet.h>
+
+
 int
 cmd_end(parser_t *parser, int no, const char *args)
 {
-    parser->state.state_ctx = CTX_BASE;
-    if (parser->state.state_context == CTX_BASE)
-        parser->state.state_enable = 0;
+    parser->state.ctx = CTX_BASE;
+    if (parser->state.ctx == CTX_BASE)
+        parser->state.enabled = 0;
     return 0;
 }
 
 int
 cmd_exit(parser_t *parser, int no, const char *args)
 {
-    switch (parser->state.state_context) {
-    case CTX_BASE: parser->state.state_enable = 0; break;
-    case CTX_CONFIG: parser->state.state_ctx = CTX_BASE; break;
-    case CTX_TRIP: parser->state.state_ctx = CTX_CONFIG; break;
+    switch (parser->state.ctx) {
+    case CTX_BASE: parser->state.enabled = 0; break;
+    case CTX_CONFIG: parser->state.ctx = CTX_BASE; break;
+    case CTX_PREFIXLIST: parser->state.ctx = CTX_CONFIG; break;
+    case CTX_TRIP: parser->state.ctx = CTX_CONFIG; break;
     default: return -1;
     }
     return 0;
@@ -48,13 +52,13 @@ cmd_exit(parser_t *parser, int no, const char *args)
 int
 cmd_enable(parser_t *parser, int no, const char *args)
 {
-    parser->state.state_enable = 1;
+    parser->state.enabled = 1;
 }
 
 int
 cmd_configure(parser_t *parser, int no, const char *args)
 {
-    parser->state.state_ctx = CTX_CONFIG;
+    parser->state.ctx = CTX_CONFIG;
 }
 
 int
@@ -74,13 +78,30 @@ cmd_config_log(parser_t *parser, int no, const char *args)
 int
 cmd_config_bind(parser_t *parser, int no, const char *args)
 {
-    return inet_pton(AF_INET6, args, &listen_addr.sin6_addr);
+    args = strip(args);
+    parser->listen_addr.sin6_family = AF_INET6;
+    parser->listen_addr.sin6_port = htons(PROTO_TCP_PORT);
+    return inet_pton(AF_INET6, args, &parser->listen_addr.sin6_addr);
+}
+
+int
+cmd_config_prefixlist(parser_t *parser, int no, const char *args)
+{
+    parser->state.ctx = CTX_PREFIXLIST;
 }
 
 int
 cmd_config_trip(parser_t *parser, int no, const char *args)
 {
-    
+    parser->state.ctx = CTX_TRIP;
+}
+
+/* prefix list context */
+
+int
+cmd_config_prefixlist_prefix(parser_t *parser, int no, const char *args)
+{
+
 }
 
 /* trip context */
@@ -107,9 +128,4 @@ cmd_config_trip_peer(parser_t *parser, int no, const char *args)
 
 }
 
-int
-cmd_config_trip_prefix(parser_t *parser, int no, const char *args)
-{
-
-}
 

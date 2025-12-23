@@ -16,14 +16,18 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    command.c: command parser
+    parser.c: command parser
 
 */
 
 
 #include "parser.h"
 
+#include "commands.h"
+
 #include <functions/manager.h>
+
+#include <string.h>
 
 
 /* handler function pointer type */
@@ -36,38 +40,50 @@ typedef struct {
 } cmd_def_t;
 
 /* command definitions per context */
-const cmd_def_t cmds[][] = {
-    {
-        { "end",            &cmd_end },
-        { "exit",           &cmd_exit },
-        { "enable",         &cmd_enable },
-        { "configure",      &cmd_configure },
-        { "show",           &cmd_show },
-        { NULL,             NULL }
-    },
-    {
-        { "end",            &cmd_end },
-        { "exit",           &cmd_exit },
-        { "no",             &cmd_no },
-        { "log",            &cmd_config_log },
-        { "bind-address",   &cmd_config_bind },
-        { "trip",           &cmd_config_trip },
-        { NULL,             NULL }
-    },
-    {
-        { "end",            &cmd_end },
-        { "exit",           &cmd_exit },
-        { "no",             &cmd_no },
-        { "ls-id",          &cmd_config_trip_lsid },
-        { "timers",         &cmd_config_trip_timers },
-        { "peer",           &cmd_config_trip_peer },
-        { "prefix",         &cmd_config_trip_prefix },
-        { NULL,             NULL }
-    }
+const cmd_def_t cmds_base[] = {
+    { "end",            &cmd_end },
+    { "exit",           &cmd_exit },
+    { "enable",         &cmd_enable },
+    { "configure",      &cmd_configure },
+    { "show",           &cmd_show },
+    { NULL,             NULL }
+};
+
+const cmd_def_t cmds_config[] = {
+    { "end",            &cmd_end },
+    { "exit",           &cmd_exit },
+    { "log",            &cmd_config_log },
+    { "bind-address",   &cmd_config_bind },
+    { "prefix-list",    &cmd_config_prefixlist },
+    { "trip",           &cmd_config_trip },
+    { NULL,             NULL }
+};
+
+const cmd_def_t cmds_prefixlist[] = {
+    { "end",            &cmd_end },
+    { "exit",           &cmd_exit },
+    { "prefix",         &cmd_config_prefixlist_prefix },
+    { NULL,             NULL }
+};
+
+const cmd_def_t cmds_trip[] = {
+    { "end",            &cmd_end },
+    { "exit",           &cmd_exit },
+    { "ls-id",          &cmd_config_trip_lsid },
+    { "timers",         &cmd_config_trip_timers },
+    { "peer",           &cmd_config_trip_peer },
+    { NULL,             NULL }
+};
+
+const cmd_def_t *cmds[] = {
+    cmds_base,
+    cmds_config,
+    cmds_prefixlist,
+    cmds_trip
 };
 
 
-static const char *
+const char *
 strip(const char *s)
 {
     while (*s == ' ' || *s == '\t')
@@ -77,12 +93,14 @@ strip(const char *s)
 
 
 parser_t *
-command_parser_init()
+parser_init(FILE *outf)
 {
     static parser_t parser;
 
-    parser.state.state_enabled = 0;
-    parser.state.state_ctx = CTX_BASE;
+    parser.state.enabled = 0;
+    parser.state.ctx = CTX_BASE;
+
+    parser.outf = outf;
 
     return &parser;
 }
@@ -92,11 +110,20 @@ int
 parser_parse_cmd(parser_t *parser, const char *cmd)
 {
     cmd = strip(cmd);
-    const cmd_def_t *ctx_cmds = cmds[parser->state.state_ctx];
+    if (!*cmd || *cmd == '!' || *cmd == '#')
+        return 0;
+
+    const cmd_def_t *ctx_cmds = cmds[parser->state.ctx];
+
+    int no = 0;
+    if (strcmp("no", cmd) == 0) {
+        no = 1;
+        cmd = strip(cmd + 2);
+    }
 
     for (size_t i = 0; ctx_cmds[i].cmd; i++)
-        if (strcmp(cmd, ctx_cmds[i].cmd) == 0)
-            return ctx_cmds[i].cmd_handler(parser, 0,
+        if (strncmp(cmd, ctx_cmds[i].cmd, strlen(ctx_cmds[i].cmd)) == 0)
+            return ctx_cmds[i].cmd_handler(parser, no,
                 cmd + strlen(ctx_cmds[i].cmd));
 
     fprintf(parser->outf, "[WARNING parser] unknown command: %s\n", cmd);
@@ -112,6 +139,7 @@ parser_parse_file(parser_t *parser, FILE *f)
         return -1;
 
     while (fgets(line, sizeof(line), f)) {
+        line[strlen(line) - 1] = '\0';
         parser_parse_cmd(parser, line);
     }
 

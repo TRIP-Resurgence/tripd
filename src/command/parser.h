@@ -23,28 +23,33 @@
 
 #include <functions/manager.h>
 
+#include <stdio.h>
+
 
 /* command structure */
 typedef enum {
-    CTX_BASE,   /* base context */
-    CTX_CONFIG, /* config context */
-    CTX_TRIP,   /* TRIP routing context */
+    CTX_BASE,       /* base context */
+    CTX_CONFIG,     /* config context */
+    CTX_PREFIXLIST, /* prefix list context */
+    CTX_TRIP,       /* TRIP routing context */
 } cmd_context_t;
 
 /* parser state */
 typedef struct {
-    int             state_enabled;
-    cmd_context_t   state_ctx;
+    int                 enabled;
+    cmd_context_t       ctx;
 } parser_state_t;
 
 typedef struct {
-    parser_state_t      parser_state;
+    parser_state_t      state;
     FILE               *outf;
 
-    struct sockaddr_in6 parser_listen_addr;
-    manager_t          *parser_manager;
+    struct sockaddr_in6 listen_addr;
+    manager_t          *manager;
 } parser_t;
 
+
+const char *strip(const char *s);
 
 parser_t *parser_init(FILE *outf);
 int parser_parse_cmd(parser_t *parser, const char *cmd);
