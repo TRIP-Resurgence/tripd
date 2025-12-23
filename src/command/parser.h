@@ -18,10 +18,38 @@
 
 */
 
-#ifndef _COMMAND_H
-#define _COMMAND_H
+#ifndef _PARSER_H
+#define _PARSER_H
+
+#include <functions/manager.h>
 
 
+/* command structure */
+typedef enum {
+    CTX_BASE,   /* base context */
+    CTX_CONFIG, /* config context */
+    CTX_TRIP,   /* TRIP routing context */
+} cmd_context_t;
 
-#endif /* _COMMAND_H */
+/* parser state */
+typedef struct {
+    int             state_enabled;
+    cmd_context_t   state_ctx;
+} parser_state_t;
+
+typedef struct {
+    parser_state_t      parser_state;
+    FILE               *outf;
+
+    struct sockaddr_in6 parser_listen_addr;
+    manager_t          *parser_manager;
+} parser_t;
+
+
+parser_t *parser_init(FILE *outf);
+int parser_parse_cmd(parser_t *parser, const char *cmd);
+int parser_parse_file(parser_t *parser, FILE *f);
+
+
+#endif /* _PARSER_H */
 

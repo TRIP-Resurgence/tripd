@@ -22,13 +22,10 @@
 
 #include <protocol/protocol.h>
 
-#include <functions/locator.h>
-#include <functions/manager.h>
+#include <commands/parser.h>
 
 #include <stdio.h>
 
-#include <unistd.h>
-#include <arpa/inet.h>
 
 
 int
@@ -36,18 +33,6 @@ main(int arg, char **argv)
 {
     printf("tripd\n");
 
-    struct sockaddr_in6 listen_addr = {
-        AF_INET6,
-        htons(PROTO_TCP_PORT),
-        0
-    };
-    inet_pton(AF_INET6, "[::1]", &listen_addr.sin6_addr);
-
-    manager_t *manager = manager_new(10, 1234, &listen_addr);
-    if (!manager)
-        return 1;
-    
-    manager_run(manager);
 
     while (1) {
         sleep(1000);

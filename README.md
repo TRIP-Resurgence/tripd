@@ -2,10 +2,16 @@
 
 Modern TRIP (RFC 3219) LS routing daemon implementation in C99
 
+DISCLAIMER: All code here is super untested
+
 ## Design
 
- - protocol: static library for serialization and deserialization of protocol messages, thread safe static library with no allocation
- - lsfunctions: trip state machine and session management
+Static libraries: protocol (thread safe, no alloc), lsfunctions, command
+
+ - protocol: serialization and deserialization of protocol messages
+ - lsfunctions: session manager (thread: accept loop) owns sessions (threads: state, connect|recv loop)
+ - command: command parser, owns manager
+ - tripd: daemon, inits and launches parser for config and stdin
 
 ## Resources
 
@@ -27,14 +33,14 @@ From Practical VoIP Using VOCAL
 
 ```
 Many people seem to be confused about the differences between ENUM and TRIP.
-Let’s try to clarify' these differences.
+Let’s try to clarify these differences.
 
 ENUM is an address resolution protocol that lets you translate a phone number into
 a URI. TRIP is a routing protocol that lets you obtain routing information for a par-
 ticular
 telephone number prefix. With TRIP, you discover where the next hop
-should be in y'our routing of telephone numbers. With ENUM, you discover a map-
-ping between a phone number and an IP entity'.
+should be in your routing of telephone numbers. With ENUM, you discover a map-
+ping between a phone number and an IP entity.
 
 ENUM answers the question, “Is there a URI (for example, an IP phone) associated
 with the number that the user is dialing?” The answer to this question helps avoid
