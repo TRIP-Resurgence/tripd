@@ -26,8 +26,8 @@
 
 typedef enum {
     LOG_ERROR,
-    LOG_INFO,
     LOG_WARNING,
+    LOG_INFO,
     LOG_DEBUG
 } loglevel_t;
 

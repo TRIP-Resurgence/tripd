@@ -36,7 +36,11 @@
 int
 main(int arg, char **argv)
 {
-    printf("tripd\n");
+    printf(
+        "tripd  Copyright (C) 2025  TRIP Resurgence Project\n"
+        "This program comes with ABSOLUTELY NO WARRANTY;\n"
+        "This is free software, and you are welcome to redistribute it\n"
+        "under certain conditions; type `show license' for details.\n\n");
 
     logging_init(stderr, LOG_DEBUG);
 

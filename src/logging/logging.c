@@ -26,16 +26,23 @@
 #include <string.h>
 #include <time.h>
 
+#define COLOR_MAGENTA   "\e[35m"
+#define COLOR_BLUE      "\e[94m"
+#define COLOR_YELLOW    "\e[93m"
+#define COLOR_RED       "\e[91m"
+#define COLOR_END       "\e[0m"
+
 
 static FILE *g_logf;
 static loglevel_t g_loglevel;
 
 static const char *loglevel_strs[] = {
-    "ERROR",
-    "INFO",
-    "WARNING",
-    "DEBUG"
+    COLOR_RED     "ERROR"   COLOR_END,
+    COLOR_YELLOW  "WARNING" COLOR_END,
+    COLOR_BLUE    "INFO"    COLOR_END,
+    COLOR_MAGENTA "DEBUG"   COLOR_END
 };
+
 
 
 static const char *
