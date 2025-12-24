@@ -32,6 +32,18 @@
 
 
 
+static void
+map_addr_inet_inet6(struct sockaddr_in6 *sin6, const struct sockaddr_in *sin)
+{
+    memset(&sin6->sin6_addr.s6_addr[0], 0x00, 10);  /* 80 0s */
+    memset(&sin6->sin6_addr.s6_addr[10], 0xff, 2);  /* 16 1s */
+    memcpy(&sin6->sin6_addr.s6_addr[12],            /* 32 IPv4 addr */
+        &sin->sin_addr.s_addr,
+        sizeof(in_addr_t));
+}
+
+
+
 int
 cmd_end(parser_t *parser, int no, char *args)
 {
@@ -86,10 +98,28 @@ int
 cmd_config_bind(parser_t *parser, int no, char *args)
 {
     args = strip(args);
-    parser->listen_addr.sin6_family = AF_INET6;
-    parser->listen_addr.sin6_port = htons(PROTO_TCP_PORT);
-    if (inet_pton(AF_INET6, args, &parser->listen_addr.sin6_addr) < 0) {
-        fprintf(parser->outf, "invalid bind address: %s\n", args);
+
+    /* resolve listen address */
+    struct addrinfo *listen_addrs;
+    int res = getaddrinfo(args, NULL, NULL, &listen_addrs);
+    if (res != 0) {
+        fprintf(parser->outf, "bind-address: getaddrinfo() error: %s for %s\n",
+            gai_strerror(res), args);
+        return -1;
+    }
+
+    if (listen_addrs->ai_addr->sa_family == AF_INET6) {
+        memcpy(&parser->listen_addr, listen_addrs->ai_addr,
+            listen_addrs->ai_addrlen);
+    } else if (listen_addrs->ai_addr->sa_family == AF_INET) {
+        parser->listen_addr.sin6_family = AF_INET6;
+        parser->listen_addr.sin6_port = htons(PROTO_TCP_PORT);
+        /* map IPv4 into IPv4-mapped IPv6 */
+        map_addr_inet_inet6(&parser->listen_addr,
+            (struct sockaddr_in *)listen_addrs->ai_addr);
+    } else {
+        fprintf(parser->outf, "bind-address: unsupported address family: %s\n",
+            args);
         return -1;
     }
 
@@ -178,6 +208,7 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
     char *remote_itad_arg = strtok(NULL, " ");
     char *remote_itad = strtok(NULL, " ");
 
+    /* check args */
     if (!peer || !remote_itad_arg || !remote_itad ||
         strcmp(remote_itad_arg, "remote-itad") != 0)
     {
@@ -185,6 +216,7 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
         return -1;
     }
 
+    /* resolve host */
     struct addrinfo *peer_addrs;
     int res = getaddrinfo(peer, NULL, NULL, &peer_addrs);
     if (res != 0) {
@@ -196,16 +228,13 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
     struct sockaddr_in6 peer_addr = { 0 };
 
     if (peer_addrs->ai_addr->sa_family == AF_INET6) {
-        memcpy(&peer_addr, &peer_addrs->ai_addr, peer_addrs->ai_addrlen);
+        memcpy(&peer_addr, peer_addrs->ai_addr, peer_addrs->ai_addrlen);
     } else if (peer_addrs->ai_addr->sa_family == AF_INET) {
         peer_addr.sin6_family = AF_INET6;
         peer_addr.sin6_port = htons(PROTO_TCP_PORT);
         /* map IPv4 into IPv4-mapped IPv6 */
-        memset(&peer_addr.sin6_addr.s6_addr[0], 0x00, 10);  /* 80 0s */
-        memset(&peer_addr.sin6_addr.s6_addr[10], 0xff, 2);  /* 16 1s */
-        memcpy(&peer_addr.sin6_addr.s6_addr[12],            /* 32 IPv4 addr */
-            &((struct sockaddr_in *)peer_addrs->ai_addr)->sin_addr.s_addr,
-            sizeof(in_addr_t)); 
+        map_addr_inet_inet6(&peer_addr,
+            (struct sockaddr_in *)peer_addrs->ai_addr);
     } else {
         fprintf(parser->outf, "peer: unsupported address family: %s\n", args);
         return -1;
