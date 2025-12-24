@@ -47,18 +47,18 @@ manager_loop(void *arg)
 
     while (1) {
         /* accept connection (block) */
-        int session_fd = accept(m->manager_fd, (struct sockaddr*)&peer_addr,
+        int session_fd = accept(m->fd, (struct sockaddr*)&peer_addr,
             &peer_addr_size);
         if (session_fd < 0) {
             fprintf(stderr, "[ERROR manager] could not accept peer: %s",
                 strerror(errno));
-            continue;
+            return NULL;
         }
 
         /* check that connection comes from peer, and that this peer does not
          * have an active session */
         const peer_t *peer = NULL;
-        int idx = locator_lookup(m->manager_locator, &peer, &peer_addr);
+        int idx = locator_lookup(m->locator, &peer, &peer_addr);
         if (!peer) {
             printf("[INFO manager] rejecting unknown peer connection: %s\n",
                 inet_ntop(AF_INET6, &peer_addr.sin6_addr, addr_buff,
@@ -67,7 +67,7 @@ manager_loop(void *arg)
             continue;
         }
 
-        if (m->manager_sessions[idx]) {
+        if (m->sessions[idx]) {
             printf("[INFO manager] rejecting existing peer connection: %s\n",
                 inet_ntop(AF_INET6, &peer_addr.sin6_addr, addr_buff,
                 INET6_ADDRSTRLEN));
@@ -76,38 +76,44 @@ manager_loop(void *arg)
         }
 
         /* create session (run session thread */
-        session_t *session = session_new_peer(m->manager_itad, m->manager_id,
-            peer->peer_hold, peer->peer_transmode, &peer_addr, session_fd);
+        session_t *session = session_new_peer(m->itad, m->id,
+            peer->hold, peer->transmode, &peer_addr, session_fd);
 
-        m->manager_sessions[idx] = session; /* save session */
+        m->sessions[idx] = session; /* save session */
     }
+
+    return NULL;
 }
 
 
 manager_t *
-manager_new(uint32_t itad, uint32_t id, const struct sockaddr_in6 *listen_addr)
+manager_new(const struct sockaddr_in6 *listen_addr)
 {
-    manager_t *m = malloc(sizeof(manager_t));
-    m->manager_thread = 0;
-    m->manager_itad = itad;
-    m->manager_id = id;
+    static manager_t manager = { 0 };
 
-    m->manager_locator = locator_new();
+    if (manager.itad)
+        return NULL;
 
-    m->manager_sessions = malloc(m->manager_locator->locator_peers_size *
-        sizeof(session_t*));
-    memset(m->manager_sessions, 0, m->manager_locator->locator_peers_size *
-        sizeof(session_t*));
+    manager_t *m = &manager;
+
+    m->thread = 0;
+    m->itad = 0;
+    m->id = 0;
+
+    m->locator = locator_new();
+
+    m->sessions = malloc(m->locator->peers_size * sizeof(session_t*));
+    memset(m->sessions, 0, m->locator->peers_size * sizeof(session_t*));
 
     /* create listen socket */
-    m->manager_fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
-    if (m->manager_fd < 0) {
+    m->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    if (m->fd < 0) {
         fprintf(stderr, "[ERROR manager] could not create listen socket: %s\n",
             strerror(errno));
         return NULL;
     }
 
-    if (bind(m->manager_fd, (const struct sockaddr*)listen_addr,
+    if (bind(m->fd, (const struct sockaddr*)listen_addr,
         sizeof(struct sockaddr_in6)) < 0)
     {
         fprintf(stderr, "[ERROR manager] could not bind() listen socket: %s\n",
@@ -115,7 +121,7 @@ manager_new(uint32_t itad, uint32_t id, const struct sockaddr_in6 *listen_addr)
         return NULL;
     }
 
-    if (listen(m->manager_fd, SOMAXCONN) < 0) {
+    if (listen(m->fd, SOMAXCONN) < 0) {
         fprintf(stderr,
             "[ERROR manager] could not listen() listen socket: %s\n",
             strerror(errno));
@@ -125,18 +131,46 @@ manager_new(uint32_t itad, uint32_t id, const struct sockaddr_in6 *listen_addr)
     return m;
 }
 
+
+void
+manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
+    uint32_t itad)
+{
+    locator_add(manager->locator, addr, itad, manager->hold,
+        CAPINFO_TRANS_SEND_RECV);
+    
+    if (manager->sessions_size + 1 == manager->locator->peers_size) {
+        manager->sessions = realloc(manager->sessions,
+            manager->locator->peers_size * sizeof(session_t*));
+    } else {
+        fprintf(stderr, "[WARNING manager] manager session vector "
+            "inconsistent with locator\n");
+        return;
+    }
+
+    manager->sessions[manager->sessions_size - 1] =
+        session_new_initiate(manager->itad, manager->id, manager->hold,
+            CAPINFO_TRANS_SEND_RECV, addr, itad);
+}
+
 void
 manager_run(manager_t *manager)
 {
-    pthread_create(&manager->manager_thread, NULL, &manager_loop, manager);
-    pthread_detach(manager->manager_thread);
+    pthread_create(&manager->thread, NULL, &manager_loop, manager);
+    pthread_detach(manager->thread);
+}
+
+void
+manager_stop(manager_t *manager)
+{
+    shutdown(manager->fd, SHUT_RDWR);
 }
 
 void
 manager_destroy(manager_t *manager)
 {
-    locator_destroy(manager->manager_locator);
-    free(manager->manager_sessions);
-    free(manager);
+    locator_destroy(manager->locator);
+    free(manager->sessions);
+    manager->itad = 0;
 }
 

@@ -30,6 +30,8 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#include <arpa/inet.h>
+
 
 #define DEBUG printf
 
@@ -56,11 +58,25 @@
     }
 
 
+const char *session_state_strs[] = {
+    "idle",
+    "connect",
+    "active",
+    "opensent",
+    "openconfirm",
+    "established"
+};
+
+
 static void
 session_change_state(session_t *s, session_state_t new_state)
 {
-    DEBUG("peer %d:%d changed state from %d to %d\n",
-        s->session_peer_itad, s->session_peer_id, s->session_state, new_state);
+    static char abuff[INET6_ADDRSTRLEN];
+    DEBUG("peer (%s)%d:%d changed state from %s to %s\n",
+        inet_ntop(AF_INET6, &s->session_peer_addr.sin6_addr, abuff,
+            sizeof(abuff)),
+        s->session_peer_itad, s->session_peer_id,
+        session_state_strs[s->session_state], session_state_strs[new_state]);
     s->session_state = new_state;
 }
 
@@ -156,7 +172,8 @@ connect_loop(void *arg)
 
 session_t *
 session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
-    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr)
+    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr,
+    uint32_t peer_itad)
 {
     /* allocate resources */
     session_t *session = malloc(sizeof(session_t));
@@ -165,6 +182,7 @@ session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
     session->session_transmode = transmode;
     session->session_itad = itad;
     session->session_id = id;
+    session->session_peer_itad = peer_itad;
 
     memcpy(&session->session_peer_addr, peer_addr, sizeof(struct sockaddr_in6));
     session->session_fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);

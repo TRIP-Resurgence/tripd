@@ -39,16 +39,28 @@ locator_new()
 
     g_locator = malloc(sizeof(locator_t));
     /* test peer */
-    g_locator->locator_peers = malloc(1 * sizeof(peer_t));
-    g_locator->locator_peers_size = 1;
+    g_locator->peers_capacity = 64;
+    g_locator->peers = malloc(g_locator->peers_capacity * sizeof(peer_t));
+    g_locator->peers_size = 0;
 
-    peer_t testpeer = { 0 };
-    inet_pton(AF_INET6, "[::1]", &testpeer.peer_addr);
-    testpeer.peer_itad = 10;
-    testpeer.peer_hold = 480;
-
-    memcpy(g_locator->locator_peers, &testpeer, sizeof(testpeer));
     return g_locator;
+}
+
+void
+locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
+    uint32_t itad, uint16_t hold, capinfo_transmode_t transmode)
+{
+    if (locator->peers_size + 1 > locator->peers_capacity) {
+        locator->peers_capacity *= 2;
+        locator->peers = realloc(locator->peers,
+            locator->peers_capacity * sizeof(peer_t));
+    }
+
+    peer_t *peer = &locator->peers[locator->peers_size++];
+    memcpy(&peer->addr, addr, sizeof(struct sockaddr_in6));
+    peer->itad = itad;
+    peer->hold = hold;
+    peer->transmode = transmode;
 }
 
 int
@@ -57,13 +69,14 @@ locator_lookup(locator_t *locator, const peer_t **peer,
 {
     peer_t *p = NULL;
     size_t i = 0;
-    for (; i < locator->locator_peers_size; i++)
+    for (; i < locator->peers_size; i++) {
         if (memcmp(&addr->sin6_addr,
-            &locator->locator_peers[i].peer_addr.sin6_addr,
+            &locator->peers[i].addr.sin6_addr,
             sizeof(addr->sin6_addr)) == 0)
         {
-            p = &locator->locator_peers[i];
+            p = &locator->peers[i];
         }
+    }
 
     *peer = p;
     return p ? (int)i : -1;

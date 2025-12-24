@@ -24,27 +24,27 @@
 #include "parser.h"
 
 /* common context */
-int cmd_end(parser_t *parser, int no, const char *args);
-int cmd_exit(parser_t *parser, int no, const char *args);
+int cmd_end(parser_t *parser, int no, char *args);
+int cmd_exit(parser_t *parser, int no, char *args);
 
 /* base context */
-int cmd_enable(parser_t *parser, int no, const char *args);
-int cmd_configure(parser_t *parser, int no, const char *args);
-int cmd_show(parser_t *parser, int no, const char *args);
+int cmd_enable(parser_t *parser, int no, char *args);
+int cmd_configure(parser_t *parser, int no, char *args);
+int cmd_show(parser_t *parser, int no, char *args);
 
 /* config context */
-int cmd_config_log(parser_t *parser, int no, const char *args);
-int cmd_config_bind(parser_t *parser, int no, const char *args);
-int cmd_config_prefixlist(parser_t *parser, int no, const char *args);
-int cmd_config_trip(parser_t *parser, int no, const char *args);
+int cmd_config_log(parser_t *parser, int no, char *args);
+int cmd_config_bind(parser_t *parser, int no, char *args);
+int cmd_config_prefixlist(parser_t *parser, int no, char *args);
+int cmd_config_trip(parser_t *parser, int no, char *args);
 
 /* prefixlist context */
-int cmd_config_prefixlist_prefix(parser_t *parser, int no, const char *args);
+int cmd_config_prefixlist_prefix(parser_t *parser, int no, char *args);
 
 /* trip context */
-int cmd_config_trip_lsid(parser_t *parser, int no, const char *args);
-int cmd_config_trip_timers(parser_t *parser, int no, const char *args);
-int cmd_config_trip_peer(parser_t *parser, int no, const char *args);
+int cmd_config_trip_lsid(parser_t *parser, int no, char *args);
+int cmd_config_trip_timers(parser_t *parser, int no, char *args);
+int cmd_config_trip_peer(parser_t *parser, int no, char *args);
 
 #endif /* _COMMANDS_H */
 

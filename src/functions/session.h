@@ -56,8 +56,9 @@ typedef struct {
 /* sessions start with no data exchanged yet */
 
 /* initiate connection to peer */
-session_t * session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
-    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr);
+session_t *session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
+    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr,
+    uint32_t peer_itad);
 
 /* connection request received from peer */
 session_t *session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,

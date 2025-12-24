@@ -31,7 +31,7 @@
 
 
 /* handler function pointer type */
-typedef int(*cmd_handler_t)(parser_t *parser, int no, const char *args);
+typedef int(*cmd_handler_t)(parser_t *parser, int no, char *args);
 
 /* command definition type */
 typedef struct {
@@ -83,8 +83,8 @@ const cmd_def_t *cmds[] = {
 };
 
 
-const char *
-strip(const char *s)
+char *
+strip(char *s)
 {
     while (*s == ' ' || *s == '\t')
         s++;
@@ -107,7 +107,7 @@ parser_init(FILE *outf)
 
 
 int
-parser_parse_cmd(parser_t *parser, const char *cmd)
+parser_parse_cmd(parser_t *parser, char *cmd)
 {
     cmd = strip(cmd);
     if (!*cmd || *cmd == '!' || *cmd == '#')
@@ -121,12 +121,18 @@ parser_parse_cmd(parser_t *parser, const char *cmd)
         cmd = strip(cmd + 2);
     }
 
+    /* TODO: no support */
+    if (no) {
+        fprintf(parser->outf, "command `no` currently unsupported\n");
+        return -1;
+    }
+
     for (size_t i = 0; ctx_cmds[i].cmd; i++)
         if (strncmp(cmd, ctx_cmds[i].cmd, strlen(ctx_cmds[i].cmd)) == 0)
             return ctx_cmds[i].cmd_handler(parser, no,
                 cmd + strlen(ctx_cmds[i].cmd));
 
-    fprintf(parser->outf, "[WARNING parser] unknown command: %s\n", cmd);
+    fprintf(parser->outf, "unknown command: %s\n", cmd);
     return -1;
 }
 

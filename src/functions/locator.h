@@ -27,20 +27,26 @@
 
 
 typedef struct {
-    struct sockaddr_in6     peer_addr;
-    uint32_t                peer_itad;
-    uint16_t                peer_hold;
-    capinfo_transmode_t     peer_transmode;
+    struct sockaddr_in6     addr;
+    uint32_t                itad;
+    uint16_t                hold;
+    capinfo_transmode_t     transmode;
 } peer_t;
 
 typedef struct {
-    peer_t     *locator_peers;
-    size_t      locator_peers_size;
+    peer_t     *peers;
+    size_t      peers_size, peers_capacity;
 } locator_t;
 
 
+/* initialize singleton locator known peer list */
 locator_t *locator_new();
 
+/* add a peer */
+void locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
+    uint32_t itad, uint16_t hold, capinfo_transmode_t transmode);
+
+/* lookup by address */
 int locator_lookup(locator_t *locator, const peer_t **peer,
     const struct sockaddr_in6 *addr);
 

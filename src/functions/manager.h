@@ -28,23 +28,28 @@
 
 
 typedef struct {
-    pthread_t   manager_thread;
-    int         manager_fd;
+    pthread_t   thread;
+    int         fd;
 
-    uint32_t    manager_itad;
-    uint32_t    manager_id;
-    locator_t  *manager_locator;
+    uint32_t    itad;
+    uint32_t    id;
+    uint16_t    hold;
+    locator_t  *locator;
 
-    session_t **manager_sessions;
-    size_t      manager_sessions_size;
+    session_t **sessions;
+    size_t      sessions_size;
 } manager_t;
 
 /* create manager and bind socket */
-manager_t *manager_new(uint32_t itad, uint32_t id,
-    const struct sockaddr_in6 *listen_addr);
+manager_t *manager_new(const struct sockaddr_in6 *listen_addr);
+
+void manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
+    uint32_t itad);
 
 /* run accept loop in thread */
 void manager_run(manager_t *manager);
+
+void manager_stop(manager_t *manager);
 
 void manager_destroy(manager_t *manager);
 

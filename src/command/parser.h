@@ -38,6 +38,8 @@ typedef enum {
 typedef struct {
     int                 enabled;
     cmd_context_t       ctx;
+
+    uint32_t            itad; /* trip context itad */
 } parser_state_t;
 
 typedef struct {
@@ -49,10 +51,10 @@ typedef struct {
 } parser_t;
 
 
-const char *strip(const char *s);
+char *strip(char *s);
 
 parser_t *parser_init(FILE *outf);
-int parser_parse_cmd(parser_t *parser, const char *cmd);
+int parser_parse_cmd(parser_t *parser, char *cmd);
 int parser_parse_file(parser_t *parser, FILE *f);
 
 
