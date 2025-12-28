@@ -46,8 +46,9 @@
     }
 
 #define SOCK_TRY_RECV(fd, buff, type, action) \
+    toread = sizeof(type); \
     while (1) { \
-        res = recv(fd, buff, sizeof(type), 0); \
+        res = recv(fd, buff, toread, 0); \
         if (res < 0) { \
             ERROR("recv(): %s", strerror(errno)); \
             action; break; \
@@ -55,8 +56,11 @@
             DEBUG("connection closed by peer"); \
             action; break; \
         } else if (res < sizeof(type)) { \
+            buff += res; break; \
+            toread -= res; \
             continue; \
         } \
+        toread -= res; \
         buff += res; break; \
     }
 
@@ -82,6 +86,14 @@ session_str(session_t *s)
     return str;
 }
 
+static const char *
+id_str(uint32_t id)
+{
+    static char idbuff[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &id, idbuff, sizeof(idbuff));
+    return idbuff;
+}
+
 static void
 session_change_state(session_t *s, session_state_t new_state)
 {
@@ -95,7 +107,7 @@ session_loop(void *arg)
 {
     session_t *s = arg;
 
-    int r = 0;
+    int res = 0, toread = 0;
 
     /* send OPEN */
     PROTO_TRY(
@@ -103,29 +115,52 @@ session_loop(void *arg)
             s->session_hold, s->session_itad, s->session_id,
             supported_routetypes, supported_routetypes_size,
             s->session_transmode),
-        goto proto_error
+        res, goto proto_error
     );
 
     SOCK_TRY_SEND(
-        send(s->session_fd, s->session_buff, r, 0) < 0,
+        send(s->session_fd, s->session_buff, res, 0) < 0,
         goto sock_error
     );
     session_change_state(s, STATE_OPENSENT);
 
-    int res = 0;
     while (1) {
         void *recv_wnd = s->session_buff;
-        /* receive message */
+        /* receive and decode message header */
         SOCK_TRY_RECV(s->session_fd, recv_wnd, msg_t, goto sock_error);
 
         const msg_t *msg = NULL;
         PROTO_TRY(
-            parse_msg(s->session_buff, r, &msg),
-            goto proto_error
+            parse_msg(s->session_buff, res, &msg),
+            res, goto proto_error
         );
 
         DEBUG("received msg: %s[%d]", msg_type_strs[msg->msg_type],
             msg->msg_len);
+
+        switch (msg->msg_type) {
+        case MSG_TYPE_OPEN: {
+            SOCK_TRY_RECV(s->session_fd, recv_wnd, msg_open_t, goto sock_error);
+
+            const msg_open_t *open = NULL;
+            PROTO_TRY(
+                parse_msg_open(msg->msg_val, res, &open),
+                res, goto proto_error
+            );
+
+            DEBUG("OPEN(ver %d, hold %d, itad %d, id %s, opts len %d)",
+                open->open_ver, open->open_hold, open->open_itad,
+                id_str(open->open_id), open->open_opts_len);
+
+
+        } break;
+        case MSG_TYPE_UPDATE: {
+        } break;
+        case MSG_TYPE_NOTIFICATION: {
+        } break;
+        case MSG_TYPE_KEEPALIVE: {
+        } break;
+        }
 
         /* flush and continue */
         res = recv(s->session_fd, s->session_buff, MAX_MSG_SIZE, 0);
@@ -142,15 +177,27 @@ session_loop(void *arg)
 
 proto_error:
     uint8_t subcode = 0;
-    switch (r) {
+    switch (res) {
         case ERROR_MSGTYPE: subcode = NOTIF_SUBCODE_MSG_BAD_TYPE; break;
+        case ERROR_VERSION: subcode = NOTIF_SUBCODE_OPEN_UNSUP_VERSION; break;
+        case ERROR_ITAD: subcode = NOTIF_SUBCODE_OPEN_BAD_ITAD; break;
+        case ERROR_OPT: subcode = NOTIF_SUBCODE_OPEN_UNSUP_OPT; break;
+        case ERROR_HOLD: subcode = NOTIF_SUBCODE_OPEN_BAD_HOLD; break;
+        case ERROR_CAPINFO_CODE: subcode = NOTIF_SUBCODE_OPEN_UNSUP_CAP; break;
     }
 
-    PROTO_TRY(
-        new_msg_notification(s->session_buff, MAX_MSG_SIZE,
-            NOTIF_CODE_ERROR_MSG, subcode, 0, NULL),
-        goto proto_error
-    );
+    if (subcode) {
+        PROTO_TRY(
+            new_msg_notification(s->session_buff, MAX_MSG_SIZE,
+                NOTIF_CODE_ERROR_MSG, subcode, 0, NULL),
+            res, goto sock_error
+        );
+
+        SOCK_TRY_SEND(
+            send(s->session_fd, s->session_buff, res, 0) < 0,
+            goto sock_error
+        );
+    }
 
 sock_error:
     close(s->session_fd);
@@ -202,6 +249,7 @@ session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
     session->session_transmode = transmode;
     session->session_itad = itad;
     session->session_id = id;
+    session->session_hold = hold;
     session->session_peer_itad = peer_itad;
     session->session_peer_id = 0;
 
@@ -228,6 +276,7 @@ session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
     session->session_transmode = transmode;
     session->session_itad = itad;
     session->session_id = id;
+    session->session_hold = hold;
     session->session_peer_itad = peer_itad;
     session->session_peer_id = 0;
 

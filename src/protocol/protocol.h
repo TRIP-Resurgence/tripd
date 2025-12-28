@@ -443,10 +443,10 @@ extern const size_t supported_routetypes_size;
 #define PROTO_TCP_PORT  6069
 
 /** \brief Try-Catch macro for serialization/deserialization functions */
-#define PROTO_TRY(o, a) \
-    r = o; \
-    if (r < 0) { \
-        ERROR("protocol error: %s", runtime_error_strs[-r]); \
+#define PROTO_TRY(o, res, a) \
+    res = o; \
+    if (res < 0) { \
+        ERROR("protocol error: %s", runtime_error_strs[-res]); \
         a; \
     }
 
