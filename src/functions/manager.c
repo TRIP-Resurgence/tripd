@@ -41,6 +41,22 @@
 
 #define _COMPONENT_ "manager"
 
+static const char *
+sockaddr_str(const struct sockaddr *sa)
+{
+    static char addr_buff[INET6_ADDRSTRLEN];
+    switch (sa->sa_family) {
+    case AF_INET6:
+        inet_ntop(AF_INET6, &((struct sockaddr_in6 *)sa)->sin6_addr, addr_buff,
+            INET6_ADDRSTRLEN);
+    break;
+    case AF_INET:
+        inet_ntop(AF_INET, &((struct sockaddr_in *)sa)->sin_addr, addr_buff,
+            INET_ADDRSTRLEN);
+    break;
+    }
+    return addr_buff;
+}
 
 static void *
 manager_loop(void *arg)
@@ -48,8 +64,7 @@ manager_loop(void *arg)
     manager_t *m = arg;
 
     struct sockaddr_in6 peer_addr = { 0 };
-    socklen_t peer_addr_size = 0;
-    char addr_buff[INET6_ADDRSTRLEN];
+    socklen_t peer_addr_size = sizeof(struct sockaddr_in6);
 
     while (1) {
         /* accept connection (block) */
@@ -66,16 +81,14 @@ manager_loop(void *arg)
         int idx = locator_lookup(m->locator, &peer, &peer_addr);
         if (!peer) {
             INFO("rejecting unknown peer connection: %s",
-                inet_ntop(AF_INET6, &peer_addr.sin6_addr, addr_buff,
-                INET6_ADDRSTRLEN));
+                sockaddr_str((struct sockaddr *)&peer_addr));
             close(session_fd);
             continue;
         }
 
         if (m->sessions[idx]) {
             INFO("rejecting existing peer connection: %s",
-                inet_ntop(AF_INET6, &peer_addr.sin6_addr, addr_buff,
-                INET6_ADDRSTRLEN));
+                sockaddr_str((struct sockaddr *)&peer_addr));
             close(session_fd);
             continue;
         }

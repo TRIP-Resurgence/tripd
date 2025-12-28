@@ -25,6 +25,7 @@
 #include "commands.h"
 
 #include <logging/logging.h>
+#include <util/util.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -34,19 +35,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-
-
-
-static void
-map_addr_inet_inet6(struct sockaddr_in6 *sin6, const struct sockaddr_in *sin)
-{
-    memset(&sin6->sin6_addr.s6_addr[0], 0x00, 10);  /* 80 0s */
-    memset(&sin6->sin6_addr.s6_addr[10], 0xff, 2);  /* 16 1s */
-    memcpy(&sin6->sin6_addr.s6_addr[12],            /* 32 IPv4 addr */
-        &sin->sin_addr.s_addr,
-        sizeof(in_addr_t));
-}
-
 
 
 int

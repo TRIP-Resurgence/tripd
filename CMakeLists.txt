@@ -10,15 +10,18 @@ file(GLOB PROTOCOL_SRC "src/protocol/*.c")
 file(GLOB FUNCTIONS_SRC "src/functions/*.c")
 file(GLOB COMMAND_SRC "src/command/*.c")
 file(GLOB LOGGING_SRC "src/logging/*.c")
+file(GLOB UTIL_SRC "src/util/*.c")
 file(GLOB TRIPD_SRC "src/tripd/*.c")
 
 add_library(logging STATIC ${LOGGING_SRC})
+
+add_library(util STATIC ${UTIL_SRC})
 
 add_library(protocol STATIC ${PROTOCOL_SRC})
 target_link_libraries(protocol logging)
 
 add_library(functions STATIC ${FUNCTIONS_SRC})
-target_link_libraries(functions protocol logging)
+target_link_libraries(functions protocol logging util)
 
 add_library(command STATIC ${COMMAND_SRC})
 target_link_libraries(command functions logging)

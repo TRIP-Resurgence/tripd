@@ -25,6 +25,7 @@
 #include "session.h"
 
 #include <logging/logging.h>
+#include <util/util.h>
 
 #include <string.h>
 #include <stdlib.h>
