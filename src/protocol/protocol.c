@@ -58,6 +58,35 @@ const char *capinfo_transmode_strs[] = {
     "CAPINFO_TRANS_RECV"
 };
 
+const char *af_strs[] = {
+    "nil",
+    "decimal",
+    "pentadecimal",
+    "E.164",
+    "trunkgroup",
+    "carrier"
+};
+
+
+
+
+const char *
+app_proto_str(int app_proto)
+{
+    static const char *app_proto_strs[] = {
+        "SIP",
+        "H.323-H.225.0-Q.931",
+        "H.323-H.225.0-RAS",
+        "H.323-H.225.0-Annex-G",
+    };
+
+    if (app_proto >= APP_PROTO_SIP && app_proto <= APP_PROTO_H323_225_0_ANNEXG)
+        return app_proto_strs[app_proto - 1];
+    else if (app_proto == APP_PROTO_IAX2)
+        return "IAX2";
+    else return "invalid";
+}
+
 
 const char *runtime_error_strs[] = {
     "no error",
@@ -670,7 +699,7 @@ parse_msg_open_opt(const void *buff, size_t len,
 }
 
 runtime_error_t
-parse_capinfo_t(const void *buff, size_t len,
+parse_capinfo(const void *buff, size_t len,
     const capinfo_t **capinfo_out)
 {
     if (len < sizeof(capinfo_t))

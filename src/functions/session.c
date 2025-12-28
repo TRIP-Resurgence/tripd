@@ -152,7 +152,97 @@ session_loop(void *arg)
                 open->open_ver, open->open_hold, open->open_itad,
                 id_str(open->open_id), open->open_opts_len);
 
+            size_t opts_toread = open->open_opts_len;
+            const void *opt_cur = open->open_opts;
+            while (opts_toread) {
+                SOCK_TRY_RECV(s->session_fd, recv_wnd, msg_open_opt_t,
+                    goto sock_error);
 
+                const msg_open_opt_t *opt = NULL;
+                PROTO_TRY(
+                    parse_msg_open_opt(opt_cur, res, &opt),
+                    res, goto proto_error
+                );
+
+                opts_toread -= res;
+
+                DEBUG(" option: %s[%d]", open_opt_type_strs[opt->opt_type],
+                    opt->opt_len);
+
+                switch (opt->opt_type) {
+                case OPEN_OPT_TYPE_CAPABILITY_INFO: {
+                    size_t capinfos_toread = opt->opt_len;
+                    const void *capinfo_cur = opt->opt_val;
+                    while (capinfos_toread) {
+                        SOCK_TRY_RECV(s->session_fd, recv_wnd, capinfo_t,
+                            goto sock_error);
+
+                        const capinfo_t *capinfo = NULL;
+                        PROTO_TRY(
+                            parse_capinfo(capinfo_cur, res, &capinfo),
+                            res, goto proto_error
+                        );
+
+                        opts_toread -= res;
+                        capinfos_toread -= res;
+
+                        DEBUG("  capability info: %s[%d]",
+                            capinfo_code_strs[capinfo->capinfo_code],
+                            capinfo->capinfo_len);
+
+
+                        switch (capinfo->capinfo_code) {
+                        case CAPINFO_CODE_ROUTETYPE: {
+                            size_t routetypes_toread = capinfo->capinfo_len;
+                            const void *routetype_cur = capinfo->capinfo_val;
+                            while (routetypes_toread) {
+                                SOCK_TRY_RECV(s->session_fd, recv_wnd,
+                                    capinfo_routetype_t, goto sock_error);
+
+                                const capinfo_routetype_t *routetype = NULL;
+                                PROTO_TRY(
+                                    parse_capinfo_routetype(routetype_cur, res,
+                                        &routetype),
+                                    res, goto proto_error
+                                );
+
+
+                                routetype_cur += res;
+                                opts_toread -= res;
+                                capinfos_toread -= res;
+                                routetypes_toread -= res;
+
+                                DEBUG("   route type: %s:%s",
+                                    af_strs[routetype->routetype_af],
+                                    app_proto_str(routetype->routetype_app_proto));
+                            }
+                        } break;
+                        case CAPINFO_CODE_TRANSMODE: {
+                            SOCK_TRY_RECV(s->session_fd, recv_wnd,
+                                capinfo_transmode_t, goto sock_error);
+
+                            const capinfo_transmode_t *transmode = NULL;
+                            PROTO_TRY(
+                                parse_capinfo_transmode(capinfo->capinfo_val,
+                                    res, &transmode),
+                                res, goto proto_error
+                            );
+
+                            opts_toread -= res;
+                            capinfos_toread -= res;
+
+                            DEBUG("   transmission mode: %s",
+                                capinfo_transmode_strs[*transmode]);
+                        } break;
+                        }
+
+                        capinfo_cur += sizeof(capinfo_t) + capinfo->capinfo_len;
+                    }
+                } break;
+                }
+
+                opt_cur += sizeof(msg_open_opt_t) + opt->opt_len;
+            }
         } break;
         case MSG_TYPE_UPDATE: {
         } break;

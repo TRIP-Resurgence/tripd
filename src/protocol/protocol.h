@@ -113,7 +113,7 @@ enum capinfo_transmode {
 };
 
 /** \brief Capability information transmission mode types strings */
-extern const char *capinfo_code_strs[];
+extern const char *capinfo_transmode_strs[];
 
 /** \brief Capability information NULL transmission mode value
  *
@@ -209,7 +209,10 @@ enum af {
     AF_CARRIER
 };
 
-/** \brief Application protocol */
+/** \brief Address family strings */
+extern const char *af_strs[];
+
+/** \brief Application protocols */
 enum app_proto {
     /** RFC3219 */
     APP_PROTO_SIP = 1,              /**< SIP */
@@ -220,6 +223,9 @@ enum app_proto {
     APP_PROTO_IAX2 = 32768          /**< vendor specific asterisk IAX2
                                       (RFC 5456) */
 };
+
+/** \brief Application protocol to string */
+const char *app_proto_str(int app_proto);
 
 /** \brief Route */
 typedef struct {
@@ -321,7 +327,7 @@ typedef struct {
 
 /** \brief Attribute Communities
  *
- * flags: well-known, transmodeitive
+ * flags: well-known, transitive
  * list of communities
  */
 typedef community_t attr_communities_t[];
@@ -535,7 +541,7 @@ runtime_error_t parse_msg_open_opt(const void *buff, size_t len,
     const msg_open_opt_t **opt_out);
 
 /** \brief Deserialize option capability information */
-runtime_error_t parse_capinfo_t(const void *buff, size_t len,
+runtime_error_t parse_capinfo(const void *buff, size_t len,
     const capinfo_t **capinfo_out);
 
 /** \brief Deserialize option route type */
