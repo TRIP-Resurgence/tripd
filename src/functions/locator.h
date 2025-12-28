@@ -18,6 +18,12 @@
 
 */
 
+/** \file
+ * \brief Peer locator
+ *
+ * Holds information about known configured peers
+ */
+
 #ifndef _LOCATOR_H
 #define _LOCATOR_H
 
@@ -26,6 +32,7 @@
 #include <netinet/in.h>
 
 
+/** \brief Knwon peer info object */
 typedef struct {
     struct sockaddr_in6     addr;
     uint32_t                itad;
@@ -33,23 +40,25 @@ typedef struct {
     capinfo_transmode_t     transmode;
 } peer_t;
 
+/** \brief Peer locator */
 typedef struct {
     peer_t     *peers;
     size_t      peers_size, peers_capacity;
 } locator_t;
 
 
-/* initialize singleton locator known peer list */
+/** \brief Initialize singleton locator known peer list */
 locator_t *locator_new();
 
-/* add a peer */
+/** \brief Add a known peer */
 void locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     uint32_t itad, uint16_t hold, capinfo_transmode_t transmode);
 
-/* lookup by address */
+/** \brief Lookup peer by its address */
 int locator_lookup(locator_t *locator, const peer_t **peer,
     const struct sockaddr_in6 *addr);
 
+/** \brief Destroy locator object */
 void locator_destroy(locator_t *locator);
 
 

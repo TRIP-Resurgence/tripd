@@ -20,6 +20,8 @@
 
 */
 
+/** \file */
+
 #include "locator.h"
 
 #include <stddef.h>
@@ -28,22 +30,17 @@
 
 #include <arpa/inet.h>
 
-static locator_t *g_locator = NULL;
+static locator_t g_locator = { 0 };
 
 
 locator_t *
 locator_new()
 {
-    if (g_locator != NULL)
-        return NULL;
+    g_locator.peers_capacity = 64;
+    g_locator.peers = malloc(g_locator.peers_capacity * sizeof(peer_t));
+    g_locator.peers_size = 0;
 
-    g_locator = malloc(sizeof(locator_t));
-    /* test peer */
-    g_locator->peers_capacity = 64;
-    g_locator->peers = malloc(g_locator->peers_capacity * sizeof(peer_t));
-    g_locator->peers_size = 0;
-
-    return g_locator;
+    return &g_locator;
 }
 
 void
@@ -86,10 +83,9 @@ locator_lookup(locator_t *locator, const peer_t **peer,
 void
 locator_destroy(locator_t *locator)
 {
-    if (locator != g_locator)
+    if (locator != &g_locator)
         return;
-    free(locator);
-    g_locator = NULL;
+    free(locator->peers);
 }
 
 

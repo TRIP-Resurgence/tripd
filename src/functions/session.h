@@ -18,6 +18,12 @@
 
 */
 
+/** \file
+ * \brief Session logic
+ *
+ * Logic for session communication, receive loop thread
+ */
+
 #ifndef _SESSION_H
 #define _SESSION_H
 
@@ -26,6 +32,7 @@
 #include <netinet/in.h>
 
 
+/** \brief Session states */
 typedef enum {
     STATE_IDLE,
     STATE_CONNECT,
@@ -35,6 +42,10 @@ typedef enum {
     STATE_ESTABLISHED
 } session_state_t;
 
+/** \brief Session state strings */
+extern const char *session_state_strs[];
+
+/** \brief Session object */
 typedef struct {
     pthread_t           session_thread;
     void               *session_buff;
@@ -53,20 +64,23 @@ typedef struct {
 } session_t;
 
 
-/* sessions start with no data exchanged yet */
-
-/* initiate connection to peer */
+/** \brief Initiate connection to peer */
 session_t *session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
     capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr,
     uint32_t peer_itad);
 
-/* connection request received from peer */
+/** \brief Connection request received from peer
+ *
+ * No data exchaged before the creation of a session
+ */
 session_t *session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
     capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr,
-    int fd);
+    uint32_t peer_itad, int fd);
 
-session_state_t session_get_state(const session_t *session);
+/** \brief Shutdown socket, terminate connection and thread */
+void session_shutdown(session_t *session);
 
+/** \brief Destroy session object */
 void session_destroy(session_t *session);
 
 

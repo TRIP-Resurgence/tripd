@@ -20,7 +20,12 @@
 
 */
 
+/** \file */
+
 #include "session.h"
+
+#include <logging/logging.h>
+#include <util/util.h>
 
 #include <string.h>
 #include <stdlib.h>
@@ -32,13 +37,11 @@
 
 #include <arpa/inet.h>
 
-
-#define DEBUG printf
+#define _COMPONENT_ "session"
 
 #define SOCK_TRY_SEND(o, a) \
     if (o < 0) { \
-        fprintf(stderr, "[ERROR] %s:%s:%s: %s\n", \
-            __FILE__, __func__, __LINE__, strerror(errno)); \
+        ERROR("send(): %s", strerror(errno)); \
         a; \
     }
 
@@ -46,8 +49,7 @@
     while (1) { \
         res = recv(fd, buff, sizeof(type), 0); \
         if (res < 0) { \
-            fprintf(stderr, "[ERROR] %s:%s:%s: %s\n", \
-                __FILE__, __func__, __LINE__, strerror(errno)); \
+            ERROR("recv(): %s", strerror(errno)); \
             action; break; \
         } else if (res == 0) { \
             action; break; \
@@ -67,15 +69,22 @@ const char *session_state_strs[] = {
     "established"
 };
 
+static const char *
+session_str(session_t *s)
+{
+    static char str[256], abuff[INET6_ADDRSTRLEN], abuff2[INET_ADDRSTRLEN];
+    snprintf(str, 256, "(%s):%d:%s",
+        inet_ntop(AF_INET6, &s->session_peer_addr.sin6_addr, abuff,
+            sizeof(abuff)),
+        s->session_peer_itad,
+        inet_ntop(AF_INET, &s->session_peer_id, abuff2, sizeof(abuff2)));
+    return str;
+}
 
 static void
 session_change_state(session_t *s, session_state_t new_state)
 {
-    static char abuff[INET6_ADDRSTRLEN];
-    DEBUG("peer (%s)%d:%d changed state from %s to %s\n",
-        inet_ntop(AF_INET6, &s->session_peer_addr.sin6_addr, abuff,
-            sizeof(abuff)),
-        s->session_peer_itad, s->session_peer_id,
+    DEBUG("peer session %s changed state from %s to %s", session_str(s),
         session_state_strs[s->session_state], session_state_strs[new_state]);
     s->session_state = new_state;
 }
@@ -114,7 +123,7 @@ session_loop(void *arg)
             goto proto_error
         );
 
-        DEBUG("msg: %d[%d]\n", msg->msg_type, msg->msg_len);
+        DEBUG("received msg: %d[%d]", msg->msg_type, msg->msg_len);
 
         /* continue */
     }
@@ -153,8 +162,7 @@ connect_loop(void *arg)
             sizeof(struct sockaddr_in6));
 
         if (res < 0) {
-            fprintf(stderr, "[ERROR] %s:%s:%s: %s\n",
-                __FILE__, __func__, __LINE__, strerror(errno));
+            ERROR("connect(): %s", strerror(errno));
             session_change_state(s, STATE_IDLE);
             sleep(s->session_connect_retry);
             if (s->session_connect_retry < 3600)
@@ -183,17 +191,23 @@ session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
     session->session_itad = itad;
     session->session_id = id;
     session->session_peer_itad = peer_itad;
+    session->session_peer_id = 0;
 
     memcpy(&session->session_peer_addr, peer_addr, sizeof(struct sockaddr_in6));
     session->session_fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
 
     pthread_create(&session->session_thread, NULL, &connect_loop, session);
     pthread_detach(session->session_thread);
+
+    DEBUG("initiated peer session %s", session_str(session));
+
+    return session;
 }
 
 session_t *
 session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
-    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr, int fd)
+    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr,
+    uint32_t peer_itad, int fd)
 {
     /* allocate resources */
     session_t *session = malloc(sizeof(session_t));
@@ -202,6 +216,8 @@ session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
     session->session_transmode = transmode;
     session->session_itad = itad;
     session->session_id = id;
+    session->session_peer_itad = peer_itad;
+    session->session_peer_id = 0;
 
     memcpy(&session->session_peer_addr, peer_addr, sizeof(struct sockaddr_in6));
     session->session_fd = fd;
@@ -209,7 +225,18 @@ session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
     pthread_create(&session->session_thread, NULL, &session_loop, session);
     pthread_detach(session->session_thread);
 
+    DEBUG("accepted peer session %s", session_str(session));
+
     return session;
+}
+
+void
+session_shutdown(session_t *session)
+{
+    /* TODO send CEASE NOTIFICATION */
+    DEBUG("shutting down session %s", session_str(session));
+    shutdown(session->session_fd, SHUT_RDWR); /* recv loop does close() */
+    session->session_state = STATE_IDLE;
 }
 
 void

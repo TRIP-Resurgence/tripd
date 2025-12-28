@@ -18,6 +18,13 @@
 
 */
 
+/** \file
+ * \brief Session manager
+ *
+ * Listens for connections, owns peer locator and sessions, which are created
+ * by this object
+ */
+
 #ifndef _MANAGER_H
 #define _MANAGER_H
 
@@ -27,6 +34,7 @@
 #include "locator.h"
 
 
+/** \brief Manager object */
 typedef struct {
     pthread_t   thread;
     int         fd;
@@ -40,17 +48,23 @@ typedef struct {
     size_t      sessions_size;
 } manager_t;
 
-/* create manager and bind socket */
+/** \brief Create manager and bind socket */
 manager_t *manager_new(const struct sockaddr_in6 *listen_addr);
 
+/** \brief Add known peer to underlaying locator */
 void manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     uint32_t itad);
 
-/* run accept loop in thread */
+/** \brief Run accept loop in thread */
 void manager_run(manager_t *manager);
 
+/** \brief Stop accept loop */
 void manager_stop(manager_t *manager);
 
+/** \brief Shut down manager and all sessions */
+void manager_shutdown(manager_t *manager);
+
+/** \brief Destroy manager object */
 void manager_destroy(manager_t *manager);
 
 

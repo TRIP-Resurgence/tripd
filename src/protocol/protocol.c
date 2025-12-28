@@ -20,6 +20,8 @@
 
 */
 
+/** \file */
+
 #include "protocol.h"
 
 #include <string.h>

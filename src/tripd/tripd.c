@@ -20,37 +20,84 @@
 
 */
 
+/** \file */
+
 #include <protocol/protocol.h>
 
 #include <command/parser.h>
+#include <command/commands.h>
+#include <logging/logging.h>
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <unistd.h>
 
-#define CONFIG_FILE "../tripd.conf"
+#define DEFAULT_CONFIG_PATH "/usr/local/etc/tripd.conf"
 
-int
-main(int arg, char **argv)
+
+static parser_t *g_parser = NULL;
+
+
+/** \brief Print CLI usage */
+void
+print_usage(char *name)
 {
-    printf("tripd\n");
+    printf("usage: %s [config file]\n", name);
+}
 
+/** \brief SIGINT handler
+ *
+ * Shutdowns daemon graceously calling shutdown command
+ */
+void
+sigint_handler(int dummy)
+{
+    cmd_shutdown(g_parser, 0, NULL);
+    exit(0);
+}
 
-    parser_t *parser = parser_init(stdout);
+/** \brief Entry point */
+int
+main(int argc, char **argv)
+{
+    printf(
+        "tripd  Copyright (C) 2025  TRIP Resurgence Project\n"
+        "This program comes with ABSOLUTELY NO WARRANTY;\n"
+        "This is free software, and you are welcome to redistribute it\n"
+        "under certain conditions; type `show license' for details.\n\n");
 
-    /* read config */
-    parser_parse_cmd(parser, "enable");
-    parser_parse_cmd(parser, "configure");
-
-    FILE *conff = fopen(CONFIG_FILE, "r");
-    if (!conff) {
-        fprintf(stderr, "Error opening config file %s: %s\n",
-            CONFIG_FILE, strerror(errno));
+    if (argc > 2) {
+        print_usage(*argv);
         return 1;
     }
-    parser_parse_file(parser, conff);
+
+    const char *config_path = DEFAULT_CONFIG_PATH;
+
+    if (argc == 2)
+        config_path = argv[1];
+
+    signal(SIGINT, sigint_handler);
+
+
+    logging_init(stderr, LOG_DEBUG);
+
+    g_parser = parser_init(stdout);
+
+    /* read config */
+    parser_parse_cmd(g_parser, "enable");
+    parser_parse_cmd(g_parser, "configure");
+
+    FILE *conff = fopen(config_path, "r");
+    if (!conff) {
+        fprintf(stderr, "error opening config file %s: %s\n",
+            config_path, strerror(errno));
+        return 1;
+    }
+    parser_parse_file(g_parser, conff);
     fclose(conff);
 
     while (1) {
