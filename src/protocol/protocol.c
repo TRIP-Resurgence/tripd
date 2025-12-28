@@ -27,7 +27,37 @@
 #include <string.h>
 
 
-/* objects */
+/* symbols */
+
+
+const char *msg_type_strs[] = {
+    "nil",
+    "OPEN",
+    "UPDATE",
+    "NOTIFICATION",
+    "KEEPALIVE"
+};
+
+const char *open_opt_type_strs[] = {
+    "nil",
+    "OPEN_OPT_TYPE_CAPABILITY_INFO"
+};
+
+
+const char *capinfo_code_strs[] = {
+    "nil",
+    "CAPINFO_CODE_ROUTETYPE",
+    "CAPINFO_CODE_TRANSMODE"
+};
+
+
+const char *capinfo_transmode_strs[] = {
+    "nil",
+    "CAPINFO_TRANS_SEND_RECV",
+    "CAPINFO_TRANS_SEND",
+    "CAPINFO_TRANS_RECV"
+};
+
 
 const char *runtime_error_strs[] = {
     "no error",
@@ -39,7 +69,7 @@ const char *runtime_error_strs[] = {
     "invalid NOTIFICATION error code",
     "invalid NOTIFICATION error subcode",
     /* deserialization specific */
-    "passed an incomplete message, recv more"
+    "passed an incomplete message, recv more",
     "invalid message type",
     "unsupported protocol version",
     "unsupported OPEN option param",
@@ -608,7 +638,7 @@ parse_msg_open(const void *buff, size_t len,
     
     const msg_open_t *open = buff;
 
-    if (open->open_ver != 1)
+    if (open->open_ver != PROTOCOL_VERSION)
         return ERROR_VERSION;
 
     if (open->open_hold != 0 && open->open_hold < 3)

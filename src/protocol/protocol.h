@@ -40,6 +40,9 @@ enum msg_type {
     MSG_TYPE_KEEPALIVE
 };
 
+/** \brief Message type strings */
+extern const char *msg_type_strs[];
+
 /** \brief Message header */
 typedef struct {
     uint16_t    msg_len;
@@ -53,12 +56,18 @@ enum open_opt_type {
     OPEN_OPT_TYPE_CAPABILITY_INFO = 1,
 };
 
+/** \brief Message type strings */
+extern const char *open_opt_type_strs[];
+
 /** \brief Message OPEN optional paramter */
 typedef struct {
     uint16_t    opt_type;
     uint16_t    opt_len;
     uint8_t     opt_val[];
 } msg_open_opt_t;
+
+/** \brief current protocol version */
+#define PROTOCOL_VERSION    1
 
 /** \brief Message OPEN */
 typedef struct {
@@ -77,6 +86,9 @@ enum capinfo_code {
     CAPINFO_CODE_ROUTETYPE = 1,
     CAPINFO_CODE_TRANSMODE
 };
+
+/** \brief Capability information option type strings */
+extern const char *capinfo_code_strs[];
 
 /** \brief Capability information option */
 typedef struct {
@@ -99,6 +111,9 @@ enum capinfo_transmode {
     CAPINFO_TRANS_SEND,
     CAPINFO_TRANS_RECV
 };
+
+/** \brief Capability information transmission mode types strings */
+extern const char *capinfo_code_strs[];
 
 /** \brief Capability information NULL transmission mode value
  *
@@ -395,19 +410,19 @@ typedef enum runtime_errors_e {
     ERROR_NOTIF_ERROR_CODE = -5,    /**< Invalid NOTIFICATION error code */
     ERROR_NOTIF_ERROR_SUBCODE = -6, /**< Invalid NOTIFICATION error subcode */
     /* Deserialization specific */
-    ERROR_INCOMPLETE = -10,         /**<Passed an incomplete message, recv more*/
-    ERROR_MSGTYPE = -11,            /**< Invalid message type */
-    ERROR_VERSION = -12,            /**< Unsupported protocol version */
-    ERROR_OPT = -13,                /**< Unsupported OPEN option param */
-    ERROR_CAPINFO_CODE = -14,       /**< Unsupported capability info code */
-    ERROR_AF = -15,                 /**< Unsupported address family */
-    ERROR_APP_PROTO = -16,          /**< Unsupported application protocol */
-    ERROR_TRANS = -17,              /**< Invalid send/recv capability */
-    ERROR_ATTR_TYPE = -18,          /**< Unsupported attribute type */
-    ERROR_ATTR_FLAG_WELL_KNOWN = -19,/**< Attribute should have well-known */
-    ERROR_ATTR_FLAG_LSENCAP = -20,  /**< Attribute must be link-state encapsul*/
-    ERROR_ITADPATH_TYPE = -21,      /**< Unsupported ITAD path type */
-    ERROR_COMMUNITY_ITAD = -22      /**< Reserved community ITAD with bad ID */
+    ERROR_INCOMPLETE = -7,          /**<Passed an incomplete message, recv more*/
+    ERROR_MSGTYPE = -8,             /**< Invalid message type */
+    ERROR_VERSION = -9,             /**< Unsupported protocol version */
+    ERROR_OPT = -10,                /**< Unsupported OPEN option param */
+    ERROR_CAPINFO_CODE = -11,       /**< Unsupported capability info code */
+    ERROR_AF = -12,                 /**< Unsupported address family */
+    ERROR_APP_PROTO = -13,          /**< Unsupported application protocol */
+    ERROR_TRANS = -14,              /**< Invalid send/recv capability */
+    ERROR_ATTR_TYPE = -15,          /**< Unsupported attribute type */
+    ERROR_ATTR_FLAG_WELL_KNOWN = -16,/**< Attribute should have well-known */
+    ERROR_ATTR_FLAG_LSENCAP = -17,  /**< Attribute must be link-state encapsul*/
+    ERROR_ITADPATH_TYPE = -18,      /**< Unsupported ITAD path type */
+    ERROR_COMMUNITY_ITAD = -19      /**< Reserved community ITAD with bad ID */
 } runtime_error_t;
 
 /** \brief Serialization/deserialization runtime error strings */
@@ -431,7 +446,7 @@ extern const size_t supported_routetypes_size;
 #define PROTO_TRY(o, a) \
     r = o; \
     if (r < 0) { \
-        DEBUG("protocol error: %s\n", runtime_error_strs[-r]); \
+        ERROR("protocol error: %s", runtime_error_strs[-r]); \
         a; \
     }
 

@@ -52,6 +52,7 @@
             ERROR("recv(): %s", strerror(errno)); \
             action; break; \
         } else if (res == 0) { \
+            DEBUG("connection closed by peer"); \
             action; break; \
         } else if (res < sizeof(type)) { \
             continue; \
@@ -123,9 +124,20 @@ session_loop(void *arg)
             goto proto_error
         );
 
-        DEBUG("received msg: %d[%d]", msg->msg_type, msg->msg_len);
+        DEBUG("received msg: %s[%d]", msg_type_strs[msg->msg_type],
+            msg->msg_len);
 
-        /* continue */
+        /* flush and continue */
+        res = recv(s->session_fd, s->session_buff, MAX_MSG_SIZE, 0);
+        if (res < 0) {
+            ERROR("recv(): %s", strerror(errno)); \
+            goto sock_error;
+        } else if (res == 0) {
+            DEBUG("connection closed by peer"); \
+            goto sock_error;
+        } else {
+            DEBUG("%d trailing bytes dropped", res);
+        }
     }
 
 proto_error:
@@ -142,7 +154,7 @@ proto_error:
 
 sock_error:
     close(s->session_fd);
-    s->session_state = STATE_IDLE;
+    session_change_state(s, STATE_IDLE);
     return NULL;
 }
 
