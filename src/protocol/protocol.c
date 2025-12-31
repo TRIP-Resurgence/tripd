@@ -53,9 +53,9 @@ const char *capinfo_code_strs[] = {
 
 const char *capinfo_transmode_strs[] = {
     "nil",
-    "CAPINFO_TRANS_SEND_RECV",
-    "CAPINFO_TRANS_SEND",
-    "CAPINFO_TRANS_RECV"
+    "bidirectional",
+    "send-only",
+    "receive-only"
 };
 
 const char *af_strs[] = {
@@ -67,6 +67,50 @@ const char *af_strs[] = {
     "carrier"
 };
 
+
+const char *notif_code_strs[] = {
+    "nil",
+    "message",
+    "OPEN",
+    "UPDATE",
+    "expired",
+    "state",
+    "cease"
+};
+
+const char *notif_subcode_msg_strs[] = {
+    "nil",
+    "bad length",
+    "bad type"
+};
+
+const char *notif_subcode_open_strs[] = {
+    "nil",
+    "unsupported version",
+    "bad ITAD",
+    "bad ID",
+    "unsupported option",
+    "bad hold",
+    "unsupported capability",
+    "transmission mode mismatch"
+};
+
+const char *notif_subcode_update_strs[] = {
+    "nil",
+    "malformed attribute",
+    "unknown well-known attribute",
+    "missing well-known flag",
+    "bad attribute flag",
+    "bad attribute length",
+    "invalid attribute"
+};
+
+const char **notif_code_subcodes_strs[] = {
+    NULL,
+    notif_subcode_msg_strs,
+    notif_subcode_open_strs,
+    notif_subcode_update_strs
+};
 
 
 
@@ -600,7 +644,7 @@ new_msg_keepalive(void *buff, size_t len)
 /* message NOTIFICATION */
 
 runtime_error_t
-new_msg_notification(void *buff, size_t len,
+new_msg_notif(void *buff, size_t len,
     uint8_t error_code, uint8_t error_subcode, size_t datalen, const void *data)
 {
     if (!buff)

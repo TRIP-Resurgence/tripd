@@ -86,7 +86,7 @@ send_notification(int fd, int code, int subcode)
     char buff[MAX_MSG_SIZE];
 
     PROTO_TRY(
-        new_msg_notification(buff, MAX_MSG_SIZE,
+        new_msg_notif(buff, MAX_MSG_SIZE,
             NOTIF_CODE_ERROR_MSG, subcode, 0, NULL),
         res, goto sock_error
     );

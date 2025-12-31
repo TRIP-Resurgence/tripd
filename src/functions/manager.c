@@ -276,7 +276,7 @@ request_handler(void *arg)
     /* send OPEN */
     PROTO_TRY(
         new_msg_open(buff, MAX_MSG_SIZE,
-            peer->hold, peer->itad, req->manager->id,
+            peer->hold, req->manager->itad, req->manager->id,
             supported_routetypes, supported_routetypes_size,
             peer->transmode),
         res, goto proto_error
@@ -322,6 +322,18 @@ request_handler(void *arg)
             request_change_state(req, STATE_OPENCONFIRM);
         } break;
         case MSG_TYPE_NOTIFICATION: {
+            SOCK_TRY_RECV(req->fd, recv_wnd, msg_notif_t, goto sock_error);
+
+            const msg_notif_t *notif= NULL;
+            PROTO_TRY(
+                parse_msg_notif(msg->msg_val, res, &notif),
+                res, goto proto_error
+            );
+
+            DEBUG("error code: %s, error subcode: %s",
+                notif_code_strs[notif->notif_error_code],
+                notif_code_subcodes_strs[notif->notif_error_code]
+                    [notif->notif_error_subcode]);
         } break;
         case MSG_TYPE_KEEPALIVE: {
             if (req->state == STATE_OPENCONFIRM)
@@ -414,6 +426,10 @@ manager_loop(void *arg)
             close(request_fd);
             continue;
         }
+
+        DEBUG("accepted connection from %s, initiating peer",
+            sockaddr_str((struct sockaddr*)&peer_addr));
+
 
         /* hand off connection to request handler on a new thread */
         request_t *req = malloc(sizeof(request_t));

@@ -369,11 +369,17 @@ enum notif_code {
     NOTIF_CODE_CEASE
 };
 
+/** \brief NOTIFICATION error code strings */
+extern const char *notif_code_strs[];
+
 /** \brief NOTIFICATION error subcode for message */
 enum notif_subcode_msg {
     NOTIF_SUBCODE_MSG_BAD_LEN = 1,
     NOTIF_SUBCODE_MSG_BAD_TYPE
 };
+
+/** \brief NOTIFICATION error subcode for message strings */
+extern const char *notif_subcode_msg_strs[];
 
 /** \brief NOTIFICATION error subcode for OPEN */
 enum notif_subcode_open {
@@ -383,8 +389,11 @@ enum notif_subcode_open {
     NOTIF_SUBCODE_OPEN_UNSUP_OPT,
     NOTIF_SUBCODE_OPEN_BAD_HOLD,
     NOTIF_SUBCODE_OPEN_UNSUP_CAP,
-    NOTIF_SUBCODE_OPEN_CAP_MISMATCH,
+    NOTIF_SUBCODE_OPEN_CAP_MISMATCH
 };
+
+/** \brief NOTIFICATION error subcode for OPEN strings*/
+extern const char *notif_subcode_open_strs[];
 
 /** \brief NOTIFICATION error subcode for UPDATE */
 enum notif_subcode_update {
@@ -393,8 +402,14 @@ enum notif_subcode_update {
     NOTIF_SUBCODE_UPDATE_MISS_WELLKNOWN_ATTR,
     NOTIF_SUBCODE_UPDATE_BAD_ATTR_FLAG,
     NOTIF_SUBCODE_UPDATE_BAD_ATTR_LEN,
-    NOTIF_SUBCODE_UPDATE_INVAL_ATTR,
+    NOTIF_SUBCODE_UPDATE_INVAL_ATTR
 };
+
+/** \brief NOTIFICATION error subcode for UPDATE strings */
+extern const char *notif_subcode_update_strs[];
+
+/** \brief subcode strings per code class */
+extern const char **notif_code_subcodes_strs[];
 
 /** \brief Message NOTIFICATION */
 typedef struct {
@@ -474,7 +489,7 @@ runtime_error_t new_msg_update(void *buff, size_t len,
 runtime_error_t new_msg_keepalive(void *buff, size_t len);
 
 /** \brief Serialize NOTIFICATION message */
-runtime_error_t new_msg_notification(void *buff, size_t len, uint8_t error_code,
+runtime_error_t new_msg_notif(void *buff, size_t len, uint8_t error_code,
     uint8_t error_subcode, size_t datalen, const void *data);
 
 

@@ -74,6 +74,7 @@ locator_lookup(locator_t *locator, const peer_t **peer,
             sizeof(addr->sin6_addr)) == 0)
         {
             p = &locator->peers[i];
+            break;
         }
     }
 

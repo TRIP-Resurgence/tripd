@@ -27,7 +27,6 @@
 void map_addr_inet_inet6(struct sockaddr_in6 *sin6,
     const struct sockaddr_in *sin);
 
-
 const char *sockaddr_str(const struct sockaddr *sa);
 
 #endif /* _UTIL_H */
