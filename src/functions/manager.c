@@ -345,6 +345,7 @@ request_handler(void *arg)
              * cumbersome */
             session_t *session = malloc(sizeof(session_t));
             session->thread = req->thread;
+            session->fd = req->fd;
             session->state = STATE_IDLE;
             session->itad = req->manager->itad;
             session->id = req->manager->id;
@@ -363,18 +364,6 @@ request_handler(void *arg)
         default:
             ERROR("unexpected %s message");
             goto sock_error;
-        }
-
-        /* flush and continue */
-        res = recv(req->fd, buff, MAX_MSG_SIZE, 0);
-        if (res < 0) {
-            ERROR("recv(): %s", strerror(errno)); \
-            goto sock_error;
-        } else if (res == 0) {
-            DEBUG("connection closed by peer"); \
-            goto sock_error;
-        } else {
-            DEBUG("%d trailing bytes dropped", res);
         }
     }
 
