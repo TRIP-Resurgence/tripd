@@ -51,7 +51,7 @@ typedef struct {
 locator_t *locator_new();
 
 /** \brief Add a known peer */
-void locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
+int locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     uint32_t itad, uint16_t hold, capinfo_transmode_t transmode);
 
 /** \brief Lookup peer by its address */

@@ -31,6 +31,34 @@
 
 #include <netinet/in.h>
 
+/** \brief Send helper macro */
+#define SOCK_TRY_SEND(o, a) \
+    if (o < 0) { \
+        ERROR("send(): %s", strerror(errno)); \
+        a; \
+    }
+
+/** \brief Receive helper macro */
+#define SOCK_TRY_RECV(fd, buff, type, action) \
+    toread = sizeof(type); \
+    while (1) { \
+        res = recv(fd, buff, toread, 0); \
+        if (res < 0) { \
+            ERROR("recv(): %s", strerror(errno)); \
+            action; break; \
+        } else if (res == 0) { \
+            DEBUG("connection closed by peer"); \
+            action; break; \
+        } else if (res < sizeof(type)) { \
+            buff += res; break; \
+            toread -= res; \
+            continue; \
+        } \
+        toread -= res; \
+        buff += res; break; \
+    }
+
+
 
 /** \brief Session states */
 typedef enum {
@@ -47,35 +75,29 @@ extern const char *session_state_strs[];
 
 /** \brief Session object */
 typedef struct {
-    pthread_t           session_thread;
-    void               *session_buff;
-    session_state_t     session_state;
-    uint32_t            session_itad, session_id;
-    uint16_t            session_hold;
+    pthread_t               thread;
+    session_state_t         state;
+    uint32_t                itad, id;
+    uint16_t                hold;
 
-    time_t              session_connect_retry;
+    capinfo_transmode_t     transmode;
 
-    capinfo_transmode_t session_transmode;
+    struct sockaddr_in6    *addr;
+    int                     fd;
 
-    struct sockaddr_in6 session_peer_addr;
-    int                 session_fd;
-
-    uint32_t            session_peer_itad, session_peer_id;
+    uint32_t                peer_itad, peer_id;
 } session_t;
 
 
-/** \brief Initiate connection to peer */
-session_t *session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
-    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr,
-    uint32_t peer_itad);
 
-/** \brief Connection request received from peer
- *
- * No data exchaged before the creation of a session
- */
-session_t *session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
-    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr,
-    uint32_t peer_itad, int fd);
+/** \brief Send notification helper */
+int send_notification(int fd, int code, int subcode);
+
+/** \brief LSID string */
+const char *id_str(uint32_t id);
+
+/** \brief Session loop */
+void *session_loop(void *arg);
 
 /** \brief Shutdown socket, terminate connection and thread */
 void session_shutdown(session_t *session);
