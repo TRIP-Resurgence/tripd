@@ -53,7 +53,7 @@ const char *capinfo_code_strs[] = {
 
 const char *capinfo_transmode_strs[] = {
     "nil",
-    "bidirectional",
+    "duplex",
     "send-only",
     "receive-only"
 };
