@@ -24,7 +24,7 @@
  * Singleton class.
  * Implements connection management.
  * Listens for incoming connection requests. When one arrives, it parses
- * the OPEN on a thread to find capabilities and creates a session object and
+ * the OPEN on a thread to find capabilities, creates a session object and
  * delegates the session to session_run in the existing thread.
  * The manager can also initiate connections.
  */
@@ -49,6 +49,10 @@
 #include <unistd.h>
 
 #define _COMPONENT_ "manager"
+
+#ifndef MAX_BACKOFF_CONNECT_RETRY
+    #define MAX_BACKOFF_CONNECT_RETRY 3600
+#endif /* MAX_BACKOFF_CONNECT_RETRY */
 
 
 typedef struct {
@@ -257,14 +261,14 @@ sock_error:
 }
 
 
-/** \brief Establish TRIP session
+/** \brief Establish TRIP session for both incoming and outgoing connections
  * 
  * Send OPEN, listen for OPEN, decode OPEN, check fields against peers,
  * send KEEPALIVE, receive KEEPALIVE, established the session -> hand off to
  * session loop
  */
 static void *
-request_handler(void *arg)
+peer_handshake(void *arg)
 {
     request_t *req = arg;
 
@@ -428,7 +432,7 @@ manager_loop(void *arg)
         memcpy(req->addr, &peer_addr, peer_addr_size);
         req->fd = request_fd;
 
-        pthread_create(&req->thread, NULL, &request_handler, req);
+        pthread_create(&req->thread, NULL, &peer_handshake, req);
         pthread_detach(req->thread);
     }
 
@@ -490,7 +494,7 @@ static void *
 connect_loop(void *arg)
 {
     request_t *req = arg;
-    time_t connect_retry = 60;
+    time_t connect_retry = 120;
 
     int r = 0;
     while (1) {
@@ -504,7 +508,7 @@ connect_loop(void *arg)
             ERROR("connect(): %s", strerror(errno));
             request_change_state(req, STATE_IDLE);
             sleep(connect_retry);
-            if (connect_retry < 3600)
+            if (connect_retry < MAX_BACKOFF_CONNECT_RETRY)
                 connect_retry *= 2;
             continue;
         }
@@ -513,7 +517,7 @@ connect_loop(void *arg)
     }
 
     /* TCP channel established, hand off to request handler */
-    request_handler(arg);
+    peer_handshake(arg);
 }
 
 

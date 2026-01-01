@@ -31,14 +31,24 @@
 
 #include <netinet/in.h>
 
-/** \brief Send helper macro */
+/** \brief Send helper macro 
+ *
+ * \param o Operation
+ * \param a Error condition action
+ * */
 #define SOCK_TRY_SEND(o, a) \
     if (o < 0) { \
         ERROR("send(): %s", strerror(errno)); \
         a; \
     }
 
-/** \brief Receive helper macro */
+/** \brief Receive helper macro
+ *
+ * \param fd Socket
+ * \param buff Receive buffer
+ * \param type Typename to receive
+ * \param ation Error condition action
+ */
 #define SOCK_TRY_RECV(fd, buff, type, action) \
     toread = sizeof(type); \
     while (1) { \
