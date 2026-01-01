@@ -476,7 +476,7 @@ manager_new(const struct sockaddr_in6 *listen_addr)
 
     char abuff[INET6_ADDRSTRLEN];
     DEBUG("started session manager, listening at [%s]:%d",
-        sockaddr_str(listen_addr),
+        sockaddr_str((struct sockaddr *)listen_addr),
         ntohs(listen_addr->sin6_port));
 
     return m;

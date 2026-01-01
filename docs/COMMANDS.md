@@ -42,7 +42,7 @@ Exit current context and return to the outer context.
 Where to write the log. Default level is `debug`.
 
  - file: `stdout`, `stderr` or a filename
- - loglevel: { `error` | `warning` | `info` | `debug` }
+ - loglevel: { `error` | `warning` | `info` | `debug` | `trace` }
 
 #### `bind-address <address>`
 

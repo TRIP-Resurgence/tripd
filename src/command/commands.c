@@ -128,6 +128,8 @@ cmd_config_log(parser_t *parser, int no, char *args)
         level = LOG_INFO;
     else if (strcmp(file_str, "debug") == 0)
         level = LOG_DEBUG;
+    else if (strcmp(file_str, "trace") == 0)
+        level = LOG_TRACE;
 
     logging_init(f, level);
 
