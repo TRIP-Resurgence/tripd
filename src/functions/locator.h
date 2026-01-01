@@ -32,7 +32,7 @@
 #include <netinet/in.h>
 
 
-/** \brief Knwon peer info object */
+/** \brief Known peer info object */
 typedef struct {
     struct sockaddr_in6     addr;
     uint32_t                itad;

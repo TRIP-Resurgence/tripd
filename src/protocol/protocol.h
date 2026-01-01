@@ -127,7 +127,8 @@ typedef uint32_t capinfo_transmode_t;
 /** \brief Message UPDATE
  *
  * Unpadded list of attributes,
- * defined by RFCs are Well-Known
+ * dAttributes defined by RFCs are "Well-Known", and should have the WELL_KNOWN
+ * bit set.
  *
  * attr_flag is a bitfield
  * bit  flag

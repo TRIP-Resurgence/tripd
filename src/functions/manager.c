@@ -476,7 +476,7 @@ manager_new(const struct sockaddr_in6 *listen_addr)
 
     char abuff[INET6_ADDRSTRLEN];
     DEBUG("started session manager, listening at [%s]:%d",
-        inet_ntop(AF_INET6, &listen_addr->sin6_addr, abuff, sizeof(abuff)),
+        sockaddr_str(listen_addr),
         ntohs(listen_addr->sin6_port));
 
     return m;
@@ -562,6 +562,8 @@ manager_stop(manager_t *manager)
 void
 manager_shutdown(manager_t *manager)
 {
+    DEBUG("beginning shutdown");
+
     shutdown(manager->fd, SHUT_RDWR);
 
     for (size_t i = 0; i < manager->sessions_size; i++) {

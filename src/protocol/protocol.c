@@ -20,7 +20,10 @@
 
 */
 
-/** \file */
+/** \file
+ * 
+ * Protocol serialization and deserialization implementation
+ */
 
 #include "protocol.h"
 
