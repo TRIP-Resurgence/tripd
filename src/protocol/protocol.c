@@ -20,14 +20,120 @@
 
 */
 
-/** \file */
+/** \file
+ * 
+ * Protocol serialization and deserialization implementation
+ */
 
 #include "protocol.h"
 
 #include <string.h>
 
 
-/* objects */
+/* symbols */
+
+
+const char *msg_type_strs[] = {
+    "nil",
+    "OPEN",
+    "UPDATE",
+    "NOTIFICATION",
+    "KEEPALIVE"
+};
+
+const char *open_opt_type_strs[] = {
+    "nil",
+    "OPEN_OPT_TYPE_CAPABILITY_INFO"
+};
+
+
+const char *capinfo_code_strs[] = {
+    "nil",
+    "CAPINFO_CODE_ROUTETYPE",
+    "CAPINFO_CODE_TRANSMODE"
+};
+
+
+const char *capinfo_transmode_strs[] = {
+    "nil",
+    "duplex",
+    "send-only",
+    "receive-only"
+};
+
+const char *af_strs[] = {
+    "nil",
+    "decimal",
+    "pentadecimal",
+    "E.164",
+    "trunkgroup",
+    "carrier"
+};
+
+
+const char *notif_code_strs[] = {
+    "nil",
+    "message",
+    "OPEN",
+    "UPDATE",
+    "expired",
+    "state",
+    "cease"
+};
+
+const char *notif_subcode_msg_strs[] = {
+    "nil",
+    "bad length",
+    "bad type"
+};
+
+const char *notif_subcode_open_strs[] = {
+    "nil",
+    "unsupported version",
+    "bad ITAD",
+    "bad ID",
+    "unsupported option",
+    "bad hold",
+    "unsupported capability",
+    "transmission mode mismatch"
+};
+
+const char *notif_subcode_update_strs[] = {
+    "nil",
+    "malformed attribute",
+    "unknown well-known attribute",
+    "missing well-known flag",
+    "bad attribute flag",
+    "bad attribute length",
+    "invalid attribute"
+};
+
+const char **notif_code_subcodes_strs[] = {
+    NULL,
+    notif_subcode_msg_strs,
+    notif_subcode_open_strs,
+    notif_subcode_update_strs
+};
+
+
+
+const char *
+app_proto_str(int app_proto)
+{
+    static const char *app_proto_strs[] = {
+        "SIP",
+        "H.323-H.225.0-Q.931",
+        "H.323-H.225.0-RAS",
+        "H.323-H.225.0-Annex-G",
+    };
+
+    if (app_proto >= APP_PROTO_SIP && app_proto <= APP_PROTO_H323_225_0_ANNEXG)
+        return app_proto_strs[app_proto - 1];
+    else if (app_proto == APP_PROTO_IAX2)
+        return "IAX2";
+    else return "invalid";
+}
+
 
 const char *runtime_error_strs[] = {
     "no error",
@@ -39,7 +145,7 @@ const char *runtime_error_strs[] = {
     "invalid NOTIFICATION error code",
     "invalid NOTIFICATION error subcode",
     /* deserialization specific */
-    "passed an incomplete message, recv more"
+    "passed an incomplete message, recv more",
     "invalid message type",
     "unsupported protocol version",
     "unsupported OPEN option param",
@@ -541,7 +647,7 @@ new_msg_keepalive(void *buff, size_t len)
 /* message NOTIFICATION */
 
 runtime_error_t
-new_msg_notification(void *buff, size_t len,
+new_msg_notif(void *buff, size_t len,
     uint8_t error_code, uint8_t error_subcode, size_t datalen, const void *data)
 {
     if (!buff)
@@ -608,7 +714,7 @@ parse_msg_open(const void *buff, size_t len,
     
     const msg_open_t *open = buff;
 
-    if (open->open_ver != 1)
+    if (open->open_ver != PROTOCOL_VERSION)
         return ERROR_VERSION;
 
     if (open->open_hold != 0 && open->open_hold < 3)
@@ -640,7 +746,7 @@ parse_msg_open_opt(const void *buff, size_t len,
 }
 
 runtime_error_t
-parse_capinfo_t(const void *buff, size_t len,
+parse_capinfo(const void *buff, size_t len,
     const capinfo_t **capinfo_out)
 {
     if (len < sizeof(capinfo_t))

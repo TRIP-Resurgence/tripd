@@ -40,6 +40,9 @@ enum msg_type {
     MSG_TYPE_KEEPALIVE
 };
 
+/** \brief Message type strings */
+extern const char *msg_type_strs[];
+
 /** \brief Message header */
 typedef struct {
     uint16_t    msg_len;
@@ -53,12 +56,18 @@ enum open_opt_type {
     OPEN_OPT_TYPE_CAPABILITY_INFO = 1,
 };
 
+/** \brief Message type strings */
+extern const char *open_opt_type_strs[];
+
 /** \brief Message OPEN optional paramter */
 typedef struct {
     uint16_t    opt_type;
     uint16_t    opt_len;
     uint8_t     opt_val[];
 } msg_open_opt_t;
+
+/** \brief current protocol version */
+#define PROTOCOL_VERSION    1
 
 /** \brief Message OPEN */
 typedef struct {
@@ -77,6 +86,9 @@ enum capinfo_code {
     CAPINFO_CODE_ROUTETYPE = 1,
     CAPINFO_CODE_TRANSMODE
 };
+
+/** \brief Capability information option type strings */
+extern const char *capinfo_code_strs[];
 
 /** \brief Capability information option */
 typedef struct {
@@ -100,6 +112,9 @@ enum capinfo_transmode {
     CAPINFO_TRANS_RECV
 };
 
+/** \brief Capability information transmission mode types strings */
+extern const char *capinfo_transmode_strs[];
+
 /** \brief Capability information NULL transmission mode value
  *
  * Only for serializer */
@@ -112,7 +127,8 @@ typedef uint32_t capinfo_transmode_t;
 /** \brief Message UPDATE
  *
  * Unpadded list of attributes,
- * defined by RFCs are Well-Known
+ * dAttributes defined by RFCs are "Well-Known", and should have the WELL_KNOWN
+ * bit set.
  *
  * attr_flag is a bitfield
  * bit  flag
@@ -194,7 +210,10 @@ enum af {
     AF_CARRIER
 };
 
-/** \brief Application protocol */
+/** \brief Address family strings */
+extern const char *af_strs[];
+
+/** \brief Application protocols */
 enum app_proto {
     /** RFC3219 */
     APP_PROTO_SIP = 1,              /**< SIP */
@@ -205,6 +224,9 @@ enum app_proto {
     APP_PROTO_IAX2 = 32768          /**< vendor specific asterisk IAX2
                                       (RFC 5456) */
 };
+
+/** \brief Application protocol to string */
+const char *app_proto_str(int app_proto);
 
 /** \brief Route */
 typedef struct {
@@ -306,7 +328,7 @@ typedef struct {
 
 /** \brief Attribute Communities
  *
- * flags: well-known, transmodeitive
+ * flags: well-known, transitive
  * list of communities
  */
 typedef community_t attr_communities_t[];
@@ -348,11 +370,17 @@ enum notif_code {
     NOTIF_CODE_CEASE
 };
 
+/** \brief NOTIFICATION error code strings */
+extern const char *notif_code_strs[];
+
 /** \brief NOTIFICATION error subcode for message */
 enum notif_subcode_msg {
     NOTIF_SUBCODE_MSG_BAD_LEN = 1,
     NOTIF_SUBCODE_MSG_BAD_TYPE
 };
+
+/** \brief NOTIFICATION error subcode for message strings */
+extern const char *notif_subcode_msg_strs[];
 
 /** \brief NOTIFICATION error subcode for OPEN */
 enum notif_subcode_open {
@@ -362,8 +390,11 @@ enum notif_subcode_open {
     NOTIF_SUBCODE_OPEN_UNSUP_OPT,
     NOTIF_SUBCODE_OPEN_BAD_HOLD,
     NOTIF_SUBCODE_OPEN_UNSUP_CAP,
-    NOTIF_SUBCODE_OPEN_CAP_MISMATCH,
+    NOTIF_SUBCODE_OPEN_CAP_MISMATCH
 };
+
+/** \brief NOTIFICATION error subcode for OPEN strings*/
+extern const char *notif_subcode_open_strs[];
 
 /** \brief NOTIFICATION error subcode for UPDATE */
 enum notif_subcode_update {
@@ -372,8 +403,14 @@ enum notif_subcode_update {
     NOTIF_SUBCODE_UPDATE_MISS_WELLKNOWN_ATTR,
     NOTIF_SUBCODE_UPDATE_BAD_ATTR_FLAG,
     NOTIF_SUBCODE_UPDATE_BAD_ATTR_LEN,
-    NOTIF_SUBCODE_UPDATE_INVAL_ATTR,
+    NOTIF_SUBCODE_UPDATE_INVAL_ATTR
 };
+
+/** \brief NOTIFICATION error subcode for UPDATE strings */
+extern const char *notif_subcode_update_strs[];
+
+/** \brief subcode strings per code class */
+extern const char **notif_code_subcodes_strs[];
 
 /** \brief Message NOTIFICATION */
 typedef struct {
@@ -395,19 +432,19 @@ typedef enum runtime_errors_e {
     ERROR_NOTIF_ERROR_CODE = -5,    /**< Invalid NOTIFICATION error code */
     ERROR_NOTIF_ERROR_SUBCODE = -6, /**< Invalid NOTIFICATION error subcode */
     /* Deserialization specific */
-    ERROR_INCOMPLETE = -10,         /**<Passed an incomplete message, recv more*/
-    ERROR_MSGTYPE = -11,            /**< Invalid message type */
-    ERROR_VERSION = -12,            /**< Unsupported protocol version */
-    ERROR_OPT = -13,                /**< Unsupported OPEN option param */
-    ERROR_CAPINFO_CODE = -14,       /**< Unsupported capability info code */
-    ERROR_AF = -15,                 /**< Unsupported address family */
-    ERROR_APP_PROTO = -16,          /**< Unsupported application protocol */
-    ERROR_TRANS = -17,              /**< Invalid send/recv capability */
-    ERROR_ATTR_TYPE = -18,          /**< Unsupported attribute type */
-    ERROR_ATTR_FLAG_WELL_KNOWN = -19,/**< Attribute should have well-known */
-    ERROR_ATTR_FLAG_LSENCAP = -20,  /**< Attribute must be link-state encapsul*/
-    ERROR_ITADPATH_TYPE = -21,      /**< Unsupported ITAD path type */
-    ERROR_COMMUNITY_ITAD = -22      /**< Reserved community ITAD with bad ID */
+    ERROR_INCOMPLETE = -7,          /**<Passed an incomplete message, recv more*/
+    ERROR_MSGTYPE = -8,             /**< Invalid message type */
+    ERROR_VERSION = -9,             /**< Unsupported protocol version */
+    ERROR_OPT = -10,                /**< Unsupported OPEN option param */
+    ERROR_CAPINFO_CODE = -11,       /**< Unsupported capability info code */
+    ERROR_AF = -12,                 /**< Unsupported address family */
+    ERROR_APP_PROTO = -13,          /**< Unsupported application protocol */
+    ERROR_TRANS = -14,              /**< Invalid send/recv capability */
+    ERROR_ATTR_TYPE = -15,          /**< Unsupported attribute type */
+    ERROR_ATTR_FLAG_WELL_KNOWN = -16,/**< Attribute should have well-known */
+    ERROR_ATTR_FLAG_LSENCAP = -17,  /**< Attribute must be link-state encapsul*/
+    ERROR_ITADPATH_TYPE = -18,      /**< Unsupported ITAD path type */
+    ERROR_COMMUNITY_ITAD = -19      /**< Reserved community ITAD with bad ID */
 } runtime_error_t;
 
 /** \brief Serialization/deserialization runtime error strings */
@@ -428,10 +465,10 @@ extern const size_t supported_routetypes_size;
 #define PROTO_TCP_PORT  6069
 
 /** \brief Try-Catch macro for serialization/deserialization functions */
-#define PROTO_TRY(o, a) \
-    r = o; \
-    if (r < 0) { \
-        DEBUG("protocol error: %s\n", runtime_error_strs[-r]); \
+#define PROTO_TRY(o, res, a) \
+    res = o; \
+    if (res < 0) { \
+        ERROR("protocol error: %s", runtime_error_strs[-res]); \
         a; \
     }
 
@@ -453,7 +490,7 @@ runtime_error_t new_msg_update(void *buff, size_t len,
 runtime_error_t new_msg_keepalive(void *buff, size_t len);
 
 /** \brief Serialize NOTIFICATION message */
-runtime_error_t new_msg_notification(void *buff, size_t len, uint8_t error_code,
+runtime_error_t new_msg_notif(void *buff, size_t len, uint8_t error_code,
     uint8_t error_subcode, size_t datalen, const void *data);
 
 
@@ -520,7 +557,7 @@ runtime_error_t parse_msg_open_opt(const void *buff, size_t len,
     const msg_open_opt_t **opt_out);
 
 /** \brief Deserialize option capability information */
-runtime_error_t parse_capinfo_t(const void *buff, size_t len,
+runtime_error_t parse_capinfo(const void *buff, size_t len,
     const capinfo_t **capinfo_out);
 
 /** \brief Deserialize option route type */

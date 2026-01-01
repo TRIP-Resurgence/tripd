@@ -10,6 +10,15 @@ DISCLAIMER: All code here is super untested
 
 ## [Install](docs/INSTALL.md)
 
+CMake project. Only development builds supported currently.
+
+```
+mkdir build && cd build
+cmake ..
+make
+./tripd <config file>
+```
+
 ## Resources
 
  - [RFC 1771 (1995) A Border Gateway Protocol 4 (BGP-4)](https://datatracker.ietf.org/doc/html/rfc1771)

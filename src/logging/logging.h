@@ -34,7 +34,8 @@ typedef enum {
     LOG_ERROR,
     LOG_WARNING,
     LOG_INFO,
-    LOG_DEBUG
+    LOG_DEBUG,
+    LOG_TRACE
 } loglevel_t;
 
 
@@ -63,6 +64,9 @@ void logging_log_debug(loglevel_t level, const char *component,
 /** \brief log for debugging purposes */
 #define DEBUG(format, ...)   logging_log_debug(LOG_DEBUG, _COMPONENT_, \
     __FILE__, __func__, __LINE__, format, ##__VA_ARGS__);
+/** \brief log for tracing purposes */
+#define TRACE(format, ...) logging_log_debug(LOG_TRACE, _COMPONENT_, \
+    __FILE__, __func__, __LINE__, format, ##_VA_ARGS__);
 
 #endif /* _LOGGING_H */
 

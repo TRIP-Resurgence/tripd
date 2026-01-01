@@ -24,6 +24,8 @@
 
 #include <string.h>
 
+#include <arpa/inet.h>
+
 void
 map_addr_inet_inet6(struct sockaddr_in6 *sin6, const struct sockaddr_in *sin)
 {
@@ -32,5 +34,22 @@ map_addr_inet_inet6(struct sockaddr_in6 *sin6, const struct sockaddr_in *sin)
     memcpy(&sin6->sin6_addr.s6_addr[12],            /* 32 IPv4 addr */
         &sin->sin_addr.s_addr,
         sizeof(in_addr_t));
+}
+
+const char *
+sockaddr_str(const struct sockaddr *sa)
+{
+    static char addr_buff[INET6_ADDRSTRLEN];
+    switch (sa->sa_family) {
+    case AF_INET6:
+        inet_ntop(AF_INET6, &((struct sockaddr_in6 *)sa)->sin6_addr, addr_buff,
+            INET6_ADDRSTRLEN);
+    break;
+    case AF_INET:
+        inet_ntop(AF_INET, &((struct sockaddr_in *)sa)->sin_addr, addr_buff,
+            INET_ADDRSTRLEN);
+    break;
+    }
+    return addr_buff;
 }
 

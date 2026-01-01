@@ -7,7 +7,8 @@
 
 # Architecture Design
 
-Roughly based on the UML class diagram from Vovida's VOCAL
+Roughly based on the UML class diagram from Vovida's VOCAL. Available
+[here](https://github.com/TRIP-Resurgence/vovida-trip/blob/main/tripstack/docs/trip.pdf)
 
 ## Components
 
