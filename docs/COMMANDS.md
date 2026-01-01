@@ -9,7 +9,7 @@
 
 tripd command usage and reference
 
-The tripd configuration is inspired in a Cisco-style commands,
+The tripd configuration is inspired by the Cisco IOS command line interface,
 where the configuration syntax is the same as the interactive command syntax.
 
 You can read a basic example configuration `tripd.conf` at the root of this project.
@@ -29,16 +29,17 @@ Some commands are common between contexts
 
 #### `end`
 
-Exit any context to the root base context
+Exit any context and return to the root base context.
+
 #### `exit`
 
-Exit current context to the previous one in the tree
+Exit current context and return to the outer context.
 
 ### Base context
 
 #### `log <file> <loglevel>`
 
-Where to write the log
+Where to write the log. Default level is `debug`.
 
  - file: `stdout`, `stderr` or a filename
  - loglevel: { `error` | `warning` | `info` | `debug` }
