@@ -25,23 +25,27 @@
 
 #include <stdio.h>
 
+/** \file
+ * \brief Command parser
+ */
 
-/* command structure */
+/** \brief Command context structure */
 typedef enum {
-    CTX_BASE,       /* base context */
-    CTX_CONFIG,     /* config context */
-    CTX_PREFIXLIST, /* prefix list context */
-    CTX_TRIP,       /* TRIP routing context */
+    CTX_BASE,       /**< Base context */
+    CTX_CONFIG,     /**< Config context */
+    CTX_PREFIXLIST, /**< Prefix list context */
+    CTX_TRIP,       /**< TRIP routing context */
 } cmd_context_t;
 
-/* parser state */
+/** \brief Parser state */
 typedef struct {
     int                 enabled;
     cmd_context_t       ctx;
 
-    uint32_t            itad; /* trip context itad */
+    uint32_t            itad; /**< TRIP context ITAD */
 } parser_state_t;
 
+/** \brief Parser object */
 typedef struct {
     parser_state_t      state;
     FILE               *outf;
@@ -51,10 +55,14 @@ typedef struct {
 } parser_t;
 
 
+/** \brief Skip white characters */
 char *strip(char *s);
 
+/** \brief Initialize parser state and output file */
 parser_t *parser_init(FILE *outf);
+/** \brief Parse single command */
 int parser_parse_cmd(parser_t *parser, char *cmd);
+/** \brief Parse file */
 int parser_parse_file(parser_t *parser, FILE *f);
 
 

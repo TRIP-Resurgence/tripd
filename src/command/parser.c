@@ -20,6 +20,7 @@
 
 */
 
+/** \file */
 
 #include "parser.h"
 
@@ -46,6 +47,7 @@ const cmd_def_t cmds_base[] = {
     { "enable",         &cmd_enable },
     { "configure",      &cmd_configure },
     { "show",           &cmd_show },
+    { "shutdown",       &cmd_shutdown },
     { NULL,             NULL }
 };
 

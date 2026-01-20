@@ -20,7 +20,14 @@
 
 */
 
+/** \file
+ * Implements P2P connection between two LS.
+ */
+
 #include "session.h"
+
+#include <logging/logging.h>
+#include <util/util.h>
 
 #include <string.h>
 #include <stdlib.h>
@@ -32,30 +39,7 @@
 
 #include <arpa/inet.h>
 
-
-#define DEBUG printf
-
-#define SOCK_TRY_SEND(o, a) \
-    if (o < 0) { \
-        fprintf(stderr, "[ERROR] %s:%s:%s: %s\n", \
-            __FILE__, __func__, __LINE__, strerror(errno)); \
-        a; \
-    }
-
-#define SOCK_TRY_RECV(fd, buff, type, action) \
-    while (1) { \
-        res = recv(fd, buff, sizeof(type), 0); \
-        if (res < 0) { \
-            fprintf(stderr, "[ERROR] %s:%s:%s: %s\n", \
-                __FILE__, __func__, __LINE__, strerror(errno)); \
-            action; break; \
-        } else if (res == 0) { \
-            action; break; \
-        } else if (res < sizeof(type)) { \
-            continue; \
-        } \
-        buff += res; break; \
-    }
+#define _COMPONENT_ "session"
 
 
 const char *session_state_strs[] = {
@@ -67,155 +51,157 @@ const char *session_state_strs[] = {
     "established"
 };
 
+static const char *
+session_str(session_t *s)
+{
+    static char str[256], abuff[INET6_ADDRSTRLEN], abuff2[INET_ADDRSTRLEN];
+    snprintf(str, 256, "(%s):%d:%s",
+        inet_ntop(AF_INET6, &s->addr->sin6_addr, abuff,
+            sizeof(abuff)),
+        s->peer_itad,
+        inet_ntop(AF_INET, &s->peer_id, abuff2, sizeof(abuff2)));
+    return str;
+}
+
+const char *
+id_str(uint32_t id)
+{
+    static char idbuff[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &id, idbuff, sizeof(idbuff));
+    return idbuff;
+}
 
 static void
 session_change_state(session_t *s, session_state_t new_state)
 {
-    static char abuff[INET6_ADDRSTRLEN];
-    DEBUG("peer (%s)%d:%d changed state from %s to %s\n",
-        inet_ntop(AF_INET6, &s->session_peer_addr.sin6_addr, abuff,
-            sizeof(abuff)),
-        s->session_peer_itad, s->session_peer_id,
-        session_state_strs[s->session_state], session_state_strs[new_state]);
-    s->session_state = new_state;
+    DEBUG("peer session %s changed state from %s to %s", session_str(s),
+        session_state_strs[s->state], session_state_strs[new_state]);
+    s->state = new_state;
 }
 
-static void *
+int
+send_notification(int fd, int code, int subcode)
+{
+    int res = 0;
+    char buff[MAX_MSG_SIZE];
+
+    PROTO_TRY(
+        new_msg_notif(buff, MAX_MSG_SIZE,
+            NOTIF_CODE_ERROR_MSG, subcode, 0, NULL),
+        res, goto sock_error
+    );
+
+    SOCK_TRY_SEND(
+        send(fd, buff, res, 0) < 0,
+        goto sock_error
+    );
+
+    return 0;
+
+sock_error:
+    return -1;
+}
+
+/** /brief for session handler
+ *
+ * only if res warrants a NOTIFICATION
+ */
+static int
+send_notification_res(int fd, int res)
+{
+    uint8_t code = 0, subcode = 0;
+    switch (res) {
+        case ERROR_MSGTYPE:
+            code = NOTIF_CODE_ERROR_MSG;
+            subcode = NOTIF_SUBCODE_MSG_BAD_TYPE;
+        break;
+    }
+
+    if (subcode)
+        if(send_notification(fd, code, subcode) < 0)
+            return -1;
+
+    return 0;
+}
+
+
+void *
 session_loop(void *arg)
 {
     session_t *s = arg;
 
-    int r = 0;
+    int res = 0, toread = 0;
+    char buff[MAX_MSG_SIZE];
 
-    /* send OPEN */
-    PROTO_TRY(
-        new_msg_open(s->session_buff, MAX_MSG_SIZE,
-            s->session_hold, s->session_itad, s->session_id,
-            supported_routetypes, supported_routetypes_size,
-            s->session_transmode),
-        goto proto_error
-    );
-
-    SOCK_TRY_SEND(
-        send(s->session_fd, s->session_buff, r, 0) < 0,
-        goto sock_error
-    );
-    session_change_state(s, STATE_OPENSENT);
-
-    int res = 0;
     while (1) {
-        void *recv_wnd = s->session_buff;
-        /* receive message */
-        SOCK_TRY_RECV(s->session_fd, recv_wnd, msg_t, goto sock_error);
+        void *recv_wnd = buff;
+        /* receive and decode message header */
+        SOCK_TRY_RECV(s->fd, recv_wnd, msg_t, goto sock_error);
 
         const msg_t *msg = NULL;
         PROTO_TRY(
-            parse_msg(s->session_buff, r, &msg),
-            goto proto_error
+            parse_msg(buff, res, &msg),
+            res, goto proto_error
         );
 
-        DEBUG("msg: %d[%d]\n", msg->msg_type, msg->msg_len);
+        DEBUG("received msg: %s[%d]", msg_type_strs[msg->msg_type],
+            msg->msg_len);
 
-        /* continue */
+        switch (msg->msg_type) {
+        case MSG_TYPE_OPEN: {
+            ERROR("session %s unexpected OPEN message", session_str(s));
+
+            send_notification(s->fd, NOTIF_CODE_ERROR_MSG,
+                NOTIF_SUBCODE_MSG_BAD_TYPE);
+
+            goto sock_error;
+        } break;
+        case MSG_TYPE_UPDATE: {
+            /* TODO */
+        } break;
+        case MSG_TYPE_NOTIFICATION: {
+            /* TODO */
+        } break;
+        case MSG_TYPE_KEEPALIVE: {
+            /* TODO: reset timer (TODO keepalive timer */
+        } break;
+        }
+
+        /* flush and continue */
+        res = recv(s->fd, buff, MAX_MSG_SIZE, 0);
+        if (res < 0) {
+            ERROR("recv(): %s", strerror(errno)); \
+            goto sock_error;
+        } else if (res == 0) {
+            DEBUG("connection closed by peer"); \
+            goto sock_error;
+        } else {
+            DEBUG("%d trailing bytes dropped", res);
+        }
     }
 
 proto_error:
-    uint8_t subcode = 0;
-    switch (r) {
-        case ERROR_MSGTYPE: subcode = NOTIF_SUBCODE_MSG_BAD_TYPE; break;
-    }
-
-    PROTO_TRY(
-        new_msg_notification(s->session_buff, MAX_MSG_SIZE,
-            NOTIF_CODE_ERROR_MSG, subcode, 0, NULL),
-        goto proto_error
-    );
+    send_notification_res(s->fd, res);
 
 sock_error:
-    close(s->session_fd);
-    s->session_state = STATE_IDLE;
+    close(s->fd);
+    session_change_state(s, STATE_IDLE);
     return NULL;
 }
 
-
-static void *
-connect_loop(void *arg)
+void
+session_shutdown(session_t *session)
 {
-    session_t *s = arg;
-    s->session_connect_retry = 60;
-
-    int r = 0;
-    while (1) {
-        session_change_state(s, STATE_CONNECT);
-
-        int res = connect(s->session_fd,
-            (struct sockaddr*)&s->session_peer_addr,
-            sizeof(struct sockaddr_in6));
-
-        if (res < 0) {
-            fprintf(stderr, "[ERROR] %s:%s:%s: %s\n",
-                __FILE__, __func__, __LINE__, strerror(errno));
-            session_change_state(s, STATE_IDLE);
-            sleep(s->session_connect_retry);
-            if (s->session_connect_retry < 3600)
-                s->session_connect_retry *= 2;
-            continue;
-        }
-
-        break;
-    }
-
-    s->session_connect_retry = 60;
-    session_loop(arg);
-}
-
-
-session_t *
-session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold,
-    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr,
-    uint32_t peer_itad)
-{
-    /* allocate resources */
-    session_t *session = malloc(sizeof(session_t));
-    session->session_buff = malloc(MAX_MSG_SIZE);
-    session->session_state = STATE_IDLE;
-    session->session_transmode = transmode;
-    session->session_itad = itad;
-    session->session_id = id;
-    session->session_peer_itad = peer_itad;
-
-    memcpy(&session->session_peer_addr, peer_addr, sizeof(struct sockaddr_in6));
-    session->session_fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
-
-    pthread_create(&session->session_thread, NULL, &connect_loop, session);
-    pthread_detach(session->session_thread);
-}
-
-session_t *
-session_new_peer(uint32_t itad, uint32_t id, uint16_t hold,
-    capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr, int fd)
-{
-    /* allocate resources */
-    session_t *session = malloc(sizeof(session_t));
-    session->session_buff = malloc(MAX_MSG_SIZE);
-    session->session_state = STATE_IDLE;
-    session->session_transmode = transmode;
-    session->session_itad = itad;
-    session->session_id = id;
-
-    memcpy(&session->session_peer_addr, peer_addr, sizeof(struct sockaddr_in6));
-    session->session_fd = fd;
-
-    pthread_create(&session->session_thread, NULL, &session_loop, session);
-    pthread_detach(session->session_thread);
-
-    return session;
+    /* TODO send CEASE NOTIFICATION */
+    DEBUG("shutting down session %s", session_str(session));
+    shutdown(session->fd, SHUT_RDWR); /* recv loop does close() */
+    session->state = STATE_IDLE;
 }
 
 void
 session_destroy(session_t *session)
 {
-    free(session->session_buff);
+    free(session->addr);
     free(session);
 }
 

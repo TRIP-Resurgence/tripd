@@ -20,6 +20,8 @@
 
 */
 
+/** \file */
+
 #include "locator.h"
 
 #include <stddef.h>
@@ -28,25 +30,20 @@
 
 #include <arpa/inet.h>
 
-static locator_t *g_locator = NULL;
+static locator_t g_locator = { 0 };
 
 
 locator_t *
 locator_new()
 {
-    if (g_locator != NULL)
-        return NULL;
+    g_locator.peers_capacity = 64;
+    g_locator.peers = malloc(g_locator.peers_capacity * sizeof(peer_t));
+    g_locator.peers_size = 0;
 
-    g_locator = malloc(sizeof(locator_t));
-    /* test peer */
-    g_locator->peers_capacity = 64;
-    g_locator->peers = malloc(g_locator->peers_capacity * sizeof(peer_t));
-    g_locator->peers_size = 0;
-
-    return g_locator;
+    return &g_locator;
 }
 
-void
+int
 locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     uint32_t itad, uint16_t hold, capinfo_transmode_t transmode)
 {
@@ -61,6 +58,8 @@ locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     peer->itad = itad;
     peer->hold = hold;
     peer->transmode = transmode;
+    
+    return locator->peers_size - 1;
 }
 
 int
@@ -75,6 +74,7 @@ locator_lookup(locator_t *locator, const peer_t **peer,
             sizeof(addr->sin6_addr)) == 0)
         {
             p = &locator->peers[i];
+            break;
         }
     }
 
@@ -86,10 +86,9 @@ locator_lookup(locator_t *locator, const peer_t **peer,
 void
 locator_destroy(locator_t *locator)
 {
-    if (locator != g_locator)
+    if (locator != &g_locator)
         return;
-    free(locator);
-    g_locator = NULL;
+    free(locator->peers);
 }
 
 
