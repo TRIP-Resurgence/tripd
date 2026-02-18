@@ -34,6 +34,19 @@
 #include "locator.h"
 
 
+/** \brief Request object, represents connection before established state */
+typedef struct {
+    pthread_t               thread;
+    int                     peer_idx;
+    struct sockaddr_in6    *addr;
+    int                     fd;
+    session_state_t         state;
+
+    /* discovered */
+    uint32_t                id;
+    uint32_t                hold;
+} request_t;
+
 /** \brief Manager object */
 typedef struct {
     pthread_t   thread;
@@ -46,6 +59,8 @@ typedef struct {
 
     session_t **sessions;
     size_t      sessions_size;
+    request_t **requests;   /* TODO: save requests here */
+    size_t      requests_size;
 } manager_t;
 
 
@@ -57,8 +72,14 @@ void manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     uint32_t itad);
 
 /** \brief Lookup session by ITAD and ID */
-session_t *manager_lookup_itad_id(manager_t manager, uint32_t itad,
+session_t *manager_lookup_session_itad_id(manager_t *manager, uint32_t itad,
     uint32_t id);
+
+/** \brief Lookup session by ID */
+session_t *manager_lookup_session_id(manager_t *manager, uint32_t id);
+
+/** \brief Lookup session by ID */
+request_t *manager_lookup_request_id(manager_t *manager, uint32_t id);
 
 /** \brief Run accept loop in thread */
 void manager_run(manager_t *manager);

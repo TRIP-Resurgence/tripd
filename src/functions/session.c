@@ -92,7 +92,7 @@ send_notification(int fd, int code, int subcode)
     );
 
     SOCK_TRY_SEND(
-        send(fd, buff, res, 0) < 0,
+        send(fd, buff, res, 0),
         goto sock_error
     );
 
