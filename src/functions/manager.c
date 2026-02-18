@@ -139,7 +139,7 @@ handle_open(request_t *r, const peer_t *peer, const msg_t *msg, void *recv_wnd)
         return -1;
     }
 
-    /* TODO collision detection as per RFC
+    /* TODO: collision detection as per RFC
     if (manager_lookup_itad_id(s->itad, open->open_id)) {
         ERROR("peer ID exists in same ITAD");
         send_notification(s, NOTIF_CODE_ERROR_OPEN,
@@ -287,7 +287,7 @@ peer_handshake(void *arg)
     );
 
     SOCK_TRY_SEND(
-        send(req->fd, buff, res, 0) < 0,
+        send(req->fd, buff, res, 0),
         goto sock_error
     );
     request_change_state(req, STATE_OPENSENT);
@@ -319,7 +319,7 @@ peer_handshake(void *arg)
             );
 
             SOCK_TRY_SEND(
-                send(req->fd, buff, res, 0) < 0,
+                send(req->fd, buff, res, 0),
                 goto sock_error
             );
 
