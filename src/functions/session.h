@@ -27,6 +27,7 @@
 #ifndef _SESSION_H
 #define _SESSION_H
 
+#include "locator.h"
 #include <protocol/protocol.h>
 
 #include <netinet/in.h>
@@ -87,18 +88,18 @@ extern const char *session_state_strs[];
 typedef struct {
     pthread_t               thread;
     session_state_t         state;
-    uint32_t                itad, id;
     uint16_t                hold;
-
-    capinfo_transmode_t     transmode;
 
     struct sockaddr_in6    *addr;
     int                     fd;
 
-    uint32_t                peer_itad, peer_id;
+    const peer_t           *peer;
+    uint32_t                peer_id;
 } session_t;
 
 
+/** \brief Change session state */
+void session_change_state(session_t *s, session_state_t new_state);
 
 /** \brief Send notification helper */
 int send_notification(int fd, int code, int subcode);

@@ -51,11 +51,11 @@ typedef struct {
 locator_t *locator_new();
 
 /** \brief Add a known peer */
-int locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
+const peer_t *locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     uint32_t itad, uint16_t hold, capinfo_transmode_t transmode);
 
 /** \brief Lookup peer by its address */
-int locator_lookup(locator_t *locator, const peer_t **peer,
+const peer_t *locator_lookup(locator_t *locator,
     const struct sockaddr_in6 *addr);
 
 /** \brief Destroy locator object */

@@ -26,6 +26,8 @@
 
 #include "session.h"
 
+#include "manager.h"
+
 #include <logging/logging.h>
 #include <util/util.h>
 
@@ -58,7 +60,7 @@ session_str(session_t *s)
     snprintf(str, 256, "(%s):%d:%s",
         inet_ntop(AF_INET6, &s->addr->sin6_addr, abuff,
             sizeof(abuff)),
-        s->peer_itad,
+        s->peer->itad,
         inet_ntop(AF_INET, &s->peer_id, abuff2, sizeof(abuff2)));
     return str;
 }
@@ -71,7 +73,7 @@ id_str(uint32_t id)
     return idbuff;
 }
 
-static void
+void
 session_change_state(session_t *s, session_state_t new_state)
 {
     DEBUG("peer session %s changed state from %s to %s", session_str(s),
@@ -124,11 +126,16 @@ send_notification_res(int fd, int res)
     return 0;
 }
 
-
+/** \brief Session loop
+ *
+ * \param arg Of type (void*){ manager_t *m, session_t *s }
+ */
 void *
 session_loop(void *arg)
 {
-    session_t *s = arg;
+    manager_t *m = ((void**)arg)[0];
+    session_t *s = ((void**)arg)[1];
+    free(arg);
 
     int res = 0, toread = 0;
     char buff[MAX_MSG_SIZE];
