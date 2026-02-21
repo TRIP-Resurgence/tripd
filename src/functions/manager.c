@@ -112,8 +112,25 @@ send_notification_res(int fd, int res)
 
 
 
+/** \brief Remove session from */
+static void
+manager_session_remove(manager_t *manager, session_t *session)
+{
+    int s_idx = -1;
+    for (int i = 0; i < manager->sessions_size; i++)
+        if (manager->sessions[i] == session)
+            s_idx = i;
+
+    session_destroy(session);
+    memcpy(&manager->sessions[s_idx], &manager->sessions[s_idx + 1],
+        manager->sessions_size - s_idx);
+    manager->sessions_size--;
+}
+
+
 /* =================== REQUEST HANDLING ===================================== */
 
+/** \brief Handle a received OPEN message (OpenConfirm State) */
 static int
 handle_open(manager_t *m, session_t *s, const msg_t *msg,
     void *recv_wnd)
@@ -139,39 +156,15 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
         return -1;
     }
 
-    /* collision detection of established sessions RFC section 6.8 */
-    session_t *coll_s = manager_lookup_session_itad_id(m, open->open_itad,
-        open->open_id);
-    if (coll_s) {
-        ERROR("peer itad,id (%d,%d) collission: old peer %s, new peer %s",
-            open->open_itad, open->open_id,
-            sockaddr6_str(coll_s->addr), sockaddr6_str(s->addr));
-        send_notification(s->fd, NOTIF_CODE_CEASE, 0);
+    /* duplicate ID in ITAD peer collision detection */
+    if ((open->open_itad == m->itad) && (open->open_id == m->id)) {
+        ERROR("duplicate ID in ITAD detected, colliding peer rejected");
+        send_notification(s->fd, NOTIF_CODE_ERROR_OPEN,
+            NOTIF_SUBCODE_OPEN_BAD_ID);
         return -1;
     }
 
-    coll_s = manager_lookup_session_id(m, open->open_id);
-    if (coll_s) {
-        WARNING("collission detected with id %d at %s", coll_s->peer_id,
-            sockaddr6_str(s->addr));
-        send_notification(s->fd, NOTIF_CODE_CEASE, 0);
-        return -1;
-    }
-
-    /* TODO: collision detection with pre-session requests */
-#if 0
-    request_t *coll_r = manager_lookup_request_id(m, open->open_id);
-    if (coll_s) {
-        WARNING("collission detected");
-        if ((m->id < open->open_id) ||
-            (m->id == open->open_id) && (m->itad < open->open_itad))
-        {
-            send_notification(coll_s->fd, NOTIF_CODE_CEASE, 0);
-            session_shutdown(coll_s);
-        } else
-            return -1;
-    }
-#endif
+    /* TODO: section 6.8 collision detection */
 
     s->peer_id = open->open_id;
     s->hold = MIN(s->peer->hold, open->open_hold);
