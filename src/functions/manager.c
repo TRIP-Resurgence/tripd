@@ -449,6 +449,9 @@ peer_handshake(void *arg)
 
             /* Hand newly established session off to session_loop */
             session_loop(arg);
+
+            /* If peer disconnects going back to idle, start connect loop */
+            s->initiated = 1;
             connect_loop(arg);
         } break;
         default:
