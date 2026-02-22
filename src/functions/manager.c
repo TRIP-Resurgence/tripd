@@ -61,14 +61,26 @@
 
 /** \brief Lookup session by ITAD and ID match */
 static session_t *
-manager_lookup_session_itad_id(manager_t *manager, uint32_t itad,
+manager_session_lookup_itad_id(manager_t *m, uint32_t itad,
     uint32_t id)
 {
-    for (size_t i = 0; i < manager->sessions_size; i++)
-        if (manager->sessions[i]->peer->itad == itad &&
-            manager->sessions[i]->peer_id == id)
+    for (size_t i = 0; i < m->sessions_size; i++)
+        if (m->sessions[i]->peer->itad == itad &&
+            m->sessions[i]->peer_id == id)
         {
-            return manager->sessions[i];
+            return m->sessions[i];
+        }
+    return NULL;
+}
+
+/** \brief Lookup session by locator peer */
+static session_t *
+manager_session_lookup_peer(manager_t *m, const peer_t *peer)
+{
+    for (size_t i = 0; i < m->sessions_size; i++)
+        if (m->sessions[i]->peer == peer)
+        {
+            return m->sessions[i];
         }
     return NULL;
 }
@@ -200,9 +212,8 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     }
 
     /* section 6.8 collision detection */
-    session_t *coll_s = manager_lookup_session_itad_id(m, open->open_itad,
+    session_t *coll_s = manager_session_lookup_itad_id(m, open->open_itad,
         open->open_id);
-
     if (coll_s) {
         WARNING("collision detected with peer (%d,%d)", open->open_itad,
             open->open_id);
@@ -212,6 +223,7 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                 send_notification(s->fd, NOTIF_CODE_CEASE, 0);
                 return -1;
             } else {
+                /* cease, close and destroy old session, remove from vector */
                 send_notification(coll_s->fd, NOTIF_CODE_CEASE, 0);
                 session_shutdown(coll_s);
                 session_destroy(coll_s);
@@ -223,6 +235,16 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
             return -1;
         }
     }
+
+    /* find old still initiating session pre-openconfirm if exists and stop it*/
+    session_t *init_s = manager_session_lookup_peer(m, s->peer);
+    if (init_s) {
+        INFO("closing old initiating session");
+        session_shutdown(init_s);
+        session_destroy(init_s);
+        manager_session_remove(m, init_s);
+    }
+
 
     s->peer_id = open->open_id;
     s->hold = MIN(s->peer->hold, open->open_hold);
