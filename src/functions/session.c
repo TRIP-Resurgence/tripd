@@ -135,7 +135,6 @@ session_loop(void *arg)
 {
     manager_t *m = ((void**)arg)[0];
     session_t *s = ((void**)arg)[1];
-    free(arg);
 
     int res = 0, toread = 0;
     char buff[MAX_MSG_SIZE];

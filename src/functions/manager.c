@@ -58,6 +58,8 @@
 #endif /* MAX_BACKOFF_CONNECT_RETRY */
 
 
+static void *connect_loop(void *arg);
+
 
 /** \brief Lookup session by ITAD and ID match */
 static session_t *
@@ -78,7 +80,7 @@ static session_t *
 manager_session_lookup_peer(manager_t *m, const peer_t *peer)
 {
     for (size_t i = 0; i < m->sessions_size; i++)
-        if (m->sessions[i]->peer == peer)
+        if (m->sessions[i]->peer == peer && !m->sessions[i]->mark_stop_init)
         {
             return m->sessions[i];
         }
@@ -237,10 +239,9 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
 
     /* find old still initiating session pre-openconfirm if exists and stop it*/
     session_t *init_s = manager_session_lookup_peer(m, s->peer);
-    if (init_s) {
+    if (init_s && (init_s->initiated == 1) && (init_s != s)) {
         INFO("closing old initiating session");
-        session_shutdown(init_s);
-        manager_session_remove(m, init_s);
+        init_s->mark_stop_init = 1;
     }
 
 
@@ -248,7 +249,8 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     s->hold = MIN(s->peer->hold, open->open_hold);
 
     /* now add session to manager */
-    manager_session_add(m, s);
+    if (!s->initiated)
+        manager_session_add(m, s);
 
     size_t opts_toread = open->open_opts_len;
     const void *opt_cur = open->open_opts;
@@ -447,7 +449,7 @@ peer_handshake(void *arg)
 
             /* Hand newly established session off to session_loop */
             session_loop(arg);
-            return NULL;
+            connect_loop(arg);
         } break;
         default:
             ERROR("unexpected %s message");
@@ -576,11 +578,17 @@ manager_new(const struct sockaddr_in6 *listen_addr)
 static void *
 connect_loop(void *arg)
 {
+    manager_t *m = ((void**)arg)[0];
     session_t *s = ((void**)arg)[1];
 
     time_t connect_retry = 120;
 
     while (1) {
+        if (s->mark_stop_init) {
+            manager_session_remove(m, s);
+            return NULL;
+        }
+
         session_change_state(s, STATE_CONNECT);
 
         int res = connect(s->fd,
@@ -613,14 +621,6 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     const peer_t *peer = locator_add(manager->locator, addr, itad,
         manager->hold, CAPINFO_TRANS_SEND_RECV);
     
-    if (manager->sessions_size + 1 == manager->locator->peers_size) {
-        manager->sessions = realloc(manager->sessions,
-            manager->locator->peers_size * sizeof(session_t*));
-    } else {
-        WARNING("manager session vector inconsistent with locator");
-        return;
-    }
-
     /* create session object and hand off to connect loop */
     session_t *s = malloc(sizeof(session_t));
     memset(s, 0, sizeof(session_t));

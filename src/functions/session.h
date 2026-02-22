@@ -89,6 +89,7 @@ typedef struct {
     pthread_t               thread;
     session_state_t         state;
     int                     initiated; /**< Initiated by local */
+    int                     mark_stop_init; /**< Tell initiating thread to quit*/
 
     uint16_t                hold;
 
