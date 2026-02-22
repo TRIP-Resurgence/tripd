@@ -226,7 +226,6 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                 /* cease, close and destroy old session, remove from vector */
                 send_notification(coll_s->fd, NOTIF_CODE_CEASE, 0);
                 session_shutdown(coll_s);
-                session_destroy(coll_s);
                 manager_session_remove(m, coll_s);
             }
         } else if (coll_s->state == STATE_ESTABLISHED) {
@@ -241,7 +240,6 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     if (init_s) {
         INFO("closing old initiating session");
         session_shutdown(init_s);
-        session_destroy(init_s);
         manager_session_remove(m, init_s);
     }
 
