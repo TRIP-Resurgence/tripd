@@ -60,7 +60,7 @@
 
 
 /** \brief Lookup session by ITAD and ID match */
-session_t *
+static session_t *
 manager_lookup_session_itad_id(manager_t *manager, uint32_t itad,
     uint32_t id)
 {
@@ -70,16 +70,6 @@ manager_lookup_session_itad_id(manager_t *manager, uint32_t itad,
         {
             return manager->sessions[i];
         }
-    return NULL;
-}
-
-/** \brief Lookup session by ID match */
-session_t *
-manager_lookup_session_id(manager_t *manager, uint32_t id)
-{
-    for (size_t i = 0; i < manager->sessions_size; i++)
-        if (manager->sessions[i]->peer_id == id)
-            return manager->sessions[i];
     return NULL;
 }
 
@@ -110,23 +100,68 @@ send_notification_res(int fd, int res)
     return 0;
 }
 
-
-
-/** \brief Remove session from */
+/** \brief Add session to manager */
 static void
-manager_session_remove(manager_t *manager, session_t *session)
+manager_session_add(manager_t *m, session_t *s)
 {
-    int s_idx = -1;
-    for (int i = 0; i < manager->sessions_size; i++)
-        if (manager->sessions[i] == session)
-            s_idx = i;
+    if (m->sessions_size + 1 > m->sessions_capacity) {
+        m->sessions = realloc(m->sessions,
+            2 * sizeof(session_t) * m->sessions_capacity);
+        m->sessions_capacity *= 2;
+    }
 
-    session_destroy(session);
-    memcpy(&manager->sessions[s_idx], &manager->sessions[s_idx + 1],
-        manager->sessions_size - s_idx);
-    manager->sessions_size--;
+    m->sessions[m->sessions_size++] = s;
 }
 
+/** \brief Remove session from manager */
+static void
+manager_session_remove(manager_t *m, session_t *s)
+{
+    int s_idx = -1;
+    for (int i = 0; i < m->sessions_size; i++)
+        if (m->sessions[i] == s)
+            s_idx = i;
+
+    session_destroy(s);
+    memcpy(&m->sessions[s_idx], &m->sessions[s_idx + 1],
+        m->sessions_size - s_idx);
+    m->sessions_size--;
+}
+
+/** \brief Compare two ITAD,ID pairs
+ *
+ * \return non-zero if pair 1 < pair 2, zero if otherwise
+ */
+static int
+compare_itad_id(uint32_t itad1, uint32_t id1, uint32_t itad2, uint32_t id2)
+{
+    return (id1 < id2) || (id1 == id2 && (itad1 < itad2));
+}
+
+/** \brief Compare two colliding sessions
+ *
+ * \return non-zero if s1 should be closed, zero if s2 should be closed
+ *
+ * \param s1 New session
+ * \param s2 Old session
+ */
+static int
+manager_collision_sessions_compare(const manager_t *m, const session_t *s1,
+    const session_t *s2)
+{
+    if (s1->initiated == s2->initiated) {
+        ERROR("colliding connections initiated by same ID");
+        return 1;
+    } else if (s1->initiated) {
+        /* new session initiated by local
+         * return local < s2 peer */
+        return compare_itad_id(m->itad, m->id, s2->peer->itad, s2->peer_id);
+    } else {
+        /* old connection initiated by local
+         * return s1 peer < local */
+        return compare_itad_id(s1->peer->itad, s1->peer_id, m->itad, m->id);
+    }
+}
 
 /* =================== REQUEST HANDLING ===================================== */
 
@@ -164,10 +199,36 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
         return -1;
     }
 
-    /* TODO: section 6.8 collision detection */
+    /* section 6.8 collision detection */
+    session_t *coll_s = manager_lookup_session_itad_id(m, open->open_itad,
+        open->open_id);
+
+    if (coll_s) {
+        WARNING("collision detected with peer (%d,%d)", open->open_itad,
+            open->open_id);
+        if (coll_s->state == STATE_OPENCONFIRM) {
+            WARNING("collision resolved: kept higher ID or ITAD");
+            if (manager_collision_sessions_compare(m, s, coll_s)) {
+                send_notification(s->fd, NOTIF_CODE_CEASE, 0);
+                return -1;
+            } else {
+                send_notification(coll_s->fd, NOTIF_CODE_CEASE, 0);
+                session_shutdown(coll_s);
+                session_destroy(coll_s);
+                manager_session_remove(m, coll_s);
+            }
+        } else if (coll_s->state == STATE_ESTABLISHED) {
+            WARNING("collision resolved: kept established connection");
+            send_notification(s->fd, NOTIF_CODE_CEASE, 0);
+            return -1;
+        }
+    }
 
     s->peer_id = open->open_id;
     s->hold = MIN(s->peer->hold, open->open_hold);
+
+    /* now add session to manager */
+    manager_session_add(m, s);
 
     size_t opts_toread = open->open_opts_len;
     const void *opt_cur = open->open_opts;
@@ -417,13 +478,14 @@ manager_loop(void *arg)
             sockaddr_str((struct sockaddr*)&peer_addr));
 
 
-        /* hand off connection to request handler on a new thread */
+        /* hand off connection to handshake handler on a new thread */
         session_t *s = malloc(sizeof(session_t));
         memset(s, 0, sizeof(session_t));
         s->peer = peer;
         s->addr = malloc(peer_addr_size);
         memcpy(s->addr, &peer_addr, peer_addr_size);
         s->fd = request_fd;
+        s->initiated = 0;
 
         void **handshake_data = malloc(2 * sizeof(void*));
         handshake_data[0] = m;
@@ -539,22 +601,17 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
         return;
     }
 
-    /* create session request object and hand off to connect loop */
+    /* create session object and hand off to connect loop */
     session_t *s = malloc(sizeof(session_t));
     memset(s, 0, sizeof(session_t));
     s->peer = peer;
     s->addr = malloc(sizeof(struct sockaddr_in6));
     memcpy(s->addr, addr, sizeof(struct sockaddr_in6));
     s->state = STATE_IDLE;
+    s->initiated = 1;
 
     /* add session to manager session vector */
-    if (manager->sessions_size + 1 > manager->sessions_capacity) {
-        manager->sessions = realloc(manager->sessions,
-            2 * sizeof(session_t) * manager->sessions_capacity);
-        manager->sessions_capacity *= 2;
-    }
-
-    manager->sessions[manager->sessions_size++] = s;
+    manager_session_add(manager, s);
 
     /* create socket and pass session to connect loop */
     s->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);

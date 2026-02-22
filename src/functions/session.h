@@ -88,6 +88,8 @@ extern const char *session_state_strs[];
 typedef struct {
     pthread_t               thread;
     session_state_t         state;
+    int                     initiated; /**< Initiated by local */
+
     uint16_t                hold;
 
     struct sockaddr_in6    *addr;
