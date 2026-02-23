@@ -33,11 +33,15 @@
 int cmd_end(parser_t *parser, int no, char *args);
 /** \brief Exit current context */
 int cmd_exit(parser_t *parser, int no, char *args);
+/** \brief Contextual help */
+int cmd_help(parser_t *parser, int no, char *args);
 
-/* base context */
+/* root context */
 
 /** \brief Enable configuration */
 int cmd_enable(parser_t *parser, int no, char *args);
+/** \brief Disable configuration */
+int cmd_disable(parser_t *parser, int no, char *args);
 /** \brief Enter configuration */
 int cmd_configure(parser_t *parser, int no, char *args);
 /** \brief Show stuff */
@@ -68,6 +72,26 @@ int cmd_config_trip_lsid(parser_t *parser, int no, char *args);
 int cmd_config_trip_timers(parser_t *parser, int no, char *args);
 /** \brief Configure new peer */
 int cmd_config_trip_peer(parser_t *parser, int no, char *args);
+
+
+/* handler function pointer type */
+typedef int(*cmd_handler_t)(parser_t *parser, int no, char *args);
+
+/* command definition type */
+typedef struct {
+    const char     *cmd;
+    cmd_handler_t   cmd_handler;
+    const char     *desc;
+    const char     *syntax;
+} cmd_def_t;
+
+
+/* command definitions per context */
+extern const cmd_def_t cmds_root[];
+extern const cmd_def_t cmds_config[];
+extern const cmd_def_t cmds_prefixlist[];
+extern const cmd_def_t cmds_trip[];
+extern const cmd_def_t *ctx_cmds[];
 
 #endif /* _COMMANDS_H */
 

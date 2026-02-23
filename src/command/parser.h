@@ -31,7 +31,7 @@
 
 /** \brief Command context structure */
 typedef enum {
-    CTX_BASE,       /**< Base context */
+    CTX_ROOT,       /**< Root context */
     CTX_CONFIG,     /**< Config context */
     CTX_PREFIXLIST, /**< Prefix list context */
     CTX_TRIP,       /**< TRIP routing context */

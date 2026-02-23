@@ -20,12 +20,14 @@
 
 */
 
-/** \file */
+/** \file
+ * \brief Main entry point
+ */
 
 #include <protocol/protocol.h>
-
 #include <command/parser.h>
 #include <command/commands.h>
+#include <command/cli.h>
 #include <logging/logging.h>
 
 #include <stdlib.h>
@@ -99,10 +101,11 @@ main(int argc, char **argv)
     }
     parser_parse_file(g_parser, conff);
     fclose(conff);
+    
+    parser_parse_cmd(g_parser, "end");
 
-    while (1) {
-        sleep(1000);
-    }
+    /* run interactive command line interface */
+    cli_run(g_parser);
 
     return 0;
 }

@@ -24,6 +24,7 @@
 
 #include "commands.h"
 
+#include "cli.h"
 #include <logging/logging.h>
 #include <util/util.h>
 
@@ -40,8 +41,8 @@
 int
 cmd_end(parser_t *parser, int no, char *args)
 {
-    parser->state.ctx = CTX_BASE;
-    if (parser->state.ctx == CTX_BASE)
+    parser->state.ctx = CTX_ROOT;
+    if (parser->state.ctx == CTX_ROOT)
         parser->state.enabled = 0;
     return 0;
 }
@@ -50,8 +51,8 @@ int
 cmd_exit(parser_t *parser, int no, char *args)
 {
     switch (parser->state.ctx) {
-    case CTX_BASE: parser->state.enabled = 0; break;
-    case CTX_CONFIG: parser->state.ctx = CTX_BASE; break;
+    case CTX_ROOT: parser->state.enabled = 0; break;
+    case CTX_CONFIG: parser->state.ctx = CTX_ROOT; break;
     case CTX_PREFIXLIST: parser->state.ctx = CTX_CONFIG; break;
     case CTX_TRIP: parser->state.ctx = CTX_CONFIG; break;
     default: return -1;
@@ -59,7 +60,15 @@ cmd_exit(parser_t *parser, int no, char *args)
     return 0;
 }
 
-/* base context */
+int
+cmd_help(parser_t *parser, int no, char *args)
+{
+    for (const cmd_def_t *cmd = ctx_cmds[parser->state.ctx]; cmd->cmd; cmd++)
+        printf("  %.20s%s\n", cmd->cmd, cmd->desc);
+    return 0;
+}
+
+/* root context */
 
 int
 cmd_enable(parser_t *parser, int no, char *args)
@@ -69,8 +78,19 @@ cmd_enable(parser_t *parser, int no, char *args)
 }
 
 int
+cmd_disable(parser_t *parser, int no, char *args)
+{
+    parser->state.enabled = 0;
+    return 0;
+}
+
+int
 cmd_configure(parser_t *parser, int no, char *args)
 {
+    if (!parser->state.enabled) {
+        printf("configure: not enabled\n");
+        return -1;
+    }
     parser->state.ctx = CTX_CONFIG;
     return 0;
 }
@@ -86,6 +106,9 @@ cmd_shutdown(parser_t *parser, int no, char *args)
 {
     manager_shutdown(parser->manager);
     manager_destroy(parser->manager);
+    cli_reset();
+
+    exit(0);
 
     return 0;
 }
@@ -306,4 +329,53 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
     return 0;
 }
 
+
+/* command definitions per context */
+const cmd_def_t cmds_root[] = {
+    { "end",            &cmd_end, "exit from configure mode", NULL },
+    { "exit",           &cmd_exit,"exit current context", NULL },
+    { "help",           &cmd_help,"show command help", NULL },
+    { "enable",         &cmd_enable, "enable privileged commands", NULL },
+    { "disable",        &cmd_disable, "disable privileged commands", NULL },
+    { "configure",      &cmd_configure, "enter configuration mode", NULL },
+    { "show",           &cmd_show, "show running system information", NULL },
+    { "shutdown",       &cmd_shutdown, "shutdown system", NULL },
+    { NULL,             NULL, NULL, NULL }
+};
+
+const cmd_def_t cmds_config[] = {
+    { "end",            &cmd_end, "exit from configure mode", NULL },
+    { "exit",           &cmd_exit,"exit current context", NULL },
+    { "help",           &cmd_help,"show command help", NULL },
+    { "log",            &cmd_config_log, "set log file", "log <log file>" },
+    { "bind-address",   &cmd_config_bind, "set bind address and port", "bind-address <addr> <port>" },
+    { "prefix-list",    &cmd_config_prefixlist, "define prefix list", "prefix-list <name>" },
+    { "trip",           &cmd_config_trip, "trip configuration", "trip <itad>" },
+    { NULL,             NULL, NULL, NULL }
+};
+
+const cmd_def_t cmds_prefixlist[] = {
+    { "end",            &cmd_end, "exit from configure mode", NULL },
+    { "exit",           &cmd_exit,"exit current context", NULL },
+    { "help",           &cmd_help,"show command help", NULL },
+    { "prefix",         &cmd_config_prefixlist_prefix, "add prefix", "prefix <pfx-type> <prefix> <app-layer-proto> <server>" },
+    { NULL,             NULL, NULL, NULL }
+};
+
+const cmd_def_t cmds_trip[] = {
+    { "end",            &cmd_end, "exit from configure mode", NULL },
+    { "exit",           &cmd_exit,"exit current context", NULL },
+    { "help",           &cmd_help,"show command help", NULL },
+    { "ls-id",          &cmd_config_trip_lsid, "set local id", "ls-id <id in dotted notation" },
+    { "timers",         &cmd_config_trip_timers, "set timers", "timers <hold>" },
+    { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> remote-itad <itad>" },
+    { NULL,             NULL, NULL, NULL }
+};
+
+const cmd_def_t *ctx_cmds[] = {
+    cmds_root,
+    cmds_config,
+    cmds_prefixlist,
+    cmds_trip
+};
 
