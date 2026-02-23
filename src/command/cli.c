@@ -86,11 +86,32 @@ cli_run(parser_t *parser)
 
     cli_print_prompt();
 
+    char c = 0;
+    int esc = 0, csi = 0;
     while (1) {
-        char c = 0;
         if (read(STDIN_FILENO, &c, 1) < 1) {
             ERROR("reading stdin: %s", strerror(errno));
             break;
+        }
+
+        /* ignore Fe and CSI sequencies */
+        if (esc && (c >= 0x40) && (c <= 0x5f)) {
+            if (c == '[') {
+                csi = 1;
+                esc = 0;
+            }
+            continue;
+        }
+
+        if (csi) {
+            if (c >= 0x30 && c <= 0x3f)
+                continue;
+            else if (c >= 0x20 && c <= 0x2f)
+                continue;
+            else if (c >= 0x40 && c <= 0x7e) {
+                csi = 0;
+                continue;
+            }
         }
 
         if (c == '\n' || (line_ptr - line == 4094)) {
@@ -147,6 +168,8 @@ cli_run(parser_t *parser)
             write(STDOUT_FILENO, "\b \b", 3);
             fflush(stdout);
             line_ptr--;
+        } else if (c == '\e') {
+            esc = 1;
         } else {
             *line_ptr++ = c;
             if (write(STDOUT_FILENO, &c, 1) < 1) {
