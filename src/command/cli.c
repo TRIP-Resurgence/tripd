@@ -26,6 +26,7 @@
 
 #include "cli.h"
 
+#include "commands.h"
 #include <logging/logging.h>
 
 #include <string.h>
@@ -33,6 +34,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/param.h>
 
 #define _COMPONENT_ "cli"
 
@@ -56,6 +58,15 @@ cli_print_prompt()
 
     printf(BASE_PROMPT "%s%c ", ctx_prompts[g_parser->state.ctx],
         ">#"[g_parser->state.enabled]);
+}
+
+static int
+count_matching(const char *s1, const char *s2)
+{
+    int c = 0;
+    while (*s1 && *s2 && *s1++ == *s2++)
+        c++;
+    return c;
 }
 
 void
@@ -91,13 +102,43 @@ cli_run(parser_t *parser)
             fflush(stdout);
             line_ptr = line;
         } else if (c == '\t') {
-            printf("(autocompletion)\n");
+            /* match commands and complete */
+            char complete[4096];
+            complete[0] = '\0';
+
+            for (const cmd_def_t *cmd = ctx_cmds[parser->state.ctx];
+                cmd->cmd; cmd++)
+            {
+                if (strncmp(line, cmd->cmd, line_ptr - line) == 0) {
+                    if (!complete[0])
+                        strcpy(complete, cmd->cmd);
+                    else
+                        complete[count_matching(complete, cmd->cmd)] = '\0';
+                }
+            }
+
+            size_t comp_len = strlen(complete);
+            strncpy(line, complete, comp_len);
+            line_ptr = line + comp_len;
+
+            printf("\r");
+            fflush(stdout);
             cli_print_prompt();
+            fflush(stdout);
             write(STDOUT_FILENO, line, line_ptr - line);
             fflush(stdout);
         } else if (c == '?') {
-            printf("(help)\n");
+            /* print matching commands */
+            printf("\n");
+            for (const cmd_def_t *cmd = ctx_cmds[parser->state.ctx];
+                cmd->cmd; cmd++)
+            {
+                if (strncmp(line, cmd->cmd, line_ptr - line) == 0)
+                    printf("  %-20s%s\n", cmd->cmd, cmd->desc);
+            }
+
             cli_print_prompt();
+            fflush(stdout);
             write(STDOUT_FILENO, line, line_ptr - line);
             fflush(stdout);
         } else if (c == 127) {

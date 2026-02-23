@@ -64,7 +64,7 @@ int
 cmd_help(parser_t *parser, int no, char *args)
 {
     for (const cmd_def_t *cmd = ctx_cmds[parser->state.ctx]; cmd->cmd; cmd++)
-        printf("  %.20s%s\n", cmd->cmd, cmd->desc);
+        printf("  %-20s%s\n", cmd->cmd, cmd->desc);
     return 0;
 }
 
