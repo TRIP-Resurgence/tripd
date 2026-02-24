@@ -69,6 +69,50 @@ count_matching(const char *s1, const char *s2)
     return c;
 }
 
+static void
+autocomplete(parser_t *parser, char *line, char **line_ptr)
+{
+    /* match commands and complete */
+    char autocomp[4096];
+    autocomp[0] = '\0';
+
+    if ((line < *line_ptr) && *(*line_ptr - 1) == ' ') {
+        for (const cmd_def_t *cmd = ctx_cmds[parser->state.ctx];
+            cmd->cmd; cmd++)
+        {
+            if ((strncmp(line, cmd->cmd, (*line_ptr - line) - 1) == 0)
+                && cmd->syntax)
+            {
+                printf("\n%s\n", cmd->syntax);
+            }
+        }
+    } else {
+        int complete = 0;
+
+        for (const cmd_def_t *cmd = ctx_cmds[parser->state.ctx];
+            cmd->cmd; cmd++)
+        {
+            if (strncmp(line, cmd->cmd, *line_ptr - line) == 0) {
+                if (!autocomp[0])
+                    strcpy(autocomp, cmd->cmd);
+                else
+                    autocomp[count_matching(autocomp, cmd->cmd)] = '\0';
+
+                complete = ((*line_ptr - line) == strlen(cmd->cmd))
+                    && (strncmp(line, cmd->cmd, *line_ptr - line) == 0);
+            }
+        }
+
+        if (complete)
+            *(*line_ptr)++ = ' ';
+        else {
+            size_t comp_len = strlen(autocomp);
+            strncpy(line, autocomp, comp_len);
+            *line_ptr = line + comp_len;
+        }
+    }
+}
+
 void
 cli_run(parser_t *parser)
 {
@@ -123,24 +167,7 @@ cli_run(parser_t *parser)
             fflush(stdout);
             line_ptr = line;
         } else if (c == '\t') {
-            /* match commands and complete */
-            char complete[4096];
-            complete[0] = '\0';
-
-            for (const cmd_def_t *cmd = ctx_cmds[parser->state.ctx];
-                cmd->cmd; cmd++)
-            {
-                if (strncmp(line, cmd->cmd, line_ptr - line) == 0) {
-                    if (!complete[0])
-                        strcpy(complete, cmd->cmd);
-                    else
-                        complete[count_matching(complete, cmd->cmd)] = '\0';
-                }
-            }
-
-            size_t comp_len = strlen(complete);
-            strncpy(line, complete, comp_len);
-            line_ptr = line + comp_len;
+            autocomplete(parser, line, &line_ptr);
 
             printf("\r");
             fflush(stdout);
