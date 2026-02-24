@@ -25,7 +25,11 @@
 #include "commands.h"
 
 #include "cli.h"
+#include "functions/manager.h"
+#include "functions/session.h"
+#include "protocol/protocol.h"
 #include <logging/logging.h>
+#include <netinet/in.h>
 #include <util/util.h>
 
 #include <stdlib.h>
@@ -88,9 +92,10 @@ int
 cmd_configure(parser_t *parser, int no, char *args)
 {
     if (!parser->state.enabled) {
-        printf("configure: not enabled\n");
+        printf("configure: unprivileged\n");
         return -1;
     }
+
     parser->state.ctx = CTX_CONFIG;
     return 0;
 }
@@ -98,12 +103,65 @@ cmd_configure(parser_t *parser, int no, char *args)
 int
 cmd_show(parser_t *parser, int no, char *args)
 {
-    /* TODO */
+    args = strip(args);
+    // show < running-config | peers | sessions | session <host> >
+    if (strncmp(args, "running-config", 14) == 0) {
+        
+    } else if (strncmp(args, "peers", 5) == 0) {
+        const locator_t *locator = parser->manager->locator;
+        printf("  %8s  %-30s %-6s %-12s\n", "itad", "host", "hold", "transmode");
+        for (int i = 0; i < locator->peers_size; i++)
+            printf("  %8d  %-30s %-6d %-12s\n", locator->peers[i].itad,
+                sockaddr6_str(&locator->peers[i].addr),
+                locator->peers[i].hold,
+                capinfo_transmode_strs[locator->peers[i].transmode]);
+    } else if (strncmp(args, "sessions", 8) == 0) {
+        const manager_t *manager = parser->manager;
+        printf("  %8s  %-30s %-6s %-12s %-10s\n", "itad", "host", "hold", "id", "state");
+        for (int i = 0; i < manager->sessions_size; i++)
+            printf("  %8d  %-30s %-6d %-12s %-10s\n", manager->sessions[i]->peer->itad,
+                sockaddr6_str(&manager->sessions[i]->peer->addr),
+                manager->sessions[i]->hold,
+                inaddr_str(manager->sessions[i]->peer_id),
+                session_state_strs[manager->sessions[i]->state]);
+    } else if (strncmp(args, "session ", 8) == 0) {
+        const manager_t *manager = parser->manager;
+        struct sockaddr_in6 show_addr;
+        if (normalize_str_addr(&show_addr, args + 8) < 0)
+            return -1;
+
+        session_t *show_session =
+            manager_session_lookup_address(parser->manager, &show_addr);
+
+        if (!show_session) {
+            printf("show session: session not found\n");
+            return -1;
+        }
+
+        printf(
+            "TRIP peer is %s, remote ITAD %d\n"
+            "  TRIP version 1, remote LS ID %s\n"
+            "  TRIP state = %s, up for %s\n"
+            "  last read %s, last write %s, hold time is %d, keepalive interval is %d seconds\n"
+            "  neighbor capabilities:\n",
+            sockaddr6_str(show_session->addr), show_session->peer->itad,
+            inaddr_str(show_session->peer_id),
+            session_state_strs[show_session->state], "(place)", "(place)",
+            "(place)", show_session->hold, 0);
+    } else {
+        printf("show: unrecognized argument\n");
+    }
+
+    return 0;
 }
 
 int
 cmd_shutdown(parser_t *parser, int no, char *args)
 {
+    if (!parser->state.enabled) {
+        printf("shutdown: unprivileged\n");
+        return -1;
+    }
     manager_shutdown(parser->manager);
     manager_destroy(parser->manager);
     cli_reset();
@@ -338,7 +396,7 @@ const cmd_def_t cmds_root[] = {
     { "enable",         &cmd_enable, "enable privileged commands", NULL },
     { "disable",        &cmd_disable, "disable privileged commands", NULL },
     { "configure",      &cmd_configure, "enter configuration mode", NULL },
-    { "show",           &cmd_show, "show running system information", NULL },
+    { "show",           &cmd_show, "show running system information", "show < running-config | peers | sessions | session <host> >" },
     { "shutdown",       &cmd_shutdown, "shutdown system", NULL },
     { NULL,             NULL, NULL, NULL }
 };

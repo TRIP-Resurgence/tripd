@@ -72,6 +72,9 @@ count_matching(const char *s1, const char *s2)
 static void
 autocomplete(parser_t *parser, char *line, char **line_ptr)
 {
+    if ((*line_ptr - line) == 0)
+        return;
+
     /* match commands and complete */
     char autocomp[4096];
     autocomp[0] = '\0';

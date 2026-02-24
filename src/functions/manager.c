@@ -37,8 +37,9 @@
 #include "session.h"
 #include "util/util.h"
 
-#include <logging/logging.c>
-#include <util/util.c>
+#include <logging/logging.h>
+#include <netinet/in.h>
+#include <util/util.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,7 +64,7 @@ static void *connect_loop(void *arg);
 
 /** \brief Lookup session by ITAD and ID match */
 static session_t *
-manager_session_lookup_itad_id(manager_t *m, uint32_t itad,
+manager_session_lookup_itad_id(const manager_t *m, uint32_t itad,
     uint32_t id)
 {
     for (size_t i = 0; i < m->sessions_size; i++)
@@ -77,10 +78,24 @@ manager_session_lookup_itad_id(manager_t *m, uint32_t itad,
 
 /** \brief Lookup session by locator peer */
 static session_t *
-manager_session_lookup_peer(manager_t *m, const peer_t *peer)
+manager_session_lookup_peer(const manager_t *m, const peer_t *peer)
 {
     for (size_t i = 0; i < m->sessions_size; i++)
         if (m->sessions[i]->peer == peer && !m->sessions[i]->mark_stop_init)
+        {
+            return m->sessions[i];
+        }
+    return NULL;
+}
+
+/** \brief Lookup session by locator peer */
+session_t *
+manager_session_lookup_address(const manager_t *m,
+    const struct sockaddr_in6 *addr)
+{
+    for (size_t i = 0; i < m->sessions_size; i++)
+        if (memcmp(&m->sessions[i]->addr->sin6_addr, &addr->sin6_addr,
+            sizeof(struct in6_addr)) == 0)
         {
             return m->sessions[i];
         }

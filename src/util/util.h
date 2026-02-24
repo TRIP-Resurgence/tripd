@@ -27,8 +27,16 @@
 void map_addr_inet_inet6(struct sockaddr_in6 *sin6,
     const struct sockaddr_in *sin);
 
+/** \brief Normalize address string
+ *
+ * Converts IPv4 or IPv6 address string into IPv6-mapped-IPv4 or IPv6
+ * sockaddr_in6
+ */
+int normalize_str_addr(struct sockaddr_in6 *sin6, const char *str);
+
 const char *sockaddr_str(const struct sockaddr *sa);
 
+const char *inaddr_str(uint32_t addr);
 const char *sockaddr6_str(const struct sockaddr_in6 *sa);
 
 #endif /* _UTIL_H */

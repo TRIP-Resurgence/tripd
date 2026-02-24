@@ -58,6 +58,7 @@ print_usage(char *name)
 void
 sigint_handler(int dummy)
 {
+    g_parser->state.enabled = 1;
     cmd_shutdown(g_parser, 0, NULL);
     exit(0);
 }
