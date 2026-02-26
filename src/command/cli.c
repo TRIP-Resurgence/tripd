@@ -56,8 +56,10 @@ cli_print_prompt()
     if (!g_parser)
         return;
 
+    fflush(stdout);
     printf(BASE_PROMPT "%s%c ", ctx_prompts[g_parser->state.ctx],
         ">#"[g_parser->state.enabled]);
+    fflush(stdout);
 }
 
 static int
@@ -167,15 +169,12 @@ cli_run(parser_t *parser)
             if (line_ptr != line)
                 parser_parse_cmd(parser, line);
             cli_print_prompt();
-            fflush(stdout);
             line_ptr = line;
         } else if (c == '\t') {
             autocomplete(parser, line, &line_ptr);
 
             printf("\r");
-            fflush(stdout);
             cli_print_prompt();
-            fflush(stdout);
             write(STDOUT_FILENO, line, line_ptr - line);
             fflush(stdout);
         } else if (c == '?') {
@@ -189,7 +188,6 @@ cli_run(parser_t *parser)
             }
 
             cli_print_prompt();
-            fflush(stdout);
             write(STDOUT_FILENO, line, line_ptr - line);
             fflush(stdout);
         } else if (c == 127) {
@@ -215,5 +213,6 @@ cli_reset()
 {
     if (tcsetattr(STDIN_FILENO, TCSANOW, &oldt) < 0)
         ERROR("failed to set terminal attrs");
+    printf("\r");
 }
 

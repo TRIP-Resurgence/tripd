@@ -41,6 +41,8 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include <time.h>
+
 
 int
 cmd_end(parser_t *parser, int no, char *args)
@@ -100,6 +102,16 @@ cmd_configure(parser_t *parser, int no, char *args)
     return 0;
 }
 
+static const char *
+time_since(time_t since)
+{
+    static char buff[256];
+    time_t elapsed = time(NULL) - since;
+    snprintf(buff, 256, "%ld:%ld:%ld", elapsed / 3600, (elapsed / 60) % 60,
+        elapsed % 60);
+    return buff;
+}
+
 int
 cmd_show(parser_t *parser, int no, char *args)
 {
@@ -141,13 +153,25 @@ cmd_show(parser_t *parser, int no, char *args)
         printf(
             "TRIP peer is %s, remote ITAD %d\n"
             "  TRIP version 1, remote LS ID %s\n"
-            "  TRIP state = %s, up for %s\n"
-            "  last read %s, last write %s, hold time is %d, keepalive interval is %d seconds\n"
-            "  neighbor capabilities:\n",
+            "  TRIP state = %s",
             sockaddr6_str(show_session->addr), show_session->peer->itad,
             inaddr_str(show_session->peer_id),
-            session_state_strs[show_session->state], "(place)", "(place)",
-            "(place)", show_session->hold, 0);
+            session_state_strs[show_session->state]
+        );
+
+        if (show_session->state == STATE_ESTABLISHED)
+            printf(
+                ", up for %s\n"
+                "  last read %s, last write %s, hold time is %d, "
+                "keepalive interval is %d seconds\n"
+                "  neighbor capabilities:\n",
+                time_since(show_session->established_time),
+                time_since(show_session->last_read_time),
+                time_since(show_session->last_write_time),
+                show_session->hold, show_session->keepalive
+            );
+        else
+            printf("\n");
     } else {
         printf("show: unrecognized argument\n");
     }
@@ -167,8 +191,6 @@ cmd_shutdown(parser_t *parser, int no, char *args)
     cli_reset();
 
     exit(0);
-
-    return 0;
 }
 
 /* config context */
@@ -274,8 +296,6 @@ cmd_config_trip(parser_t *parser, int no, char *args)
         return -1;
     }
 
-    parser->state.ctx = CTX_TRIP;
-    
     args = strip(args);
     uint32_t itad = strtoul(args, NULL, 10);
 
@@ -285,6 +305,7 @@ cmd_config_trip(parser_t *parser, int no, char *args)
         return -1;
     }
 
+    parser->state.ctx = CTX_TRIP;
     parser->manager->itad = itad;
 
     return 0;

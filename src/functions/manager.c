@@ -461,6 +461,7 @@ peer_handshake(void *arg)
         case MSG_TYPE_KEEPALIVE: {
             if (s->state == STATE_OPENCONFIRM)
                 session_change_state(s, STATE_ESTABLISHED);
+            s->established_time = time(NULL);
 
             /* Hand newly established session off to session_loop */
             session_loop(arg);
