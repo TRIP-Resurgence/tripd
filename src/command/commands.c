@@ -154,7 +154,7 @@ cmd_show(parser_t *parser, int no, char *args)
             "TRIP peer is %s, remote ITAD %d\n"
             "  TRIP version 1, remote LS ID %s\n"
             "  TRIP state = %s",
-            sockaddr6_str(show_session->addr), show_session->peer->itad,
+            sockaddr6_str(&show_session->peer->addr), show_session->peer->itad,
             inaddr_str(show_session->peer_id),
             session_state_strs[show_session->state]
         );

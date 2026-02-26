@@ -94,7 +94,7 @@ manager_session_lookup_address(const manager_t *m,
     const struct sockaddr_in6 *addr)
 {
     for (size_t i = 0; i < m->sessions_size; i++)
-        if (memcmp(&m->sessions[i]->addr->sin6_addr, &addr->sin6_addr,
+        if (memcmp(&m->sessions[i]->peer->addr.sin6_addr, &addr->sin6_addr,
             sizeof(struct in6_addr)) == 0)
         {
             return m->sessions[i];
@@ -523,8 +523,6 @@ manager_loop(void *arg)
         session_t *s = malloc(sizeof(session_t));
         memset(s, 0, sizeof(session_t));
         s->peer = peer;
-        s->addr = malloc(peer_addr_size);
-        memcpy(s->addr, &peer_addr, peer_addr_size);
         s->fd = request_fd;
         s->initiated = 0;
 
@@ -610,8 +608,7 @@ connect_loop(void *arg)
 
         session_change_state(s, STATE_CONNECT);
 
-        int res = connect(s->fd,
-            (struct sockaddr*)s->addr,
+        int res = connect(s->fd, (struct sockaddr*)&s->peer->addr,
             sizeof(struct sockaddr_in6));
 
         if (res < 0) {
@@ -644,8 +641,6 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     session_t *s = malloc(sizeof(session_t));
     memset(s, 0, sizeof(session_t));
     s->peer = peer;
-    s->addr = malloc(sizeof(struct sockaddr_in6));
-    memcpy(s->addr, addr, sizeof(struct sockaddr_in6));
     s->state = STATE_IDLE;
     s->initiated = 1;
 

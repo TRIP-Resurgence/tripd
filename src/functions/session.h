@@ -91,7 +91,6 @@ typedef struct {
     int                     initiated;  /**< Initiated by local -> nonzero */
     int                     mark_stop_init; /**< Tell initiating thread to quit*/
 
-    struct sockaddr_in6    *addr;       /**< Actual address */
     int                     fd;         /**< Session socket */
 
     /* negotiated timers */
