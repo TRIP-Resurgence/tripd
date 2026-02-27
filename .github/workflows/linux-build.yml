@@ -25,6 +25,7 @@ jobs:
         tar xf doxygen-1.16.1.linux.bin.tar.gz 
         sudo ln -s doxygen-1.16.1/bin/doxygen /usr/bin
         sudo ln -s doxygen-1.16.1/bin/doxyindexer /usr/bin
+        sudo ln -s doxygen-1.16.1/bin/doxywizard /usr/bin
 
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
@@ -37,6 +38,7 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: ${{github.workspace}}/build/doxygen/html
+        publish_branch: doxygen
 
     #- name: Test
       #working-directory: ${{github.workspace}}/build
