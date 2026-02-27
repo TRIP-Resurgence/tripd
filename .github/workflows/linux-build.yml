@@ -17,13 +17,26 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Install dependencies
-      run: sudo apt-get install -y build-essential cmake doxygen
+      run: sudo apt-get install -y build-essential cmake dot
+
+    - name: Install doxygen
+      run: |
+        wget https://www.doxygen.nl/files/doxygen-1.16.1.linux.bin.tar.gz
+        tar xf doxygen-1.16.1.linux.bin.tar.gz 
+        sudo ln -s doxygen-1.16.1/bin/doxygen /usr/bin
+        sudo ln -s doxygen-1.16.1/bin/doxyindexer /usr/bin
 
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+    - name: Deploy docs
+      uses: peaceiris/actions-gh-pages@v3.9.3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ${{github.workspace}}/build/doxygen/html
 
     #- name: Test
       #working-directory: ${{github.workspace}}/build
