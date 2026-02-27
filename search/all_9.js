@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['main_0',['main',['../tripd_8c.html#a3c04138a5bfe5d72780bb7e82a18e627',1,'tripd.c']]],
+  ['manager_2ec_1',['manager.c',['../manager_8c.html',1,'']]],
+  ['manager_2eh_2',['manager.h',['../manager_8h.html',1,'']]],
+  ['manager_5fadd_5fpeer_3',['manager_add_peer',['../manager_8c.html#ae812cdbec3d485efc25f13ae98b5d0d2',1,'manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr, uint32_t itad):&#160;manager.c'],['../manager_8h.html#ae812cdbec3d485efc25f13ae98b5d0d2',1,'manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr, uint32_t itad):&#160;manager.c']]],
+  ['manager_5fdestroy_4',['manager_destroy',['../manager_8c.html#a4d6faf7e56e4e5103929ae4b404abbd2',1,'manager_destroy(manager_t *manager):&#160;manager.c'],['../manager_8h.html#a4d6faf7e56e4e5103929ae4b404abbd2',1,'manager_destroy(manager_t *manager):&#160;manager.c']]],
+  ['manager_5flookup_5fitad_5fid_5',['manager_lookup_itad_id',['../manager_8h.html#a4b568fbebba85b76b436071e690c9371',1,'manager.h']]],
+  ['manager_5fnew_6',['manager_new',['../manager_8c.html#a1d551c583ccf96894ac01af0a4c7a3ac',1,'manager_new(const struct sockaddr_in6 *listen_addr):&#160;manager.c'],['../manager_8h.html#a1d551c583ccf96894ac01af0a4c7a3ac',1,'manager_new(const struct sockaddr_in6 *listen_addr):&#160;manager.c']]],
+  ['manager_5frun_7',['manager_run',['../manager_8c.html#a52c59eaf6d8a694dc993435822d1b565',1,'manager_run(manager_t *manager):&#160;manager.c'],['../manager_8h.html#a52c59eaf6d8a694dc993435822d1b565',1,'manager_run(manager_t *manager):&#160;manager.c']]],
+  ['manager_5fshutdown_8',['manager_shutdown',['../manager_8c.html#a5279e474d83fc9fd69f470648f78e4b1',1,'manager_shutdown(manager_t *manager):&#160;manager.c'],['../manager_8h.html#a5279e474d83fc9fd69f470648f78e4b1',1,'manager_shutdown(manager_t *manager):&#160;manager.c']]],
+  ['manager_5fstop_9',['manager_stop',['../manager_8c.html#a1631c91a2eff8e1abb5a66b00f72f907',1,'manager_stop(manager_t *manager):&#160;manager.c'],['../manager_8h.html#a1631c91a2eff8e1abb5a66b00f72f907',1,'manager_stop(manager_t *manager):&#160;manager.c']]],
+  ['manager_5ft_10',['manager_t',['../structmanager__t.html',1,'']]],
+  ['md_20design_11',['Design',['../index.html#autotoc_md1',1,'']]],
+  ['md_20install_12',['Install',['../index.html#autotoc_md2',1,'']]],
+  ['msg_5fkeepalive_5ft_13',['msg_keepalive_t',['../protocol_8h.html#a3d9121c7f2b23d9871f2cd323b5dce18',1,'protocol.h']]],
+  ['msg_5fnotif_5ft_14',['msg_notif_t',['../structmsg__notif__t.html',1,'']]],
+  ['msg_5fopen_5fopt_5ft_15',['msg_open_opt_t',['../structmsg__open__opt__t.html',1,'']]],
+  ['msg_5fopen_5ft_16',['msg_open_t',['../structmsg__open__t.html',1,'']]],
+  ['msg_5ft_17',['msg_t',['../structmsg__t.html',1,'']]],
+  ['msg_5ftype_18',['msg_type',['../protocol_8h.html#a35822c953540e9ad193309b6d4f65011',1,'protocol.h']]],
+  ['msg_5ftype_5fstrs_19',['msg_type_strs',['../protocol_8c.html#ad7ca6770c0cb1f62b8c4dbf308218297',1,'msg_type_strs:&#160;protocol.c'],['../protocol_8h.html#ad7ca6770c0cb1f62b8c4dbf308218297',1,'msg_type_strs:&#160;protocol.c']]],
+  ['msg_5fupdate_5fattr_5flsencap_5ft_20',['msg_update_attr_lsencap_t',['../structmsg__update__attr__lsencap__t.html',1,'']]],
+  ['msg_5fupdate_5fattr_5ft_21',['msg_update_attr_t',['../structmsg__update__attr__t.html',1,'']]]
+];

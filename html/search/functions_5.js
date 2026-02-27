@@ -1,9 +1,0 @@
-var searchData=
-[
-  ['session_5fdestroy_0',['session_destroy',['../session_8c.html#a9ebbc8b06cb02fc30592471c1e0f2e5d',1,'session_destroy(session_t *session):&#160;session.c'],['../session_8h.html#a9ebbc8b06cb02fc30592471c1e0f2e5d',1,'session_destroy(session_t *session):&#160;session.c']]],
-  ['session_5fnew_5finitiate_1',['session_new_initiate',['../session_8c.html#a27fac8070b3fe579a0020f719a30faf8',1,'session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold, capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr, uint32_t peer_itad):&#160;session.c'],['../session_8h.html#a27fac8070b3fe579a0020f719a30faf8',1,'session_new_initiate(uint32_t itad, uint32_t id, uint16_t hold, capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr, uint32_t peer_itad):&#160;session.c']]],
-  ['session_5fnew_5fpeer_2',['session_new_peer',['../session_8c.html#aa6a6dc3d1e120379d352c55ff415193d',1,'session_new_peer(uint32_t itad, uint32_t id, uint16_t hold, capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr, uint32_t peer_itad, int fd):&#160;session.c'],['../session_8h.html#aa6a6dc3d1e120379d352c55ff415193d',1,'session_new_peer(uint32_t itad, uint32_t id, uint16_t hold, capinfo_transmode_t transmode, const struct sockaddr_in6 *peer_addr, uint32_t peer_itad, int fd):&#160;session.c']]],
-  ['session_5fshutdown_3',['session_shutdown',['../session_8c.html#a0cff69d7af7941b6d7c94b5ee446536b',1,'session_shutdown(session_t *session):&#160;session.c'],['../session_8h.html#a0cff69d7af7941b6d7c94b5ee446536b',1,'session_shutdown(session_t *session):&#160;session.c']]],
-  ['sigint_5fhandler_4',['sigint_handler',['../tripd_8c.html#a47630f8f823b92ad9333c3c5f130cf90',1,'tripd.c']]],
-  ['strip_5',['strip',['../parser_8c.html#af66ddd2b8aa41477186a988e253c2974',1,'strip(char *s):&#160;parser.c'],['../parser_8h.html#af66ddd2b8aa41477186a988e253c2974',1,'strip(char *s):&#160;parser.c']]]
-];
