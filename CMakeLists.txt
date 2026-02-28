@@ -15,6 +15,8 @@ file(GLOB TRIPD_SRC "src/tripd/*.c")
 
 add_compile_options(-Wall -Wextra -Wno-pedantic -Wno-sign-compare -Wno-unused-parameter -Wno-unused-variable)
 
+# components
+
 add_library(logging STATIC ${LOGGING_SRC})
 
 add_library(util STATIC ${UTIL_SRC})
@@ -28,9 +30,23 @@ target_link_libraries(functions protocol logging util)
 add_library(command STATIC ${COMMAND_SRC})
 target_link_libraries(command functions logging)
 
+# main executable
+
 add_executable(tripd ${TRIPD_SRC})
 target_link_libraries(tripd command)
 
+
+# tests
+
+enable_testing()
+
+add_executable(test_collision "src/tests/collision.c")
+target_link_libraries(test_collision logging command)
+add_test(NAME test_collision COMMAND test_collision)
+
+add_executable(test_open "src/tests/open.c")
+target_link_libraries(test_open protocol)
+add_test(NAME test_open COMMAND test_open)
 
 find_program(DOXYGEN doxygen)
 if (DOXYGEN)
