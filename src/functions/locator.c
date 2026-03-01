@@ -43,7 +43,7 @@ locator_new()
     return &g_locator;
 }
 
-int
+const peer_t *
 locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     uint32_t itad, uint16_t hold, capinfo_transmode_t transmode)
 {
@@ -53,18 +53,17 @@ locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
             locator->peers_capacity * sizeof(peer_t));
     }
 
-    peer_t *peer = &locator->peers[locator->peers_size++];
-    memcpy(&peer->addr, addr, sizeof(struct sockaddr_in6));
-    peer->itad = itad;
-    peer->hold = hold;
-    peer->transmode = transmode;
+    peer_t *p= &locator->peers[locator->peers_size++];
+    memcpy(&p->addr, addr, sizeof(struct sockaddr_in6));
+    p->itad = itad;
+    p->hold = hold;
+    p->transmode = transmode;
     
-    return locator->peers_size - 1;
+    return p;
 }
 
-int
-locator_lookup(locator_t *locator, const peer_t **peer,
-    const struct sockaddr_in6 *addr)
+const peer_t *
+locator_lookup(locator_t *locator, const struct sockaddr_in6 *addr)
 {
     peer_t *p = NULL;
     size_t i = 0;
@@ -78,8 +77,7 @@ locator_lookup(locator_t *locator, const peer_t **peer,
         }
     }
 
-    *peer = p;
-    return p ? (int)i : -1;
+    return p;
 }
 
 
@@ -90,5 +88,4 @@ locator_destroy(locator_t *locator)
         return;
     free(locator->peers);
 }
-
 

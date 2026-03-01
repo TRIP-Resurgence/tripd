@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(trip)
 
@@ -12,6 +12,8 @@ file(GLOB COMMAND_SRC "src/command/*.c")
 file(GLOB LOGGING_SRC "src/logging/*.c")
 file(GLOB UTIL_SRC "src/util/*.c")
 file(GLOB TRIPD_SRC "src/tripd/*.c")
+
+add_compile_options(-Wall -Wextra -Wno-pedantic -Wno-sign-compare -Wno-unused-parameter -Wno-unused-variable)
 
 add_library(logging STATIC ${LOGGING_SRC})
 
@@ -26,7 +28,6 @@ target_link_libraries(functions protocol logging util)
 add_library(command STATIC ${COMMAND_SRC})
 target_link_libraries(command functions logging)
 
-
 add_executable(tripd ${TRIPD_SRC})
 target_link_libraries(tripd command)
 
@@ -39,7 +40,7 @@ if (DOXYGEN)
     configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
 
     add_custom_target(documentation ALL
-        COMMAND ${DOXYGEN} ${DOXYGEN_OUT}
+        COMMAND ${DOXYGEN} ${DOXYGEN_OUT} 2>&1 > ${CMAKE_CURRENT_BINARY_DIR}/doxygen.log
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM)
 else (DOXYGEN_FOUND)

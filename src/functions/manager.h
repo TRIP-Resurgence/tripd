@@ -45,7 +45,7 @@ typedef struct {
     locator_t  *locator;
 
     session_t **sessions;
-    size_t      sessions_size;
+    size_t      sessions_size, sessions_capacity;
 } manager_t;
 
 
@@ -55,10 +55,6 @@ manager_t *manager_new(const struct sockaddr_in6 *listen_addr);
 /** \brief Add known peer to underlaying locator */
 void manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     uint32_t itad);
-
-/** \brief Lookup session by ITAD and ID */
-session_t *manager_lookup_itad_id(manager_t manager, uint32_t itad,
-    uint32_t id);
 
 /** \brief Run accept loop in thread */
 void manager_run(manager_t *manager);

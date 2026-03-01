@@ -53,3 +53,12 @@ sockaddr_str(const struct sockaddr *sa)
     return addr_buff;
 }
 
+const char *
+sockaddr6_str(const struct sockaddr_in6 *sa)
+{
+    static char addr_buff[INET6_ADDRSTRLEN];
+    inet_ntop(AF_INET6, &((struct sockaddr_in6 *)sa)->sin6_addr, addr_buff,
+        INET6_ADDRSTRLEN);
+    return addr_buff;
+}
+

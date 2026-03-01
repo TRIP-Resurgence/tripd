@@ -32,7 +32,10 @@
 #include "manager.h"
 
 #include "locator.h"
+#include "logging/logging.h"
+#include "protocol/protocol.h"
 #include "session.h"
+#include "util/util.h"
 
 #include <logging/logging.c>
 #include <util/util.c>
@@ -55,38 +58,38 @@
 #endif /* MAX_BACKOFF_CONNECT_RETRY */
 
 
-typedef struct {
-    manager_t              *manager;
-
-    pthread_t               thread;
-    int                     peer_idx;
-    struct sockaddr_in6    *addr;
-    int                     fd;
-    session_state_t         state;
-
-    /* discovered */
-    uint32_t                id;
-    uint32_t                hold;
-} request_t;
+static void *connect_loop(void *arg);
 
 
-static void
-request_change_state(request_t *r, session_state_t new_state)
+/** \brief Lookup session by ITAD and ID match */
+static session_t *
+manager_session_lookup_itad_id(manager_t *m, uint32_t itad,
+    uint32_t id)
 {
-    char abuff[INET6_ADDRSTRLEN];
-    DEBUG("peer (%s):%d request changed state from %s to %s",
-        inet_ntop(AF_INET6, &r->addr->sin6_addr, abuff,
-            sizeof(abuff)),
-        r->manager->locator->peers[r->peer_idx].itad,
-        session_state_strs[r->state], session_state_strs[new_state]);
-
-    r->state = new_state;
+    for (size_t i = 0; i < m->sessions_size; i++)
+        if (m->sessions[i]->peer->itad == itad &&
+            m->sessions[i]->peer_id == id)
+        {
+            return m->sessions[i];
+        }
+    return NULL;
 }
 
+/** \brief Lookup session by locator peer */
+static session_t *
+manager_session_lookup_peer(manager_t *m, const peer_t *peer)
+{
+    for (size_t i = 0; i < m->sessions_size; i++)
+        if (m->sessions[i]->peer == peer && !m->sessions[i]->mark_stop_init)
+        {
+            return m->sessions[i];
+        }
+    return NULL;
+}
 
-/** /brief for OPEN handler
+/** \brief Send notification corresponding to protocol error
  *
- * only if res warrants a NOTIFICATION
+ * for OPEN handler, only send if res warrants a NOTIFICATION
  */
 static int
 send_notification_res(int fd, int res)
@@ -111,15 +114,78 @@ send_notification_res(int fd, int res)
     return 0;
 }
 
+/** \brief Add session to manager */
+static void
+manager_session_add(manager_t *m, session_t *s)
+{
+    if (m->sessions_size + 1 > m->sessions_capacity) {
+        m->sessions = realloc(m->sessions,
+            2 * sizeof(session_t) * m->sessions_capacity);
+        m->sessions_capacity *= 2;
+    }
 
+    m->sessions[m->sessions_size++] = s;
+}
+
+/** \brief Remove session from manager */
+static void
+manager_session_remove(manager_t *m, session_t *s)
+{
+    int s_idx = -1;
+    for (int i = 0; i < m->sessions_size; i++)
+        if (m->sessions[i] == s)
+            s_idx = i;
+
+    session_destroy(s);
+    memcpy(&m->sessions[s_idx], &m->sessions[s_idx + 1],
+        m->sessions_size - s_idx);
+    m->sessions_size--;
+}
+
+/** \brief Compare two ITAD,ID pairs
+ *
+ * \return non-zero if pair 1 < pair 2, zero if otherwise
+ */
+static int
+compare_itad_id(uint32_t itad1, uint32_t id1, uint32_t itad2, uint32_t id2)
+{
+    return (id1 < id2) || (id1 == id2 && (itad1 < itad2));
+}
+
+/** \brief Compare two colliding sessions
+ *
+ * \return non-zero if s1 should be closed, zero if s2 should be closed
+ *
+ * \param s1 New session
+ * \param s2 Old session
+ */
+static int
+manager_collision_sessions_compare(const manager_t *m, const session_t *s1,
+    const session_t *s2)
+{
+    if (s1->initiated == s2->initiated) {
+        ERROR("colliding connections initiated by same ID");
+        return 1;
+    } else if (s1->initiated) {
+        /* new session initiated by local
+         * return local < s2 peer */
+        return compare_itad_id(m->itad, m->id, s2->peer->itad, s2->peer_id);
+    } else {
+        /* old connection initiated by local
+         * return s1 peer < local */
+        return compare_itad_id(s1->peer->itad, s1->peer_id, m->itad, m->id);
+    }
+}
 
 /* =================== REQUEST HANDLING ===================================== */
 
+/** \brief Handle a received OPEN message (OpenConfirm State) */
 static int
-handle_open(request_t *r, const peer_t *peer, const msg_t *msg, void *recv_wnd)
+handle_open(manager_t *m, session_t *s, const msg_t *msg,
+    void *recv_wnd)
 {
     int res = 0, toread = 0;
-    SOCK_TRY_RECV(r->fd, recv_wnd, msg_open_t, goto sock_error);
+    SOCK_TRY_RECV(s->fd, recv_wnd, msg_open_t, goto sock_error);
 
     const msg_open_t *open = NULL;
     PROTO_TRY(
@@ -132,28 +198,64 @@ handle_open(request_t *r, const peer_t *peer, const msg_t *msg, void *recv_wnd)
         id_str(open->open_id), open->open_opts_len);
 
     /* check received OPEN fields */
-    if (open->open_itad != peer->itad) {
+    if (open->open_itad != s->peer->itad) {
         ERROR("peer ITAD mismatch");
-        send_notification(r->fd, NOTIF_CODE_ERROR_OPEN,
+        send_notification(s->fd, NOTIF_CODE_ERROR_OPEN,
             NOTIF_SUBCODE_OPEN_BAD_ITAD);
         return -1;
     }
 
-    /* TODO collision detection as per RFC
-    if (manager_lookup_itad_id(s->itad, open->open_id)) {
-        ERROR("peer ID exists in same ITAD");
-        send_notification(s, NOTIF_CODE_ERROR_OPEN,
+    /* duplicate ID in ITAD peer collision detection */
+    if ((open->open_itad == m->itad) && (open->open_id == m->id)) {
+        ERROR("duplicate ID in ITAD detected, colliding peer rejected");
+        send_notification(s->fd, NOTIF_CODE_ERROR_OPEN,
             NOTIF_SUBCODE_OPEN_BAD_ID);
         return -1;
-    } */
+    }
 
-    r->id = open->open_id;
-    r->hold = MIN(peer->hold, open->open_hold);
+    /* section 6.8 collision detection */
+    session_t *coll_s = manager_session_lookup_itad_id(m, open->open_itad,
+        open->open_id);
+    if (coll_s) {
+        WARNING("collision detected with peer (%d,%d)", open->open_itad,
+            open->open_id);
+        if (coll_s->state == STATE_OPENCONFIRM) {
+            WARNING("collision resolved: kept higher ID or ITAD");
+            if (manager_collision_sessions_compare(m, s, coll_s)) {
+                send_notification(s->fd, NOTIF_CODE_CEASE, 0);
+                return -1;
+            } else {
+                /* cease, close and destroy old session, remove from vector */
+                send_notification(coll_s->fd, NOTIF_CODE_CEASE, 0);
+                session_shutdown(coll_s);
+                manager_session_remove(m, coll_s);
+            }
+        } else if (coll_s->state == STATE_ESTABLISHED) {
+            WARNING("collision resolved: kept established connection");
+            send_notification(s->fd, NOTIF_CODE_CEASE, 0);
+            return -1;
+        }
+    }
+
+    /* find old still initiating session pre-openconfirm if exists and stop it*/
+    session_t *init_s = manager_session_lookup_peer(m, s->peer);
+    if (init_s && (init_s->initiated == 1) && (init_s != s)) {
+        INFO("closing old initiating session");
+        init_s->mark_stop_init = 1;
+    }
+
+
+    s->peer_id = open->open_id;
+    s->hold = MIN(s->peer->hold, open->open_hold);
+
+    /* now add session to manager */
+    if (!s->initiated)
+        manager_session_add(m, s);
 
     size_t opts_toread = open->open_opts_len;
     const void *opt_cur = open->open_opts;
     while (opts_toread) {
-        SOCK_TRY_RECV(r->fd, recv_wnd, msg_open_opt_t,
+        SOCK_TRY_RECV(s->fd, recv_wnd, msg_open_opt_t,
             goto sock_error);
 
         const msg_open_opt_t *opt = NULL;
@@ -172,7 +274,7 @@ handle_open(request_t *r, const peer_t *peer, const msg_t *msg, void *recv_wnd)
             size_t capinfos_toread = opt->opt_len;
             const void *capinfo_cur = opt->opt_val;
             while (capinfos_toread) {
-                SOCK_TRY_RECV(r->fd, recv_wnd, capinfo_t,
+                SOCK_TRY_RECV(s->fd, recv_wnd, capinfo_t,
                     goto sock_error);
 
                 const capinfo_t *capinfo = NULL;
@@ -194,7 +296,7 @@ handle_open(request_t *r, const peer_t *peer, const msg_t *msg, void *recv_wnd)
                     size_t routetypes_toread = capinfo->capinfo_len;
                     const void *routetype_cur = capinfo->capinfo_val;
                     while (routetypes_toread) {
-                        SOCK_TRY_RECV(r->fd, recv_wnd,
+                        SOCK_TRY_RECV(s->fd, recv_wnd,
                             capinfo_routetype_t, goto sock_error);
 
                         const capinfo_routetype_t *routetype = NULL;
@@ -216,7 +318,7 @@ handle_open(request_t *r, const peer_t *peer, const msg_t *msg, void *recv_wnd)
                     }
                 } break;
                 case CAPINFO_CODE_TRANSMODE: {
-                    SOCK_TRY_RECV(r->fd, recv_wnd,
+                    SOCK_TRY_RECV(s->fd, recv_wnd,
                         capinfo_transmode_t, goto sock_error);
 
                     const capinfo_transmode_t *transmode = NULL;
@@ -233,9 +335,10 @@ handle_open(request_t *r, const peer_t *peer, const msg_t *msg, void *recv_wnd)
                         capinfo_transmode_strs[*transmode]);
 
                     if (*transmode != CAPINFO_TRANS_SEND_RECV &&
-                        (*transmode == peer->transmode))
+                        (*transmode == s->peer->transmode))
                     {
-                        send_notification(r->fd, NOTIF_CODE_ERROR_OPEN,
+                        WARNING("    transmission mode mismatch");
+                        send_notification(s->fd, NOTIF_CODE_ERROR_OPEN,
                             NOTIF_SUBCODE_OPEN_CAP_MISMATCH);
                         return -1;
                     }
@@ -254,7 +357,7 @@ handle_open(request_t *r, const peer_t *peer, const msg_t *msg, void *recv_wnd)
     return 0;
 
 proto_error:
-    send_notification_res(r->fd, res);
+    send_notification_res(s->fd, res);
 
 sock_error:
     return -1;
@@ -266,38 +369,39 @@ sock_error:
  * Send OPEN, listen for OPEN, decode OPEN, check fields against peers,
  * send KEEPALIVE, receive KEEPALIVE, established the session -> hand off to
  * session loop
+ *
+ * \param arg Of type (void*){ manager_t *m, session_t *s }
  */
 static void *
 peer_handshake(void *arg)
 {
-    request_t *req = arg;
+    manager_t *m = ((void**)arg)[0];
+    session_t *s = ((void**)arg)[1];
 
     int res = 0, toread = 0;
     char buff[MAX_MSG_SIZE];
 
-    const peer_t *peer = &req->manager->locator->peers[req->peer_idx];
-
     /* send OPEN */
     PROTO_TRY(
         new_msg_open(buff, MAX_MSG_SIZE,
-            peer->hold, req->manager->itad, req->manager->id,
+            s->peer->hold, m->itad, m->id,
             supported_routetypes, supported_routetypes_size,
-            peer->transmode),
+            s->peer->transmode),
         res, goto proto_error
     );
 
     SOCK_TRY_SEND(
-        send(req->fd, buff, res, 0) < 0,
+        send(s->fd, buff, res, 0),
         goto sock_error
     );
-    request_change_state(req, STATE_OPENSENT);
+    session_change_state(s, STATE_OPENSENT);
 
 
     /* receive OPEN */
     while (1) {
         void *recv_wnd = buff;
         /* receive and decode message header */
-        SOCK_TRY_RECV(req->fd, recv_wnd, msg_t, goto sock_error);
+        SOCK_TRY_RECV(s->fd, recv_wnd, msg_t, goto sock_error);
 
         const msg_t *msg = NULL;
         PROTO_TRY(
@@ -310,7 +414,7 @@ peer_handshake(void *arg)
 
         switch (msg->msg_type) {
         case MSG_TYPE_OPEN: {
-            if (handle_open(req, peer, msg, recv_wnd) < 0)
+            if (handle_open(m, s, msg, recv_wnd) < 0)
                 goto sock_error;
 
             PROTO_TRY(
@@ -319,14 +423,14 @@ peer_handshake(void *arg)
             );
 
             SOCK_TRY_SEND(
-                send(req->fd, buff, res, 0) < 0,
+                send(s->fd, buff, res, 0),
                 goto sock_error
             );
 
-            request_change_state(req, STATE_OPENCONFIRM);
+            session_change_state(s, STATE_OPENCONFIRM);
         } break;
         case MSG_TYPE_NOTIFICATION: {
-            SOCK_TRY_RECV(req->fd, recv_wnd, msg_notif_t, goto sock_error);
+            SOCK_TRY_RECV(s->fd, recv_wnd, msg_notif_t, goto sock_error);
 
             const msg_notif_t *notif= NULL;
             PROTO_TRY(
@@ -340,30 +444,15 @@ peer_handshake(void *arg)
                     [notif->notif_error_subcode]);
         } break;
         case MSG_TYPE_KEEPALIVE: {
-            if (req->state == STATE_OPENCONFIRM)
-                request_change_state(req, STATE_ESTABLISHED);
+            if (s->state == STATE_OPENCONFIRM)
+                session_change_state(s, STATE_ESTABLISHED);
 
-            /* create session, insert session into sessions
-             * hand off to session loop, free request
-             * no constructor because it only occurs here and would be
-             * cumbersome */
-            session_t *session = malloc(sizeof(session_t));
-            session->thread = req->thread;
-            session->fd = req->fd;
-            session->state = STATE_IDLE;
-            session->itad = req->manager->itad;
-            session->id = req->manager->id;
-            session->hold = req->hold;
-            session->transmode = peer->transmode;
-            session->addr = req->addr;
-            session->peer_itad = peer->itad;
-            session->peer_id = req->id;
+            /* Hand newly established session off to session_loop */
+            session_loop(arg);
 
-            req->manager->sessions[req->peer_idx] = session;
-
-            free(req);
-
-            session_loop(session);
+            /* If peer disconnects going back to idle, start connect loop */
+            s->initiated = 1;
+            connect_loop(arg);
         } break;
         default:
             ERROR("unexpected %s message");
@@ -373,13 +462,11 @@ peer_handshake(void *arg)
 
 
 proto_error:
-    send_notification_res(req->fd, res);
+    send_notification_res(s->fd, res);
 
 sock_error:
-    close(req->fd);
-    request_change_state(req, STATE_IDLE);
-    free(req->addr);
-    free(req);
+    close(s->fd);
+    session_change_state(s, STATE_IDLE);
     return NULL;
 }
 
@@ -404,17 +491,9 @@ manager_loop(void *arg)
 
         /* check that connection comes from peer, and that this peer does not
          * have an active session */
-        const peer_t *peer = NULL;
-        int idx = locator_lookup(m->locator, &peer, &peer_addr);
+        const peer_t *peer = locator_lookup(m->locator, &peer_addr);
         if (!peer) {
             INFO("rejecting unknown peer connection: %s",
-                sockaddr_str((struct sockaddr *)&peer_addr));
-            close(request_fd);
-            continue;
-        }
-
-        if (m->sessions[idx]) {
-            INFO("rejecting existing peer connection: %s",
                 sockaddr_str((struct sockaddr *)&peer_addr));
             close(request_fd);
             continue;
@@ -424,16 +503,21 @@ manager_loop(void *arg)
             sockaddr_str((struct sockaddr*)&peer_addr));
 
 
-        /* hand off connection to request handler on a new thread */
-        request_t *req = malloc(sizeof(request_t));
-        req->manager = m;
-        req->peer_idx = idx;
-        req->addr = malloc(peer_addr_size);
-        memcpy(req->addr, &peer_addr, peer_addr_size);
-        req->fd = request_fd;
+        /* hand off connection to handshake handler on a new thread */
+        session_t *s = malloc(sizeof(session_t));
+        memset(s, 0, sizeof(session_t));
+        s->peer = peer;
+        s->addr = malloc(peer_addr_size);
+        memcpy(s->addr, &peer_addr, peer_addr_size);
+        s->fd = request_fd;
+        s->initiated = 0;
 
-        pthread_create(&req->thread, NULL, &peer_handshake, req);
-        pthread_detach(req->thread);
+        void **handshake_data = malloc(2 * sizeof(void*));
+        handshake_data[0] = m;
+        handshake_data[1] = s;
+
+        pthread_create(&s->thread, NULL, &peer_handshake, handshake_data);
+        pthread_detach(s->thread);
     }
 
     return NULL;
@@ -456,8 +540,10 @@ manager_new(const struct sockaddr_in6 *listen_addr)
 
     m->locator = locator_new();
 
-    m->sessions = malloc(m->locator->peers_size * sizeof(session_t*));
-    memset(m->sessions, 0, m->locator->peers_size * sizeof(session_t*));
+    m->sessions_size = 0;
+    m->sessions_capacity = 16;
+    m->sessions = malloc(m->sessions_capacity * sizeof(session_t*));
+    memset(m->sessions, 0, m->sessions_capacity * sizeof(session_t*));
 
     /* create listen socket */
     m->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
@@ -478,7 +564,6 @@ manager_new(const struct sockaddr_in6 *listen_addr)
         return NULL;
     }
 
-    char abuff[INET6_ADDRSTRLEN];
     DEBUG("started session manager, listening at [%s]:%d",
         sockaddr_str((struct sockaddr *)listen_addr),
         ntohs(listen_addr->sin6_port));
@@ -489,24 +574,33 @@ manager_new(const struct sockaddr_in6 *listen_addr)
 
 /* ===================== SESSION INITIATION ================================= */
 
-/** \brief Try to establish a TCP channel */
+/** \brief Try to establish a TCP channel
+ *
+ * \param arg Of type (void*){ manager_t *m, session_t *s }
+ */
 static void *
 connect_loop(void *arg)
 {
-    request_t *req = arg;
+    manager_t *m = ((void**)arg)[0];
+    session_t *s = ((void**)arg)[1];
+
     time_t connect_retry = 120;
 
-    int r = 0;
     while (1) {
-        request_change_state(req, STATE_CONNECT);
+        if (s->mark_stop_init) {
+            manager_session_remove(m, s);
+            return NULL;
+        }
 
-        int res = connect(req->fd,
-            (struct sockaddr*)req->addr,
+        session_change_state(s, STATE_CONNECT);
+
+        int res = connect(s->fd,
+            (struct sockaddr*)s->addr,
             sizeof(struct sockaddr_in6));
 
         if (res < 0) {
             ERROR("connect(): %s", strerror(errno));
-            request_change_state(req, STATE_IDLE);
+            session_change_state(s, STATE_IDLE);
             sleep(connect_retry);
             if (connect_retry < MAX_BACKOFF_CONNECT_RETRY)
                 connect_retry *= 2;
@@ -518,6 +612,7 @@ connect_loop(void *arg)
 
     /* TCP channel established, hand off to request handler */
     peer_handshake(arg);
+    return NULL;
 }
 
 
@@ -526,28 +621,29 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     uint32_t itad)
 {
     /* add peer to peer locator */
-    int idx = locator_add(manager->locator, addr, itad, manager->hold,
-        CAPINFO_TRANS_SEND_RECV);
+    const peer_t *peer = locator_add(manager->locator, addr, itad,
+        manager->hold, CAPINFO_TRANS_SEND_RECV);
     
-    if (manager->sessions_size + 1 == manager->locator->peers_size) {
-        manager->sessions = realloc(manager->sessions,
-            manager->locator->peers_size * sizeof(session_t*));
-    } else {
-        WARNING("manager session vector inconsistent with locator");
-        return;
-    }
+    /* create session object and hand off to connect loop */
+    session_t *s = malloc(sizeof(session_t));
+    memset(s, 0, sizeof(session_t));
+    s->peer = peer;
+    s->addr = malloc(sizeof(struct sockaddr_in6));
+    memcpy(s->addr, addr, sizeof(struct sockaddr_in6));
+    s->state = STATE_IDLE;
+    s->initiated = 1;
 
-    /* create session request object and hand off to connect loop */
-    request_t *req = malloc(sizeof(request_t));
-    req->manager = manager;
-    req->peer_idx = idx;
-    req->addr = malloc(sizeof(struct sockaddr_in6));
-    memcpy(req->addr, addr, sizeof(struct sockaddr_in6));
-    req->state = STATE_IDLE;
+    /* add session to manager session vector */
+    manager_session_add(manager, s);
 
-    req->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    /* create socket and pass session to connect loop */
+    s->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     
-    pthread_create(&req->thread, NULL, &connect_loop, req);
+    void **connect_data = malloc(2 * sizeof(void*));
+    connect_data[0] = manager;
+    connect_data[1] = s;
+
+    pthread_create(&s->thread, NULL, &connect_loop, connect_data);
 }
 
 void

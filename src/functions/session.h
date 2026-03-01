@@ -27,6 +27,7 @@
 #ifndef _SESSION_H
 #define _SESSION_H
 
+#include "locator.h"
 #include <protocol/protocol.h>
 
 #include <netinet/in.h>
@@ -47,7 +48,7 @@
  * \param fd Socket
  * \param buff Receive buffer
  * \param type Typename to receive
- * \param ation Error condition action
+ * \param action Error condition action
  */
 #define SOCK_TRY_RECV(fd, buff, type, action) \
     toread = sizeof(type); \
@@ -87,18 +88,21 @@ extern const char *session_state_strs[];
 typedef struct {
     pthread_t               thread;
     session_state_t         state;
-    uint32_t                itad, id;
-    uint16_t                hold;
+    int                     initiated; /**< Initiated by local */
+    int                     mark_stop_init; /**< Tell initiating thread to quit*/
 
-    capinfo_transmode_t     transmode;
+    uint16_t                hold;
 
     struct sockaddr_in6    *addr;
     int                     fd;
 
-    uint32_t                peer_itad, peer_id;
+    const peer_t           *peer;
+    uint32_t                peer_id;
 } session_t;
 
 
+/** \brief Change session state */
+void session_change_state(session_t *s, session_state_t new_state);
 
 /** \brief Send notification helper */
 int send_notification(int fd, int code, int subcode);
