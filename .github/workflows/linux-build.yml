@@ -42,9 +42,9 @@ jobs:
       with:
         path: ${{github.workspace}}/build/doxygen/html
 
-    #- name: Test
-      #working-directory: ${{github.workspace}}/build
-      #run: ctest -C ${{env.BUILD_TYPE}}
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest -C ${{env.BUILD_TYPE}}
 
   deploy:
     environment:
