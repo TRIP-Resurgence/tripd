@@ -44,7 +44,7 @@ enum msg_type {
 extern const char *msg_type_strs[];
 
 /** \brief Message header */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint16_t    msg_len;
     uint8_t     msg_type;
     uint8_t     msg_val[];
@@ -60,7 +60,7 @@ enum open_opt_type {
 extern const char *open_opt_type_strs[];
 
 /** \brief Message OPEN optional paramter */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint16_t    opt_type;
     uint16_t    opt_len;
     uint8_t     opt_val[];
@@ -70,7 +70,7 @@ typedef struct {
 #define PROTOCOL_VERSION    1
 
 /** \brief Message OPEN */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t         open_ver;
     uint8_t         open_reserved;
     uint16_t        open_hold;
@@ -91,7 +91,7 @@ enum capinfo_code {
 extern const char *capinfo_code_strs[];
 
 /** \brief Capability information option */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint16_t    capinfo_code;
     uint16_t    capinfo_len;
     uint8_t     capinfo_val[];
@@ -99,7 +99,7 @@ typedef struct {
 
 
 /** \brief Capability information supported route types */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint16_t    routetype_af;
     uint16_t    routetype_app_proto;
 } capinfo_routetype_t;
@@ -178,7 +178,7 @@ enum attr_type {
 };
 
 /** \brief UPDATE attribute */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t     attr_flags;
     uint8_t     attr_type;
     uint16_t    attr_len;
@@ -186,7 +186,7 @@ typedef struct {
 } msg_update_attr_t;
 
 /** \brief UPDATE link-state encapsulated attribute */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t     attr_flags;
     uint8_t     attr_type;
     uint16_t    attr_len;
@@ -229,7 +229,7 @@ enum app_proto {
 const char *app_proto_str(int app_proto);
 
 /** \brief Route */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint16_t    route_af;
     uint16_t    route_app_proto;
     uint16_t    route_len;
@@ -260,7 +260,7 @@ typedef route_t attr_reachableroutes_t[];
  * port: decimal number 1-65535
  */
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint32_t    nexthopserver_itad;
     uint16_t    nexthopserver_serverlen;
     char        nexthopserver_server[];
@@ -274,10 +274,10 @@ enum itadpath_type {
 };
 
 /** \brief ITAD path */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t     itadpath_type;
-    uint8_t     itadpath_len;
-    uint32_t    itadpath_segs[];  /* ITAD numbers path */
+    uint8_t     itadpath_len;       /**< Number of ITADs in path seg */
+    uint32_t    itadpath_segs[];    /**< ITAD numbers path */
 } itadpath_t;
 
 /** \brief Attribute AdvertisementPath
@@ -318,7 +318,7 @@ typedef uint32_t attr_multiexitdisc_t;
 
 
 /** \brief Community */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint32_t    community_itad;
     uint32_t    community_id;
 } community_t;
@@ -413,7 +413,7 @@ extern const char *notif_subcode_update_strs[];
 extern const char **notif_code_subcodes_strs[];
 
 /** \brief Message NOTIFICATION */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t     notif_error_code;
     uint8_t     notif_error_subcode;
     uint8_t     notif_data[];

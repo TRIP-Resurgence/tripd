@@ -15,6 +15,8 @@ file(GLOB TRIPD_SRC "src/tripd/*.c")
 
 add_compile_options(-Wall -Wextra -Wno-pedantic -Wno-sign-compare -Wno-unused-parameter -Wno-unused-variable)
 
+# components
+
 add_library(logging STATIC ${LOGGING_SRC})
 
 add_library(util STATIC ${UTIL_SRC})
@@ -28,9 +30,34 @@ target_link_libraries(functions protocol logging util)
 add_library(command STATIC ${COMMAND_SRC})
 target_link_libraries(command functions logging)
 
+# main executable
+
 add_executable(tripd ${TRIPD_SRC})
 target_link_libraries(tripd command)
 
+
+# tests
+
+enable_testing()
+
+add_executable(test_collision "src/tests/collision.c")
+target_link_libraries(test_collision logging command)
+add_test(NAME test_collision COMMAND test_collision)
+
+add_executable(test_protocol_types_sizes "src/tests/protocol_types_sizes.c")
+target_link_libraries(test_protocol_types_sizes logging command)
+add_test(NAME test_protocol_types_sizes COMMAND test_protocol_types_sizes)
+
+add_executable(test_serialize_open "src/tests/serialize_open.c")
+target_link_libraries(test_serialize_open protocol)
+add_test(NAME test_serialize_open COMMAND test_serialize_open)
+
+add_executable(test_serialize_notif "src/tests/serialize_notif.c")
+target_link_libraries(test_serialize_notif protocol)
+add_test(NAME test_serialize_notif COMMAND test_serialize_notif)
+
+
+# documentation
 
 find_program(DOXYGEN doxygen)
 if (DOXYGEN)
