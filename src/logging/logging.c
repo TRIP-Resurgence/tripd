@@ -24,9 +24,13 @@
 
 #include "logging.h"
 
+#include <command/cli.h>
+
 #include <stdarg.h>
 #include <string.h>
 #include <time.h>
+
+#define LINE_START      "\r"
 
 #define COLOR_MAGENTA   "\e[35m"
 #define COLOR_BLUE      "\e[94m"
@@ -89,8 +93,10 @@ logging_log(loglevel_t level, const char *component, const char *fmt, ...)
     vsnprintf(logbuff, 4096, fmt, args);
     va_end(args);
 
-    fprintf(g_logf, "[%s %s %s] %s\n", timestr(), loglevel_strs[level],
-        component, logbuff);
+    fprintf(g_logf, LINE_START "[%s %s %s] %s\n",
+        timestr(), loglevel_strs[level], component, logbuff);
+
+    cli_print_prompt();
 }
 
 
@@ -109,8 +115,10 @@ logging_log_debug(loglevel_t level, const char *component,
     vsnprintf(logbuff, 4096, fmt, args);
     va_end(args);
 
-    fprintf(g_logf, "[%s %s %s] %s:%s():%d: %s\n", timestr(),
+    fprintf(g_logf, LINE_START "[%s %s %s] %s:%s():%d: %s\n", timestr(),
         loglevel_strs[level], component, basename(file), func, line, logbuff);
+
+    cli_print_prompt();
 }
 
 

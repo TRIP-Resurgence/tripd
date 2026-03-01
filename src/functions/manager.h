@@ -49,6 +49,10 @@ typedef struct {
 } manager_t;
 
 
+/** \brief Lookup session by locator peer */
+session_t *manager_session_lookup_address(const manager_t *m,
+    const struct sockaddr_in6 *addr);
+
 /** \brief Create manager and bind socket */
 manager_t *manager_new(const struct sockaddr_in6 *listen_addr);
 

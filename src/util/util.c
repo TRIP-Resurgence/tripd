@@ -24,7 +24,14 @@
 
 #include <string.h>
 
+#include <logging/logging.h>
+
+#define _COMPONENT_ "util"
+
 #include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 void
 map_addr_inet_inet6(struct sockaddr_in6 *sin6, const struct sockaddr_in *sin)
@@ -34,6 +41,33 @@ map_addr_inet_inet6(struct sockaddr_in6 *sin6, const struct sockaddr_in *sin)
     memcpy(&sin6->sin6_addr.s6_addr[12],            /* 32 IPv4 addr */
         &sin->sin_addr.s_addr,
         sizeof(in_addr_t));
+}
+
+int
+normalize_str_addr(struct sockaddr_in6 *sin6, const char *str)
+{
+    /* resolve listen address */
+    struct addrinfo *ai;
+    int res = getaddrinfo(str, NULL, NULL, &ai);
+    if (res != 0) {
+        ERROR("getaddrinfo() error: %s for %s\n", gai_strerror(res), str);
+        return -1;
+    }
+
+    if (ai->ai_addr->sa_family == AF_INET6) {
+        memcpy(sin6, ai->ai_addr, ai->ai_addrlen);
+    } else if (ai->ai_addr->sa_family == AF_INET) {
+        sin6->sin6_family = AF_INET6;
+        /* map IPv4 into IPv4-mapped IPv6 */
+        map_addr_inet_inet6(sin6, (struct sockaddr_in *)ai->ai_addr);
+    } else {
+        ERROR("bind-address: unsupported address family: %s\n", str);
+        freeaddrinfo(ai);
+        return -1;
+    }
+
+    freeaddrinfo(ai);
+    return 0;
 }
 
 const char *
@@ -50,6 +84,15 @@ sockaddr_str(const struct sockaddr *sa)
             INET_ADDRSTRLEN);
     break;
     }
+    return addr_buff;
+}
+
+const char *
+inaddr_str(uint32_t addr)
+{
+    static char addr_buff[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &addr, addr_buff,
+        INET_ADDRSTRLEN);
     return addr_buff;
 }
 

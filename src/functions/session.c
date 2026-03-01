@@ -58,7 +58,7 @@ session_str(session_t *s)
 {
     static char str[256], abuff[INET6_ADDRSTRLEN], abuff2[INET_ADDRSTRLEN];
     snprintf(str, 256, "(%s):%d:%s",
-        inet_ntop(AF_INET6, &s->addr->sin6_addr, abuff,
+        inet_ntop(AF_INET6, &s->peer->addr.sin6_addr, abuff,
             sizeof(abuff)),
         s->peer->itad,
         inet_ntop(AF_INET, &s->peer_id, abuff2, sizeof(abuff2)));
@@ -207,7 +207,6 @@ session_shutdown(session_t *session)
 void
 session_destroy(session_t *session)
 {
-    free(session->addr);
     free(session);
 }
 

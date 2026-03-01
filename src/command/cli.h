@@ -18,26 +18,23 @@
 
 */
 
-#ifndef _UTIL_H
-#define _UTIL_H
+#ifndef _CLI_H
+#define _CLI_H
 
-#include <sys/socket.h>
-#include <netinet/in.h>
-
-void map_addr_inet_inet6(struct sockaddr_in6 *sin6,
-    const struct sockaddr_in *sin);
-
-/** \brief Normalize address string
- *
- * Converts IPv4 or IPv6 address string into IPv6-mapped-IPv4 or IPv6
- * sockaddr_in6
+/** \file
+ * \brief Command line interface
  */
-int normalize_str_addr(struct sockaddr_in6 *sin6, const char *str);
 
-const char *sockaddr_str(const struct sockaddr *sa);
+#include "parser.h"
 
-const char *inaddr_str(uint32_t addr);
-const char *sockaddr6_str(const struct sockaddr_in6 *sa);
+/** \brief Print prompt */
+void cli_print_prompt();
 
-#endif /* _UTIL_H */
+/** \brief Command loop */
+void cli_run(parser_t *parser);
+
+/** \brief Reset terminal */
+void cli_reset();
+
+#endif /* _CLI_H */
 

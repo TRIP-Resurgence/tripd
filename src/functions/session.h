@@ -86,18 +86,27 @@ extern const char *session_state_strs[];
 
 /** \brief Session object */
 typedef struct {
-    pthread_t               thread;
-    session_state_t         state;
-    int                     initiated; /**< Initiated by local */
+    pthread_t               thread;     /**< Session thread ID */
+    session_state_t         state;      /**< Session state */
+    int                     initiated;  /**< Initiated by local -> nonzero */
     int                     mark_stop_init; /**< Tell initiating thread to quit*/
 
-    uint16_t                hold;
+    int                     fd;         /**< Session socket */
 
-    struct sockaddr_in6    *addr;
-    int                     fd;
+    /* negotiated timers */
+    uint16_t                hold;       /**< Negotiated hold timer */
+    uint16_t                keepalive;  /**< Negotiated hold timer */
 
-    const peer_t           *peer;
-    uint32_t                peer_id;
+
+    const peer_t           *peer;       /**< From address */
+    uint32_t                peer_id;    /**< Found in OPEN */
+
+    /* times */
+    time_t                  established_time;   /**< Time of establishment */
+    time_t                  last_read_time;     /**< Time of last read */
+    time_t                  last_write_time;    /**< Time of last write */
+
+    /* capabilities */
 } session_t;
 
 
