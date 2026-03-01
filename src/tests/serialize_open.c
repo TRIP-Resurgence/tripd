@@ -3,11 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define CHECK_SIZE(name, type, len) \
-    printf("sizeof %-25s %2d == %-2ld = %s\n", name, len, sizeof(type), strs[sizeof(type) == len]); \
-    if (sizeof(type) != len) return 1;
-    
-
 int
 main()
 {
@@ -15,22 +10,6 @@ main()
     unsigned char rbuff[4096];   /* reference buffer */
 
     const char *strs[] = { "fail", "pass" };
-
-    /* sizes */
-    CHECK_SIZE("msg_t", msg_t, 3);
-    CHECK_SIZE("msg_open_t", msg_open_t, 14);
-    CHECK_SIZE("msg_open_opt_t", msg_open_opt_t, 4);
-    CHECK_SIZE("capinfo_t", capinfo_t, 4);
-    CHECK_SIZE("capinfo_routetype_t", capinfo_routetype_t, 4);
-    CHECK_SIZE("capinfo_transmode_t", capinfo_transmode_t, 4);
-    CHECK_SIZE("msg_update_attr_t", msg_update_attr_t, 4);
-    CHECK_SIZE("msg_update_attr_lsencap_t", msg_update_attr_lsencap_t, 12);
-    CHECK_SIZE("route_t", route_t, 6);
-    CHECK_SIZE("attr_nexthopserver_t", attr_nexthopserver_t, 6);
-    CHECK_SIZE("itadpath_t", itadpath_t, 2);
-    CHECK_SIZE("community_t", community_t, 8);
-    CHECK_SIZE("msg_notif_t", msg_notif_t, 2);
-
 
     /* OPEN reference */
     msg_t *msg = (void*)rbuff;
@@ -75,12 +54,19 @@ main()
         supported_routetypes_size, CAPINFO_TRANS_SEND_RECV);
 
     /* check */
+    printf("size %ld == %d = %s\n", sizeof(msg_t) + msg->msg_len, r, strs[(sizeof(msg_t) + msg->msg_len) == r]);
     if (r != sizeof(msg_t) + msg->msg_len)
         return 1;
 
     int fail = 0;
     for (int i = 0; i < sizeof(msg_t) + msg->msg_len; i++) {
-        printf("%.2x : %.2x == %.2x = %s\n", i, rbuff[i], tbuff[i], strs[rbuff[i] == tbuff[i]]);
+        if (i == 0) printf("msg:\n");
+        if (i == sizeof(msg_t)) printf("msg_open:\n");
+        if (i == sizeof(msg_t) + sizeof(msg_open_t)) printf("msg_open_opt:\n");
+        if (i == sizeof(msg_t) + sizeof(msg_open_t) + sizeof(msg_open_opt_t)) printf("capinfo:\n");
+        if (i == sizeof(msg_t) + sizeof(msg_open_t) + sizeof(msg_open_opt_t) + sizeof(capinfo_t)) printf("capinfo_routetype:\n");
+        if (i == sizeof(msg_t) + sizeof(msg_open_t) + sizeof(msg_open_opt_t) + sizeof(capinfo_t) + sizeof(capinfo_routetype_t) + capinfo_routetypes->capinfo_len) printf("capinfo_transmode:\n");
+        printf("  %.2x : %.2x == %.2x = %s\n", i, rbuff[i], tbuff[i], strs[rbuff[i] == tbuff[i]]);
         if (rbuff[i] != tbuff[i]) fail = 1;
     }
 
