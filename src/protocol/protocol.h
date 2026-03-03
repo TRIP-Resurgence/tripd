@@ -451,6 +451,18 @@ typedef enum runtime_errors_e {
 extern const char *runtime_error_strs[];
 
 
+/* default timers */
+
+#define TIMER_CONNECT_RETRY             120
+#define TIMER_HOLD_TIME                 90
+#define TIMER_KEEPALIVE                 30
+#define TIMER_MAX_PURGE_TIME            10
+#define TIMER_DISABLE_TIME              180
+#define TIMER_MIN_ITAD_ORIG_INT         30
+#define TIMER_MIN_ROUTE_ADVERT_INT      30
+
+
+
 /* objects */
 
 /** \brief Supported routetypes constant */
@@ -621,6 +633,9 @@ runtime_error_t parse_itad(const void *buff, size_t len,
 /** \brief Deserialize NOTIFICATION message */
 runtime_error_t parse_msg_notif(const void *buff, size_t len,
     const msg_notif_t **notif_out);
+
+/** \brief String NOTIFICATION code, subcode */
+const char *notif_code_subcode_str(int code, int subcode);
 
 
 #endif /* _PROTOCOL_H */

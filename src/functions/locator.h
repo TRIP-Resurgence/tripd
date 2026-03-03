@@ -35,9 +35,12 @@
 /** \brief Known peer info object */
 typedef struct {
     struct sockaddr_in6     addr;
+    
     uint32_t                itad;
-    uint16_t                hold;
     capinfo_transmode_t     transmode;
+
+    /* timers */
+    uint16_t                hold;
 } peer_t;
 
 /** \brief Peer locator */

@@ -36,16 +36,31 @@
 
 /** \brief Manager object */
 typedef struct {
-    pthread_t   thread;
+    int         run;                /**< run threads = 1 */
+    pthread_t   listen_thread;
+    pthread_t   maintenance_thread;
     int         fd;
 
+    /* local */
     uint32_t    itad;
     uint32_t    id;
-    uint16_t    hold;
+
+    /* peer information */
     locator_t  *locator;
 
+    /* session instances */
     session_t **sessions;
     size_t      sessions_size, sessions_capacity;
+
+    /* timers peer default  */
+    uint16_t    hold;
+    uint16_t    keepalive;
+    /* timers per trip instance */
+    int         connect_retry;
+    int         max_purge_time;
+    int         disable_time;
+    int         min_itad_orig_int;
+    int         min_route_advert_int;
 } manager_t;
 
 

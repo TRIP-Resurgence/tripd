@@ -32,14 +32,12 @@
 #include "manager.h"
 
 #include "locator.h"
-#include "logging/logging.h"
-#include "protocol/protocol.h"
-#include "session.h"
-#include "util/util.h"
-
 #include <logging/logging.h>
-#include <netinet/in.h>
+#include <protocol/protocol.h>
+#include "session.h"
 #include <util/util.h>
+
+#include <netinet/in.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -69,7 +67,7 @@ manager_session_lookup_itad_id(const manager_t *m, uint32_t itad,
 {
     for (size_t i = 0; i < m->sessions_size; i++)
         if (m->sessions[i]->peer->itad == itad &&
-            m->sessions[i]->peer_id == id)
+            m->sessions[i]->id == id)
         {
             return m->sessions[i];
         }
@@ -94,7 +92,8 @@ manager_session_lookup_address(const manager_t *m,
     const struct sockaddr_in6 *addr)
 {
     for (size_t i = 0; i < m->sessions_size; i++)
-        if (memcmp(&m->sessions[i]->peer->addr.sin6_addr, &addr->sin6_addr,
+        if (!m->sessions[i]->mark_stop_init &&
+            memcmp(&m->sessions[i]->peer->addr.sin6_addr, &addr->sin6_addr,
             sizeof(struct in6_addr)) == 0)
         {
             return m->sessions[i];
@@ -153,7 +152,7 @@ manager_session_remove(manager_t *m, session_t *s)
 
     session_destroy(s);
     memcpy(&m->sessions[s_idx], &m->sessions[s_idx + 1],
-        m->sessions_size - s_idx);
+        sizeof(session_t*) * (m->sessions_size - s_idx));
     m->sessions_size--;
 }
 
@@ -184,11 +183,11 @@ manager_collision_sessions_compare(const manager_t *m, const session_t *s1,
     } else if (s1->initiated) {
         /* new session initiated by local
          * return local < s2 peer */
-        return compare_itad_id(m->itad, m->id, s2->peer->itad, s2->peer_id);
+        return compare_itad_id(m->itad, m->id, s2->peer->itad, s2->id);
     } else {
         /* old connection initiated by local
          * return s1 peer < local */
-        return compare_itad_id(s1->peer->itad, s1->peer_id, m->itad, m->id);
+        return compare_itad_id(s1->peer->itad, s1->id, m->itad, m->id);
     }
 }
 
@@ -260,8 +259,9 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     }
 
 
-    s->peer_id = open->open_id;
+    s->id = open->open_id;
     s->hold = MIN(s->peer->hold, open->open_hold);
+    s->keepalive = s->hold / 3;
 
     /* now add session to manager */
     if (!s->initiated)
@@ -461,7 +461,8 @@ peer_handshake(void *arg)
         case MSG_TYPE_KEEPALIVE: {
             if (s->state == STATE_OPENCONFIRM)
                 session_change_state(s, STATE_ESTABLISHED);
-            s->established_time = time(NULL);
+            time_t now = time(NULL);
+            s->established_time = s->last_read_time = now;
 
             /* Hand newly established session off to session_loop */
             session_loop(arg);
@@ -488,15 +489,16 @@ sock_error:
 
 /* =================== CONNECTION HANDLING  ================================= */
 
+/** \brief Listen and accept connections */
 static void *
-manager_loop(void *arg)
+listen_loop(void *arg)
 {
     manager_t *m = arg;
 
     struct sockaddr_in6 peer_addr = { 0 };
     socklen_t peer_addr_size = sizeof(struct sockaddr_in6);
 
-    while (1) {
+    while (m->run) {
         /* accept connection (block) */
         int request_fd = accept(m->fd, (struct sockaddr*)&peer_addr,
             &peer_addr_size);
@@ -538,6 +540,50 @@ manager_loop(void *arg)
 }
 
 
+/** \brief Maintain sessions */
+static void *
+maintenance_loop(void *arg)
+{
+    manager_t *m = arg;
+    char buff[MAX_MSG_SIZE];
+
+    while (m->run) {
+        time_t now = time(NULL);
+
+        for (int i = 0; i < m->sessions_size; i++) {
+            session_t *s = m->sessions[i];
+            if (s->state != STATE_ESTABLISHED || s->hold == 0)
+                continue;
+
+            if (now - s->last_write_time > s->keepalive) {
+                int n = new_msg_keepalive(buff, sizeof(buff));
+
+                DEBUG("sending KEEPALIVE");
+                SOCK_TRY_SEND(send(s->fd, buff, n, 0), session_shutdown(s));
+                s->last_write_time = now;
+            }
+
+            if (now - s->last_read_time > s->hold) {
+                int n = new_msg_notif(buff, sizeof(buff),
+                    NOTIF_CODE_ERROR_EXPIRED, 0, 0, NULL);
+
+                ERROR("session %s hold timer expired %ld",
+                    sockaddr6_str(&s->peer->addr), s->last_read_time);
+                SOCK_TRY_SEND(send(s->fd, buff, n, 0), session_shutdown(s));
+                session_shutdown(s);
+            }
+
+        }
+
+        usleep(100000);
+    }
+
+
+    return NULL;
+}
+    
+
+
 manager_t *
 manager_new(const struct sockaddr_in6 *listen_addr)
 {
@@ -547,8 +593,14 @@ manager_new(const struct sockaddr_in6 *listen_addr)
         return NULL;
 
     manager_t *m = &manager;
+    memset(m, 0, sizeof(manager_t));
 
-    m->thread = 0;
+    /* init values */
+    m->run = 0;
+    m->listen_thread = 0;
+    m->maintenance_thread = 0;
+    m->fd = 0;
+
     m->itad = 0;
     m->id = 0;
 
@@ -558,6 +610,14 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->sessions_capacity = 16;
     m->sessions = malloc(m->sessions_capacity * sizeof(session_t*));
     memset(m->sessions, 0, m->sessions_capacity * sizeof(session_t*));
+
+    m->connect_retry = TIMER_CONNECT_RETRY;
+    m->hold = TIMER_HOLD_TIME;
+    m->keepalive = TIMER_KEEPALIVE;
+    m->max_purge_time = TIMER_MAX_PURGE_TIME;
+    m->disable_time = TIMER_DISABLE_TIME;
+    m->min_itad_orig_int = TIMER_MIN_ITAD_ORIG_INT;
+    m->min_route_advert_int = TIMER_MIN_ROUTE_ADVERT_INT;
 
     /* create listen socket */
     m->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
@@ -598,7 +658,7 @@ connect_loop(void *arg)
     manager_t *m = ((void**)arg)[0];
     session_t *s = ((void**)arg)[1];
 
-    time_t connect_retry = 120;
+    time_t connect_retry = m->connect_retry;
 
     while (1) {
         if (s->mark_stop_init) {
@@ -660,8 +720,12 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
 void
 manager_run(manager_t *manager)
 {
-    pthread_create(&manager->thread, NULL, &manager_loop, manager);
-    pthread_detach(manager->thread);
+    manager->run = 1;
+    pthread_create(&manager->listen_thread, NULL, &listen_loop, manager);
+    pthread_detach(manager->listen_thread);
+    pthread_create(&manager->maintenance_thread, NULL, &maintenance_loop,
+        manager);
+    pthread_detach(manager->maintenance_thread);
 }
 
 void

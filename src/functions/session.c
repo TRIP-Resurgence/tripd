@@ -27,6 +27,7 @@
 #include "session.h"
 
 #include "manager.h"
+#include "protocol/protocol.h"
 
 #include <logging/logging.h>
 #include <util/util.h>
@@ -61,7 +62,7 @@ session_str(session_t *s)
         inet_ntop(AF_INET6, &s->peer->addr.sin6_addr, abuff,
             sizeof(abuff)),
         s->peer->itad,
-        inet_ntop(AF_INET, &s->peer_id, abuff2, sizeof(abuff2)));
+        inet_ntop(AF_INET, &s->id, abuff2, sizeof(abuff2)));
     return str;
 }
 
@@ -76,8 +77,9 @@ id_str(uint32_t id)
 void
 session_change_state(session_t *s, session_state_t new_state)
 {
-    DEBUG("peer session %s changed state from %s to %s", session_str(s),
-        session_state_strs[s->state], session_state_strs[new_state]);
+    if (s->state != new_state)
+        DEBUG("peer session %s changed state from %s to %s", session_str(s),
+            session_state_strs[s->state], session_state_strs[new_state]);
     s->state = new_state;
 }
 
@@ -163,26 +165,28 @@ session_loop(void *arg)
             goto sock_error;
         } break;
         case MSG_TYPE_UPDATE: {
-            /* TODO */
+            s->last_read_time = time(NULL);
+            /* TODO: update */
         } break;
         case MSG_TYPE_NOTIFICATION: {
-            /* TODO */
+            SOCK_TRY_RECV(s->fd, recv_wnd, msg_notif_t, goto sock_error);
+
+            const msg_notif_t *msg_notif = NULL;
+            PROTO_TRY(
+                parse_msg_notif(msg->msg_val, sizeof(msg_notif_t), &msg_notif),
+                res, goto proto_error
+            );
+
+            INFO("received notification: %s",
+                notif_code_subcode_str(msg_notif->notif_error_code,
+                    msg_notif->notif_error_subcode));
+
+            if (msg_notif->notif_error_code == NOTIF_CODE_ERROR_EXPIRED)
+                goto sock_error;
         } break;
         case MSG_TYPE_KEEPALIVE: {
-            /* TODO: reset timer (TODO keepalive timer */
+            s->last_read_time = time(NULL);
         } break;
-        }
-
-        /* flush and continue */
-        res = recv(s->fd, buff, MAX_MSG_SIZE, 0);
-        if (res < 0) {
-            ERROR("recv(): %s", strerror(errno)); \
-            goto sock_error;
-        } else if (res == 0) {
-            DEBUG("connection closed by peer"); \
-            goto sock_error;
-        } else {
-            DEBUG("%d trailing bytes dropped", res);
         }
     }
 
@@ -190,7 +194,6 @@ proto_error:
     send_notification_res(s->fd, res);
 
 sock_error:
-    close(s->fd);
     session_change_state(s, STATE_IDLE);
     return NULL;
 }
@@ -201,7 +204,7 @@ session_shutdown(session_t *session)
     /* TODO send CEASE NOTIFICATION */
     DEBUG("shutting down session %s", session_str(session));
     shutdown(session->fd, SHUT_RDWR); /* recv loop does close() */
-    session->state = STATE_IDLE;
+    session_change_state(session, STATE_IDLE);
 }
 
 void

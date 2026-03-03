@@ -28,6 +28,7 @@
 #include "functions/manager.h"
 #include "functions/session.h"
 #include "protocol/protocol.h"
+#include <ctype.h>
 #include <logging/logging.h>
 #include <netinet/in.h>
 #include <util/util.h>
@@ -102,14 +103,12 @@ cmd_configure(parser_t *parser, int no, char *args)
     return 0;
 }
 
-static const char *
-time_since(time_t since)
+void
+time_since(char *buff, time_t since)
 {
-    static char buff[256];
     time_t elapsed = time(NULL) - since;
-    snprintf(buff, 256, "%ld:%ld:%ld", elapsed / 3600, (elapsed / 60) % 60,
+    snprintf(buff, 256, "%02ld:%02ld:%02ld", elapsed / 3600, (elapsed / 60) % 60,
         elapsed % 60);
-    return buff;
 }
 
 int
@@ -130,12 +129,15 @@ cmd_show(parser_t *parser, int no, char *args)
     } else if (strncmp(args, "sessions", 8) == 0) {
         const manager_t *manager = parser->manager;
         printf("  %8s  %-30s %-6s %-12s %-10s\n", "itad", "host", "hold", "id", "state");
-        for (int i = 0; i < manager->sessions_size; i++)
+        for (int i = 0; i < manager->sessions_size; i++) {
+            if (manager->sessions[i]->mark_stop_init)
+                continue;
             printf("  %8d  %-30s %-6d %-12s %-10s\n", manager->sessions[i]->peer->itad,
                 sockaddr6_str(&manager->sessions[i]->peer->addr),
                 manager->sessions[i]->hold,
-                inaddr_str(manager->sessions[i]->peer_id),
+                inaddr_str(manager->sessions[i]->id),
                 session_state_strs[manager->sessions[i]->state]);
+        }
     } else if (strncmp(args, "session ", 8) == 0) {
         const manager_t *manager = parser->manager;
         struct sockaddr_in6 show_addr;
@@ -155,19 +157,21 @@ cmd_show(parser_t *parser, int no, char *args)
             "  TRIP version 1, remote LS ID %s\n"
             "  TRIP state = %s",
             sockaddr6_str(&show_session->peer->addr), show_session->peer->itad,
-            inaddr_str(show_session->peer_id),
+            inaddr_str(show_session->id),
             session_state_strs[show_session->state]
         );
 
+        char established[16], last_read[16], last_write[16];
+        time_since(established, show_session->established_time);
+        time_since(last_read, show_session->last_read_time);
+        time_since(last_write, show_session->last_write_time);
         if (show_session->state == STATE_ESTABLISHED)
             printf(
                 ", up for %s\n"
                 "  last read %s, last write %s, hold time is %d, "
                 "keepalive interval is %d seconds\n"
                 "  neighbor capabilities:\n",
-                time_since(show_session->established_time),
-                time_since(show_session->last_read_time),
-                time_since(show_session->last_write_time),
+                established, last_read, last_write,
                 show_session->hold, show_session->keepalive
             );
         else
@@ -353,7 +357,31 @@ int
 cmd_config_trip_timers(parser_t *parser, int no, char *args)
 {
     args = strip(args);
-    parser->manager->hold = strtoul(args, NULL, 10);
+
+    if (strlen(args) == 0 || !isdigit(*args)) {
+        printf("timers: number expected\n");
+        return -1;
+    }
+
+    char *end = NULL;
+    parser->manager->hold = strtoul(args, &end, 10);
+    if (end == args) {
+        printf("timers: number expected\n");
+    }
+    if (*end == '\0') return 0;
+    parser->manager->keepalive = strtoul(end, &end, 10);
+    if (*end == '\0') return 0;
+    if (parser->manager->keepalive < 3)
+        printf("timers: keepalive too low\n");
+    parser->manager->connect_retry = strtoul(end, &end, 10);
+    if (*end == '\0') return 0;
+    parser->manager->max_purge_time = strtoul(end, &end, 10);
+    if (*end == '\0') return 0;
+    parser->manager->disable_time = strtoul(end, &end, 10);
+    if (*end == '\0') return 0;
+    parser->manager->min_itad_orig_int = strtoul(end, &end, 10);
+    if (*end == '\0') return 0;
+    parser->manager->min_route_advert_int = strtoul(end, &end, 10);
     return 0;
 }
 
@@ -446,7 +474,7 @@ const cmd_def_t cmds_trip[] = {
     { "exit",           &cmd_exit,"exit current context", NULL },
     { "help",           &cmd_help,"show command help", NULL },
     { "ls-id",          &cmd_config_trip_lsid, "set local id", "ls-id <id in dotted notation" },
-    { "timers",         &cmd_config_trip_timers, "set timers", "timers <hold>" },
+    { "timers",         &cmd_config_trip_timers, "set timers", "timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]" },
     { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> remote-itad <itad>" },
     { NULL,             NULL, NULL, NULL }
 };

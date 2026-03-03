@@ -40,10 +40,6 @@ target_link_libraries(tripd command)
 
 enable_testing()
 
-add_executable(test_collision "src/tests/collision.c")
-target_link_libraries(test_collision logging command)
-add_test(NAME test_collision COMMAND test_collision)
-
 add_executable(test_protocol_types_sizes "src/tests/protocol_types_sizes.c")
 target_link_libraries(test_protocol_types_sizes logging command)
 add_test(NAME test_protocol_types_sizes COMMAND test_protocol_types_sizes)
@@ -55,6 +51,10 @@ add_test(NAME test_serialize_open COMMAND test_serialize_open)
 add_executable(test_serialize_notif "src/tests/serialize_notif.c")
 target_link_libraries(test_serialize_notif protocol)
 add_test(NAME test_serialize_notif COMMAND test_serialize_notif)
+
+add_executable(test_collision "src/tests/collision.c")
+target_link_libraries(test_collision logging command)
+add_test(NAME test_collision COMMAND test_collision)
 
 
 # documentation
