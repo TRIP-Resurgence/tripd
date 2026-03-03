@@ -29,45 +29,10 @@
 
 #include "locator.h"
 #include <protocol/protocol.h>
+#include <util/util.h>
 
 #include <netinet/in.h>
 
-/** \brief Send helper macro 
- *
- * \param o Operation
- * \param a Error condition action
- * */
-#define SOCK_TRY_SEND(o, a) \
-    if (o < 0) { \
-        ERROR("send(): %s", strerror(errno)); \
-        a; \
-    }
-
-/** \brief Receive helper macro
- *
- * \param fd Socket
- * \param buff Receive buffer
- * \param type Typename to receive
- * \param action Error condition action
- */
-#define SOCK_TRY_RECV(fd, buff, type, action) \
-    toread = sizeof(type); \
-    while (1) { \
-        res = recv(fd, buff, toread, 0); \
-        if (res < 0) { \
-            ERROR("recv(): %s", strerror(errno)); \
-            action; break; \
-        } else if (res == 0) { \
-            DEBUG("connection closed by peer"); \
-            action; break; \
-        } else if (res < sizeof(type)) { \
-            buff += res; break; \
-            toread -= res; \
-            continue; \
-        } \
-        toread -= res; \
-        buff += res; break; \
-    }
 
 
 
@@ -93,13 +58,13 @@ typedef struct {
 
     int                     fd;         /**< Session socket */
 
-    /* negotiated timers */
+    /* negotiated */
     uint16_t                hold;       /**< Negotiated hold timer */
     uint16_t                keepalive;  /**< Negotiated hold timer */
 
 
     const peer_t           *peer;       /**< From address */
-    uint32_t                peer_id;    /**< Found in OPEN */
+    uint32_t                id;    /**< Found in OPEN */
 
     /* times */
     time_t                  established_time;   /**< Time of establishment */

@@ -24,8 +24,8 @@ main()
         .peer = &peer
     };
 
-    inet_pton(AF_INET, "20.0.0.0", &s1.peer_id);
-    inet_pton(AF_INET, "20.0.0.0", &s2.peer_id);
+    inet_pton(AF_INET, "20.0.0.0", &s1.id);
+    inet_pton(AF_INET, "20.0.0.0", &s2.id);
 
     return manager_collision_sessions_compare(&m, &s1, &s2) != 1;
 }

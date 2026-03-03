@@ -28,6 +28,7 @@
 #include "protocol.h"
 
 #include <string.h>
+#include <stdio.h>
 
 
 /* symbols */
@@ -1035,4 +1036,32 @@ parse_msg_notif(const void *buff, size_t len,
     return sizeof(msg_notif_t);
 }
 
+
+const char *
+notif_code_subcode_str(int code, int subcode)
+{
+    static char buff[256];
+
+    switch (code) {
+    case NOTIF_CODE_ERROR_MSG:
+        snprintf(buff, 256, "%s, %s", notif_code_strs[code],
+            notif_subcode_msg_strs[subcode]);
+    break;
+    case NOTIF_CODE_ERROR_OPEN:
+        snprintf(buff, 256, "%s, %s", notif_code_strs[code],
+            notif_subcode_open_strs[subcode]);
+    break;
+    case NOTIF_CODE_ERROR_UPDATE:
+        snprintf(buff, 256, "%s, %s", notif_code_strs[code],
+            notif_subcode_update_strs[subcode]);
+    break;
+    case NOTIF_CODE_ERROR_EXPIRED:  /* RFC does not define subcodes for these */
+    case NOTIF_CODE_ERROR_STATE:
+    case NOTIF_CODE_CEASE:
+        snprintf(buff, 256, "%s", notif_code_strs[code]);
+    break;
+    }
+
+    return buff;
+}
 
