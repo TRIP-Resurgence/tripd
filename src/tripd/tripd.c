@@ -100,7 +100,10 @@ main(int argc, char **argv)
             config_path, strerror(errno));
         return 1;
     }
-    parser_parse_file(g_parser, conff);
+
+    if (parser_parse_file(g_parser, conff) < 0)
+        return 1;
+    
     fclose(conff);
     
     parser_parse_cmd(g_parser, "end");

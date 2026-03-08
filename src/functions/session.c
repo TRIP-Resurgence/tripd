@@ -210,6 +210,8 @@ session_shutdown(session_t *session)
 void
 session_destroy(session_t *session)
 {
+    if (session->routetypes)
+        free(session->routetypes);
     free(session);
 }
 

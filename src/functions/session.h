@@ -64,7 +64,7 @@ typedef struct {
 
 
     const peer_t           *peer;       /**< From address */
-    uint32_t                id;    /**< Found in OPEN */
+    uint32_t                id;         /**< Found in OPEN */
 
     /* times */
     time_t                  established_time;   /**< Time of establishment */
@@ -72,6 +72,9 @@ typedef struct {
     time_t                  last_write_time;    /**< Time of last write */
 
     /* capabilities */
+    capinfo_transmode_t     transmode;        /**< Peer transmode */
+    capinfo_routetype_t    *routetypes;       /**< Supported route types */
+    size_t                  routetypes_count; /**< Supported route types count*/
 } session_t;
 
 

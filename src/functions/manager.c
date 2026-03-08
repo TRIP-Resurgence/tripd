@@ -310,6 +310,12 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                 case CAPINFO_CODE_ROUTETYPE: {
                     size_t routetypes_toread = capinfo->capinfo_len;
                     const void *routetype_cur = capinfo->capinfo_val;
+
+                    s->routetypes_count = routetypes_toread /
+                        sizeof(capinfo_routetype_t);
+                    s->routetypes = malloc(routetypes_toread);
+                    void *crt_cur = s->routetypes;
+
                     while (routetypes_toread) {
                         SOCK_TRY_RECV(s->fd, recv_wnd,
                             capinfo_routetype_t, goto sock_error);
@@ -321,7 +327,6 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                             res, goto proto_error
                         );
 
-
                         routetype_cur += res;
                         opts_toread -= res;
                         capinfos_toread -= res;
@@ -330,6 +335,9 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                         DEBUG("   route type: %s:%s",
                             af_strs[routetype->routetype_af],
                             app_proto_str(routetype->routetype_app_proto));
+
+                        memcpy(crt_cur, routetype, res);
+                        crt_cur += res;
                     }
                 } break;
                 case CAPINFO_CODE_TRANSMODE: {
@@ -358,6 +366,7 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                         return -1;
                     }
 
+                    s->transmode = *transmode;
                 } break;
                 }
 
@@ -715,6 +724,7 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     connect_data[1] = s;
 
     pthread_create(&s->thread, NULL, &connect_loop, connect_data);
+    pthread_detach(s->thread);
 }
 
 void
