@@ -476,6 +476,12 @@ peer_handshake(void *arg)
             /* Hand newly established session off to session_loop */
             session_loop(arg);
 
+            if (s->mark_stop_init) {
+                close(s->fd);
+                free(arg);
+                return NULL;
+            }
+
             /* If peer disconnects going back to idle, start connect loop */
             s->initiated = 1;
             connect_loop(arg);
@@ -491,6 +497,8 @@ proto_error:
     send_notification_res(s->fd, res);
 
 sock_error:
+    if (s->mark_stop_init)
+        return NULL;
     close(s->fd);
     session_change_state(s, STATE_IDLE);
     return NULL;
@@ -542,7 +550,6 @@ listen_loop(void *arg)
         handshake_data[1] = s;
 
         pthread_create(&s->thread, NULL, &peer_handshake, handshake_data);
-        pthread_detach(s->thread);
     }
 
     return NULL;
@@ -667,6 +674,9 @@ connect_loop(void *arg)
     manager_t *m = ((void**)arg)[0];
     session_t *s = ((void**)arg)[1];
 
+    /* create socket every time we try to connect */
+    s->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+
     time_t connect_retry = m->connect_retry;
 
     while (1) {
@@ -683,7 +693,13 @@ connect_loop(void *arg)
         if (res < 0) {
             ERROR("connect(): %s", strerror(errno));
             session_change_state(s, STATE_IDLE);
-            sleep(connect_retry);
+
+            uint64_t retry_left = connect_retry * 1e6;
+            while (retry_left && !s->mark_stop_init) {
+                usleep(100e3);
+                retry_left -= 100e3;
+            }
+
             if (connect_retry < MAX_BACKOFF_CONNECT_RETRY)
                 connect_retry *= 2;
             continue;
@@ -716,15 +732,11 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     /* add session to manager session vector */
     manager_session_add(manager, s);
 
-    /* create socket and pass session to connect loop */
-    s->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
-    
     void **connect_data = malloc(2 * sizeof(void*));
     connect_data[0] = manager;
     connect_data[1] = s;
 
     pthread_create(&s->thread, NULL, &connect_loop, connect_data);
-    pthread_detach(s->thread);
 }
 
 void
@@ -732,16 +744,17 @@ manager_run(manager_t *manager)
 {
     manager->run = 1;
     pthread_create(&manager->listen_thread, NULL, &listen_loop, manager);
-    pthread_detach(manager->listen_thread);
     pthread_create(&manager->maintenance_thread, NULL, &maintenance_loop,
         manager);
-    pthread_detach(manager->maintenance_thread);
 }
 
 void
 manager_stop(manager_t *manager)
 {
+    manager->run = 0;
     shutdown(manager->fd, SHUT_RDWR);
+    pthread_join(manager->listen_thread, NULL);
+    pthread_join(manager->maintenance_thread, NULL);
 }
 
 void
@@ -749,14 +762,26 @@ manager_shutdown(manager_t *manager)
 {
     DEBUG("beginning shutdown");
 
-    shutdown(manager->fd, SHUT_RDWR);
+    for (size_t i = 0; i < manager->sessions_size; i++) {
+        if (!manager->sessions[i])
+            continue;
+        session_shutdown(manager->sessions[i]);
+        manager->sessions[i]->mark_stop_init = 1;
+    }
+    
+    for (size_t i = 0; i < manager->sessions_size; i++) {
+        if (!manager->sessions[i])
+            continue;
+        pthread_join(manager->sessions[i]->thread, NULL);
+    }
 
     for (size_t i = 0; i < manager->sessions_size; i++) {
-        if (manager->sessions[i]) {
-            session_shutdown(manager->sessions[i]);
-            session_destroy(manager->sessions[i]);
-        }
+        if (!manager->sessions[i])
+            continue;
+        session_destroy(manager->sessions[i]);
     }
+
+    manager_stop(manager);
 
     DEBUG("shutdown complete");
 }
