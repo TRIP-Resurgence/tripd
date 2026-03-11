@@ -27,6 +27,10 @@ The configuration is organized in a tree of contexts
 
 Some commands are common between contexts
 
+#### `help`
+
+Display contextual help information
+
 #### `end`
 
 Exit any context and return to the root base context.
@@ -35,7 +39,29 @@ Exit any context and return to the root base context.
 
 Exit current context and return to the outer context.
 
-### Base context
+### Root context
+
+#### `enable`
+
+Enter privileged mode
+
+#### `disable`
+
+Exit privileged mode
+
+#### `configure`
+
+Enter configuration context
+
+#### `show < running-config | peers | sessions | session <host> | route >`
+
+Show running LS information
+
+#### `shutdown`
+
+Terminate all sessions and shutdown LS
+
+### Configuration context
 
 #### `log <file> <loglevel>`
 
@@ -54,6 +80,14 @@ What interface to bind to
 
 Enter prefix list context
 
+#### `trip <itad>`
+
+Enter TRIP routing context, setting the ITAD for this LS
+
+ - itad: ITAD number as registered at the [IANA registry](https://www.iana.org/assignments/trip-parameters/trip-parameters.xhtml#trip-parameters-5)
+
+### Prefix list context
+
 #### `prefix <af> <prefix> <app-proto> <server>`
 
 Defines a prefix
@@ -63,11 +97,7 @@ Defines a prefix
  - app-proto: application protocol { `sip` | `h323-h225-0-q931` | `h323-h225-0-ras` | `h323-h225-0-anxg` | `iax2` }
  - server: hostname or address that serves the prefix with that protocol
 
-#### `trip <itad>`
-
-Enter TRIP routing context, setting the ITAD for this LS
-
- - itad: ITAD number as registered at the [IANA registry](https://www.iana.org/assignments/trip-parameters/trip-parameters.xhtml#trip-parameters-5)
+### TRIP context
 
 #### `ls-id <id>`
 
@@ -75,11 +105,16 @@ Set LS ID for the LS, unique inside the ITAD
 
  - id: id in dotted decimal representation as in BGP
 
-#### `timers <hold>`
+#### `timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]`
 
 Sets LS timers
 
- - hold: hold time in seconds (time between KEEPALIVEs)
+ - hold: hold time in seconds, time to declare connection dead
+ - keep-alive: time between sending keepalives
+ - max-purge-time:
+ - disable-time:
+ - min-itad-orig-int:
+ - min-route-advert-int:
 
 #### `peer <host> remote-itad <itad>`
 
