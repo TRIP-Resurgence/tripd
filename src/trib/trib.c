@@ -20,31 +20,51 @@
 
 */
 
-/** \file */
+/** \file
+ *
+ * Telephony Routing Information Base, singleton
+ */
 
 #include "trib.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 static trib_t g_trib = { 0 };
 
 
+void
+trib_local_add(trib_t *trib, const entry_t *entry)
+{
+    if (trib->local_routes.capacity < trib->local_routes.size + 1) {
+        trib->local_routes.capacity *= 2;
+        trib->local_routes.table = realloc(trib->local_routes.table,
+            trib->local_routes.capacity * sizeof(entry_t));
+    }
+
+    memcpy(&trib->local_routes.table[trib->local_routes.size++], entry,
+        sizeof(entry_t));
+}
+
 trib_t *
 trib_new()
 {
+    if (g_trib.local_routes.table)
+        return NULL;
+
     trib_t *t = &g_trib;
 
     t->local_routes.capacity = 256;
     t->local_routes.size = 0;
-    t->local_routes.table = malloc(t->local_routes.capacity * sizeof(route_t));
+    t->local_routes.table = malloc(t->local_routes.capacity * sizeof(entry_t));
 
     return t;
 }
-
 
 void
 trib_destroy(trib_t *trib)
 {
     free(trib->local_routes.table);
+    g_trib.local_routes.table = NULL;
 }
 

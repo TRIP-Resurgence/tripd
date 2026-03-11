@@ -27,15 +27,24 @@
 
 
 typedef struct {
-    route_t *table;
+    int af;
+    int app_proto;
+    char *prefix;
+    char *nexthop;
+} entry_t;
+
+typedef struct {
+    entry_t *table;
     size_t size;
     size_t capacity;
 } route_table_t;
 
 typedef struct {
-    route_table_t   local_routes;
+    route_table_t local_routes;
 } trib_t;
 
+
+void trib_local_add(trib_t *trib, const entry_t *route);
 
 trib_t *trib_new();
 void trib_destroy(trib_t *trib);

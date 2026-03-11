@@ -32,6 +32,7 @@
 #include <logging/logging.h>
 #include <netinet/in.h>
 #include <util/util.h>
+#include <trib/trib.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -176,6 +177,18 @@ cmd_show(parser_t *parser, int no, char *args)
             );
         else
             printf("\n");
+    } else if (strncmp(args, "route", 5) == 0) {
+        if (!*strip(args + 5)) {
+            const trib_t *t = parser->manager->trib;
+            printf("\tS - static, C - connected, T - TRIP derived\n");
+            for (int i = 0; i < t->local_routes.size; i++)
+                printf("S   %s:%s via %s:%s\n",
+                    af_strs[t->local_routes.table[i].af],
+                    t->local_routes.table[i].prefix,
+                    app_proto_str(t->local_routes.table[i].app_proto),
+                    t->local_routes.table[i].nexthop);
+        } else {
+        }
     } else {
         printf("show: unrecognized argument\n");
     }
@@ -317,10 +330,63 @@ cmd_config_trip(parser_t *parser, int no, char *args)
 
 /* prefix list context */
 
+static int
+atoaf(const char *s)
+{
+    if (strcmp(s, "dec") == 0)
+        return AF_DECIMAL;
+    else if (strcmp(s, "pentadec") == 0)
+        return AF_PENTADECIMAL;
+    else if (strcmp(s, "e164") == 0)
+        return AF_E164;
+    else if (strcmp(s, "trunkgroup") == 0)
+        return AF_TRUNKGROUP;
+    else if (strcmp(s, "carrier") == 0)
+        return AF_CARRIER;
+    else return 0;
+}
+
+static int
+atoappproto(const char *s)
+{
+    if (strcmp(s, "sip") == 0)
+        return APP_PROTO_SIP;
+    else if (strcmp(s, "q931") == 0)
+        return APP_PROTO_H323_225_0_Q931;
+    else if (strcmp(s, "ras") == 0)
+        return APP_PROTO_H323_225_0_RAS;
+    else if (strcmp(s, "annex-g") == 0)
+        return APP_PROTO_H323_225_0_ANNEXG;
+    else if (strcmp(s, "iax2") == 0)
+        return APP_PROTO_IAX2;
+    else return 0;
+}
+
 int
 cmd_config_prefixlist_prefix(parser_t *parser, int no, char *args)
 {
-    /* TODO */
+    args = strip(args);
+
+    char *af = strtok(args, " ");
+    char *pfx = strtok(NULL, " ");
+    char *app_proto = strtok(NULL, " ");
+    char *srv = strtok(NULL, " ");
+
+    if (!af || !pfx || !app_proto || !srv) {
+        fprintf(parser->outf, "error: invalid route format\n");
+        return -1;
+    }
+
+    entry_t e = {
+        .af = atoaf(af),
+        .app_proto = atoappproto(app_proto),
+        .prefix = strdup(pfx),
+        .nexthop = strdup(srv)
+    };
+
+    trib_local_add(parser->manager->trib, &e);
+
+    return 0;
 }
 
 /* trip context */
@@ -445,7 +511,7 @@ const cmd_def_t cmds_root[] = {
     { "enable",         &cmd_enable, "enable privileged commands", NULL },
     { "disable",        &cmd_disable, "disable privileged commands", NULL },
     { "configure",      &cmd_configure, "enter configuration mode", NULL },
-    { "show",           &cmd_show, "show running system information", "show < running-config | peers | sessions | session <host> >" },
+    { "show",           &cmd_show, "show running system information", "show < running-config | peers | sessions | session <host> | route >" },
     { "shutdown",       &cmd_shutdown, "shutdown system", NULL },
     { NULL,             NULL, NULL, NULL }
 };

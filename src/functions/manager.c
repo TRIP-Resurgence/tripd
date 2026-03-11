@@ -621,6 +621,7 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->id = 0;
 
     m->locator = locator_new();
+    m->trib = trib_new();
 
     m->sessions_size = 0;
     m->sessions_capacity = 16;
