@@ -35,6 +35,7 @@
 #include <logging/logging.h>
 #include <protocol/protocol.h>
 #include "session.h"
+#include "trib/trib.h"
 #include <util/util.h>
 
 #include <netinet/in.h>
@@ -544,6 +545,7 @@ listen_loop(void *arg)
         s->peer = peer;
         s->fd = request_fd;
         s->initiated = 0;
+        trib_adj_pair_new(m->trib, &s->adj_trib_in, &s->adj_trib_out);
 
         void **handshake_data = malloc(2 * sizeof(void*));
         handshake_data[0] = m;
@@ -683,6 +685,7 @@ connect_loop(void *arg)
     while (1) {
         if (s->mark_stop_init) {
             manager_session_remove(m, s);
+            free(arg);
             return NULL;
         }
 
@@ -729,6 +732,7 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     s->peer = peer;
     s->state = STATE_IDLE;
     s->initiated = 1;
+    trib_adj_pair_new(manager->trib, &s->adj_trib_in, &s->adj_trib_out);
 
     /* add session to manager session vector */
     manager_session_add(manager, s);
@@ -791,6 +795,7 @@ void
 manager_destroy(manager_t *manager)
 {
     locator_destroy(manager->locator);
+    trib_destroy(manager->trib);
     free(manager->sessions);
     manager->itad = 0;
 }

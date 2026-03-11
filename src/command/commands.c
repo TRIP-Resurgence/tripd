@@ -384,7 +384,7 @@ cmd_config_prefixlist_prefix(parser_t *parser, int no, char *args)
         .nexthop = strdup(srv)
     };
 
-    trib_local_add(parser->manager->trib, &e);
+    trib_table_add(&parser->manager->trib->local_routes, &e);
 
     return 0;
 }

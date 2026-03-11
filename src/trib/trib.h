@@ -18,6 +18,9 @@
 
 */
 
+/** \file
+ * \brief Telephony Routing Information Base */
+
 #ifndef _TRIB_H
 #define _TRIB_H
 
@@ -26,27 +29,63 @@
 #include <stddef.h>
 
 
+/** \brief Route Entry */
 typedef struct {
-    int af;
-    int app_proto;
-    char *prefix;
-    char *nexthop;
+    int     af;
+    int     app_proto;
+    char   *prefix;
+    char   *nexthop;
 } entry_t;
 
+/** \brief Route Table */
 typedef struct {
-    entry_t *table;
-    size_t size;
-    size_t capacity;
-} route_table_t;
+    entry_t    *table;
+    size_t      size;
+    size_t      capacity;
+    uint32_t    itad;           /**< internal or external */
+} table_t;
 
+/** \brief Telephony Routing Information Base
+ *
+ * Collection of route tables
+ *
+ * ```
+ *                         Loc-TRIB
+ *                             ^
+ *                             |
+ *                     Decision Process
+ *                      ^      ^      |
+ *                      |      |      |
+ *             Adj-TRIBs-In    |      V
+ *            (Internal LSs)   |   Adj-TRIBs-Out
+ *                             |
+ *                             |
+ *                             |
+ *                          Ext-TRIB
+ *                         ^        ^
+ *                         |        |
+ *                Adj-TRIB-In      Local Routes
+ *            (External Peers)
+ * ```
+ */
 typedef struct {
-    route_table_t local_routes;
+    table_t     loc_trib;
+
+    table_t    *adj_tribs_in, *adj_tribs_out;
+    size_t      adj_tribs_capacity, adj_tribs_size;
+    
+    table_t     ext_trib;
+
+    table_t     local_routes;
 } trib_t;
 
 
-void trib_local_add(trib_t *trib, const entry_t *route);
+void trib_table_add(table_t *table, const entry_t *route);
+
+void trib_table_deinit(table_t *t);
 
 trib_t *trib_new();
+void trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out);
 void trib_destroy(trib_t *trib);
 
 

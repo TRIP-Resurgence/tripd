@@ -30,10 +30,10 @@ add_library(trib STATIC ${TRIB_SRC})
 target_link_libraries(trib logging)
 
 add_library(functions STATIC ${FUNCTIONS_SRC})
-target_link_libraries(functions protocol logging util)
+target_link_libraries(functions trib protocol logging util)
 
 add_library(command STATIC ${COMMAND_SRC})
-target_link_libraries(command functions trib logging)
+target_link_libraries(command trib functions trib logging)
 
 # main executable
 
