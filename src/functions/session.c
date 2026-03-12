@@ -214,6 +214,8 @@ session_destroy(session_t *session)
 {
     if (session->routetypes)
         free(session->routetypes);
+    trib_table_deinit(session->adj_trib_in);
+    trib_table_deinit(session->adj_trib_out);
     free(session);
 }
 

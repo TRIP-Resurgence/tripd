@@ -20,9 +20,7 @@
 
 */
 
-/** \file
- * \brief Command line interface 
- */
+/** \file */
 
 #include "cli.h"
 

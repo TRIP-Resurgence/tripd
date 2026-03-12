@@ -30,6 +30,7 @@
 #include "locator.h"
 #include <protocol/protocol.h>
 #include <util/util.h>
+#include <trib/trib.h>
 
 #include <netinet/in.h>
 
@@ -75,6 +76,10 @@ typedef struct {
     capinfo_transmode_t     transmode;        /**< Peer transmode */
     capinfo_routetype_t    *routetypes;       /**< Supported route types */
     size_t                  routetypes_count; /**< Supported route types count*/
+
+    /* adj tables */
+    table_t                *adj_trib_in;    /**< Adj-TRIB-in */
+    table_t                *adj_trib_out;   /**< Adj-TRIB-out */
 } session_t;
 
 

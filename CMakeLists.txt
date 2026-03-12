@@ -8,12 +8,14 @@ include_directories("src/")
 
 file(GLOB PROTOCOL_SRC "src/protocol/*.c")
 file(GLOB FUNCTIONS_SRC "src/functions/*.c")
+file(GLOB TRIB_SRC "src/trib/*.c")
 file(GLOB COMMAND_SRC "src/command/*.c")
 file(GLOB LOGGING_SRC "src/logging/*.c")
 file(GLOB UTIL_SRC "src/util/*.c")
 file(GLOB TRIPD_SRC "src/tripd/*.c")
 
-add_compile_options(-Wall -Wextra -Wno-pedantic -Wno-sign-compare -Wno-unused-parameter -Wno-unused-variable)
+add_compile_options(-Wall -Wextra -Wno-pedantic -Wno-sign-compare -Wno-unused-parameter -Wno-unused-variable -coverage)
+add_link_options(-coverage)
 
 # components
 
@@ -24,11 +26,14 @@ add_library(util STATIC ${UTIL_SRC})
 add_library(protocol STATIC ${PROTOCOL_SRC})
 target_link_libraries(protocol logging)
 
+add_library(trib STATIC ${TRIB_SRC})
+target_link_libraries(trib logging)
+
 add_library(functions STATIC ${FUNCTIONS_SRC})
-target_link_libraries(functions protocol logging util)
+target_link_libraries(functions trib protocol logging util)
 
 add_library(command STATIC ${COMMAND_SRC})
-target_link_libraries(command functions logging)
+target_link_libraries(command trib functions trib logging)
 
 # main executable
 
@@ -37,8 +42,6 @@ target_link_libraries(tripd command)
 
 
 # tests
-
-enable_testing()
 
 add_executable(test_protocol_types_sizes "src/tests/protocol_types_sizes.c")
 target_link_libraries(test_protocol_types_sizes logging command)
@@ -55,6 +58,9 @@ add_test(NAME test_serialize_notif COMMAND test_serialize_notif)
 add_executable(test_collision "src/tests/collision.c")
 target_link_libraries(test_collision logging command)
 add_test(NAME test_collision COMMAND test_collision)
+
+include(CTest)
+enable_testing()
 
 
 # documentation

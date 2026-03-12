@@ -32,6 +32,7 @@
 
 #include "session.h"
 #include "locator.h"
+#include <trib/trib.h>
 
 
 /** \brief Manager object */
@@ -47,6 +48,9 @@ typedef struct {
 
     /* peer information */
     locator_t  *locator;
+
+    /* telephony routing information base */
+    trib_t     *trib;
 
     /* session instances */
     session_t **sessions;
