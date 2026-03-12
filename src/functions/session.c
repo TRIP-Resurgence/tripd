@@ -194,7 +194,9 @@ proto_error:
     send_notification_res(s->fd, res);
 
 sock_error:
-    session_change_state(s, STATE_IDLE);
+    if (!s->mark_stop_init)
+        session_change_state(s, STATE_IDLE);
+    close(s->fd);
     return NULL;
 }
 
@@ -210,6 +212,8 @@ session_shutdown(session_t *session)
 void
 session_destroy(session_t *session)
 {
+    if (session->routetypes)
+        free(session->routetypes);
     free(session);
 }
 

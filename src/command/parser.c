@@ -94,7 +94,8 @@ parser_parse_file(parser_t *parser, FILE *f)
 
     while (fgets(line, sizeof(line), f)) {
         line[strlen(line) - 1] = '\0';
-        parser_parse_cmd(parser, line);
+        if (parser_parse_cmd(parser, line) < 0)
+            return -1;
     }
 
     return 0;
