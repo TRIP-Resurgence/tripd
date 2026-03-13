@@ -133,7 +133,8 @@ cmd_show(parser_t *parser, int no, char *args)
         for (int i = 0; i < manager->sessions_size; i++) {
             if (manager->sessions[i]->mark_stop_init)
                 continue;
-            printf("  %8d  %-30s %-6d %-12s %-10s\n", manager->sessions[i]->peer->itad,
+            printf("  %8d  %-30s %-6d %-12s %-10s\n",
+                manager->sessions[i]->peer->itad,
                 sockaddr6_str(&manager->sessions[i]->peer->addr),
                 manager->sessions[i]->hold,
                 inaddr_str(manager->sessions[i]->id),
@@ -177,17 +178,18 @@ cmd_show(parser_t *parser, int no, char *args)
             );
         else
             printf("\n");
-    } else if (strncmp(args, "route", 5) == 0) {
+    } else if (strncmp(args, "route ", 6) == 0) {
         if (!*strip(args + 5)) {
             const trib_t *t = parser->manager->trib;
             printf("\tS - static, C - connected, T - TRIP derived\n");
             for (int i = 0; i < t->local_routes.size; i++)
                 printf("S   %s:%s via %s:%s\n",
-                    af_strs[t->local_routes.table[i].af],
-                    t->local_routes.table[i].prefix,
-                    app_proto_str(t->local_routes.table[i].app_proto),
-                    t->local_routes.table[i].nexthop);
+                    af_strs[t->local_routes.table[i]->af],
+                    t->local_routes.table[i]->prefix,
+                    app_proto_str(t->local_routes.table[i]->app_proto),
+                    t->local_routes.table[i]->nexthop);
         } else {
+            printf("show route: unrecognized argument\n");
         }
     } else {
         printf("show: unrecognized argument\n");
@@ -377,14 +379,10 @@ cmd_config_prefixlist_prefix(parser_t *parser, int no, char *args)
         return -1;
     }
 
-    entry_t e = {
-        .af = atoaf(af),
-        .app_proto = atoappproto(app_proto),
-        .prefix = strdup(pfx),
-        .nexthop = strdup(srv)
-    };
+    entry_t *e = entry_new(atoaf(af), atoappproto(app_proto), pfx, srv,
+            0, time(NULL), UINT32_MAX, UINT32_MAX);
 
-    trib_table_add(&parser->manager->trib->local_routes, &e);
+    trib_table_add(&parser->manager->trib->local_routes, e);
 
     return 0;
 }

@@ -33,35 +33,45 @@
 static trib_t g_trib = { 0 };
 
 
-void
-trib_table_add(table_t *table, const entry_t *entry)
+entry_t *
+entry_new(uint16_t af, uint16_t app_proto, const char *prefix,
+    const char *nexthop, uint32_t seq, time_t time, uint32_t local_pref,
+    uint32_t metric)
 {
-    if (table->capacity < table->size + 1) {
-        table->capacity *= 2;
-        table->table = realloc(table->table,
-            table->capacity * sizeof(entry_t));
-    }
-
-    memcpy(&table->table[table->size++], entry,
-        sizeof(entry_t));
+    entry_t *e = malloc(sizeof(entry_t));
+    e->af = af;
+    e->app_proto = app_proto;
+    e->prefix = strdup(prefix);
+    e->nexthop = strdup(nexthop);
+    e->seq = seq;
+    e->time = time;
+    e->local_pref = local_pref;
+    e->metric = metric;
+    e->withdrawn = 0;
+    return e;
 }
 
+void
+entry_destroy(entry_t *entry)
+{
+    free(entry->prefix);
+    free(entry->nexthop);
+    free(entry);
+}
 
 static void
 table_init(table_t *t)
 {
     t->capacity = 256;
     t->size = 0;
-    t->table = malloc(t->capacity * sizeof(entry_t));
+    t->table = malloc(t->capacity * sizeof(entry_t*));
 }
 
 void
 trib_table_deinit(table_t *t)
 {
-    for (int i = 0; i < t->size; i++) {
-        free(t->table[i].prefix);
-        free(t->table[i].nexthop);
-    }
+    for (int i = 0; i < t->size; i++)
+        entry_destroy(t->table[i]);
     free(t->table);
 }
 
@@ -112,5 +122,18 @@ trib_destroy(trib_t *trib)
     trib_table_deinit(&trib->loc_trib);
     free(trib->adj_tribs_in);
     free(trib->adj_tribs_out);
+}
+
+
+void
+trib_table_add(table_t *table, entry_t *entry)
+{
+    if (table->capacity < table->size + 1) {
+        table->capacity *= 2;
+        table->table = realloc(table->table,
+            table->capacity * sizeof(entry_t));
+    }
+
+    table->table[table->size++] = entry;
 }
 

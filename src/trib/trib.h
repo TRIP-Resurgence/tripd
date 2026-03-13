@@ -27,19 +27,28 @@
 #include <protocol/protocol.h>
 
 #include <stddef.h>
+#include <time.h>
 
 
 /** \brief Route Entry */
 typedef struct {
-    int     af;
-    int     app_proto;
-    char   *prefix;
-    char   *nexthop;
+    uint16_t    af;             /**< Address family */
+    uint16_t    app_proto;      /**< Application protocol */
+    char       *prefix;         /**< Route prefix (address) */
+    char       *nexthop;        /**< Next hop server */
+
+    uint32_t    seq;            /**< Sequence number */
+    time_t      time;           /**< Learn time */
+
+    uint32_t    local_pref;     /**< Degree of Preference */
+    uint32_t    metric;         /**< MultiExitDisc */
+
+    int         withdrawn;      /**< Mark as withdrawn */
 } entry_t;
 
 /** \brief Route Table */
 typedef struct {
-    entry_t    *table;
+    entry_t   **table;
     size_t      size;
     size_t      capacity;
     uint32_t    itad;           /**< internal or external */
@@ -80,13 +89,29 @@ typedef struct {
 } trib_t;
 
 
-void trib_table_add(table_t *table, const entry_t *route);
+/** \brief New entry
+ *
+ * Not marked withdrawned
+ */
+entry_t *entry_new(uint16_t af, uint16_t app_proto, const char *prefix,
+    const char *nexthop, uint32_t seq, time_t time, uint32_t local_pref,
+    uint32_t metric);
 
+/** \brief Destroy entry */
+void entry_destroy(entry_t *entry);
+
+/** \brief Deinitialize table */
 void trib_table_deinit(table_t *t);
 
+/** \brief Initialize TRIB structure */
 trib_t *trib_new();
+/** \brief Add and init pair of tables in Adj-TRIBs-* vector */
 void trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out);
+/** \brief Deinit TRIB structure */
 void trib_destroy(trib_t *trib);
+
+/** \brief Add route to table */
+void trib_table_add(table_t *table, entry_t *route);
 
 
 #endif /* _TRIB_H */
