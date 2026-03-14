@@ -1,5 +1,5 @@
 <!--!
-\defgroup command Decision Process
+\defgroup decision Decision Process
 \ingroup docs
 \hidegroupgraph
 [TOC]
@@ -41,12 +41,12 @@ Both routes will be installed in tripd implementation
 
 In order of selection
 
- - Higher degree of preference
-    - LocalPref if internal, locally configured preference if external
- - Higher MultiExitDisc
- - Internal route with lowest peer ID
- - External route with lowest ITAD
- - External route with lowest ID
+ - 1. Degree of preference (local pref)
+ - 2. Shortest ITAD-path
+ - 3. Highest MED
+ - 4. eTRIP over iTRIP (external peer route before internal peer route)
+ - 5. Oldest route
+ - 6. Highest LS ID
 
 ## Phase 3: Route disemination
 
