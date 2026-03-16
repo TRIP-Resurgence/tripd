@@ -59,6 +59,10 @@ add_executable(test_collision "src/tests/collision.c")
 target_link_libraries(test_collision logging command)
 add_test(NAME test_collision COMMAND test_collision)
 
+add_executable(test_route_selection "src/tests/route_selection.c")
+target_link_libraries(test_route_selection logging command)
+add_test(NAME test_route_selection COMMAND test_route_selection)
+
 include(CTest)
 enable_testing()
 

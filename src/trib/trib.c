@@ -169,7 +169,7 @@ trib_table_add(table_t *table, entry_t *entry)
  * 6. Oldest route
  * 7. Highest LS ID
  *
- * \return non-zero if e2 wins, zero if e1 wins
+ * \return e1 < e2
  */
 static int
 entry_compare(const entry_t *e1, const entry_t *e2, uint32_t itad)
@@ -193,10 +193,10 @@ entry_compare(const entry_t *e1, const entry_t *e2, uint32_t itad)
 }
 
 static entry_t **
-table_find(table_t *t, const char *prefix)
+table_find(table_t *t, uint16_t af, const char *prefix)
 {
     for (size_t i = 0; i < t->size; i++)
-        if (strcmp(t->table[i]->prefix, prefix) == 0)
+        if (t->table[i]->af == af && strcmp(t->table[i]->prefix, prefix) == 0)
             return &t->table[i];
     return NULL;
 }
@@ -214,7 +214,7 @@ static void
 table_select_into(table_t *t1, table_t *t2, uint32_t itad)
 {
     for (size_t i = 0; i < t2->size; i++) {
-        entry_t **match = table_find(t1, t2->table[i]->prefix);
+        entry_t **match = table_find(t1, t2->table[i]->af, t2->table[i]->prefix);
         if (!match) {
             trib_table_add(t1, entry_clone(t2->table[i]));
             continue;

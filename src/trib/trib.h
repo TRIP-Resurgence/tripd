@@ -30,9 +30,9 @@
 #include <time.h>
 
 typedef enum {
-    ENTRY_TYPE_STATIC,
+    ENTRY_TYPE_TRIP,
     ENTRY_TYPE_CONNECTED,
-    ENTRY_TYPE_TRIP
+    ENTRY_TYPE_STATIC
 } entry_type_t;
 
 /** \brief Route Entry */
