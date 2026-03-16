@@ -161,12 +161,13 @@ trib_table_add(table_t *table, entry_t *entry)
 
 /** \brief Compare two entries with selection algorithm
  *
- * 1. Degree of preference (local pref)
- * 2. Shortest ITAD-path
- * 3. Highest MED
- * 4. eTRIP over iTRIP (external peer route before internal peer route)
- * 5. Oldest route
- * 6. Highest LS ID
+ * 1. Highest degree of preference (local pref)
+ * 2. Originated by local LS first
+ * 3. Shortest ITAD-path
+ * 4. Highest MED
+ * 5. eTRIP over iTRIP (external peer route before internal peer route)
+ * 6. Oldest route
+ * 7. Highest LS ID
  *
  * \return non-zero if e2 wins, zero if e1 wins
  */
@@ -175,6 +176,8 @@ entry_compare(const entry_t *e1, const entry_t *e2, uint32_t itad)
 {
     if (e1->local_pref != e2->local_pref)
         return e1->local_pref < e2->local_pref;
+    if (e1->type != e2->type)
+        return e1->type < e2->type;
     if (e1->itad_path_size != e2->itad_path_size)
         return e1->itad_path_size < e2->itad_path_size;
     if (e1->metric != e2->metric)
@@ -185,7 +188,7 @@ entry_compare(const entry_t *e1, const entry_t *e2, uint32_t itad)
         return e1->time > e2->time;
     if (e1->lsid != e2->lsid)
         return e1->lsid < e2->lsid;
-    INFO("identical routes");
+    INFO("identical route preference for %s", e1->prefix);
     return 0;
 }
 

@@ -39,14 +39,17 @@ Both routes will be installed in tripd implementation
 
 #### Breaking ties (route selection)
 
+An improvement to what the RFC suggests
+
 In order of selection
 
- - 1. Degree of preference (local pref)
- - 2. Shortest ITAD-path
- - 3. Highest MED
- - 4. eTRIP over iTRIP (external peer route before internal peer route)
- - 5. Oldest route
- - 6. Highest LS ID
+ - 1. Highest degree of preference (local pref)
+ - 2. Originated by local LS first
+ - 3. Shortest ITAD-path
+ - 4. Highest MED
+ - 5. eTRIP over iTRIP (external peer route before internal peer route)
+ - 6. Oldest route
+ - 7. Highest LS ID
 
 ## Phase 3: Route disemination
 
