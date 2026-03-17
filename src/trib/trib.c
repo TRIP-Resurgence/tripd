@@ -182,12 +182,12 @@ entry_compare(const entry_t *e1, const entry_t *e2, uint32_t itad)
         return e1->itad_path_size < e2->itad_path_size;
     if (e1->metric != e2->metric)
         return e1->metric < e2->metric;
-    if ((e1->itad == itad) != (e2->itad == itad))
-        return e2->itad == itad;
+    if ((e1->learn_itad == itad) != (e2->learn_itad == itad))
+        return e2->learn_itad == itad;
     if (e1->time != e2->time)
         return e1->time > e2->time;
-    if (e1->lsid != e2->lsid)
-        return e1->lsid < e2->lsid;
+    if (e1->learn_lsid != e2->learn_lsid)
+        return e1->learn_lsid < e2->learn_lsid;
     INFO("identical route preference for %s", e1->prefix);
     return 0;
 }

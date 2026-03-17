@@ -76,9 +76,39 @@ What interface to bind to
 
  - address: address or localhost (`getaddrinfo()`)
 
-#### `prefix-list`
+#### `route { add <af> <prefix> <app-proto> <server> | del <af> <prefix> }`
 
-Enter prefix list context
+Add or remove local routes
+
+ - af: address family { `e164` }
+ - prefix: the prefix in the address family format
+ - app-proto: application protocol { `sip` | `h323-h225-0-q931` | `h323-h225-0-ras` | `h323-h225-0-anxg` | `iax2` }
+ - server: hostname or address that serves the prefix with that protocol
+
+#### `acl <acl-name> { permit | deny } <expression>`
+
+Define access list
+
+ - acl-num: access list name
+ - expression: Prefix or Asterisk style dialplan pattern match expression
+
+##### Patterns
+
+Starts with character '_'
+
+[Asterisk pattern matching](https://docs.asterisk.org/Configuration/Dialplan/Pattern-Matching/)
+
+ - 0-9: A number matchis this number.
+ - X: The letter X or x represents a single digit from 0 to 9.
+ - Z: The letter Z or z represents any digit from 1 to 9.
+ - N: The letter N or n matches any digit from 2-9.
+ - .: The '.' character matches one or more characters.
+
+#### `route-map <map-name> [ permit | deny ]`
+
+Enter a route map context to define
+
+ - map-name: route map identifier
 
 #### `trip <itad>`
 
@@ -86,16 +116,22 @@ Enter TRIP routing context, setting the ITAD for this LS
 
  - itad: ITAD number as registered at the [IANA registry](https://www.iana.org/assignments/trip-parameters/trip-parameters.xhtml#trip-parameters-5)
 
-### Prefix list context
+### Route Map context
 
-#### `prefix <af> <prefix> <app-proto> <server>`
+#### `match <af> <acl-name> [ <acl-name> ... ]`
 
-Defines a prefix
+Configure route map to match prefixes that are permitted by an access list
 
- - af: address family { `e164` }
- - prefix: the prefix in the address family format
- - app-proto: application protocol { `sip` | `h323-h225-0-q931` | `h323-h225-0-ras` | `h323-h225-0-anxg` | `iax2` }
- - server: hostname or address that serves the prefix with that protocol
+ - af: Address family
+ - acl-name: access control list name
+
+#### `set <...>`
+
+Set route attributes in map
+
+ - `local-preference <local-pref>`
+ - `metric <metric>`
+ - `next-hop <af> <server>`
 
 ### TRIP context
 
@@ -118,8 +154,16 @@ Sets LS timers
 
 #### `peer <host> remote-itad <itad>`
 
-Adds a known peer
+Adds a peer
 
  - host: hostname of the peer (`getaddrinfo()`)
  - itad: expected ITAD number of peer
+
+#### `peer <host> route-map <map-name> { in | out }`
+
+Define route map
+
+ - host: peer hostname to apply to
+ - map-name: map identifier to aply
+ - `{ in | out }`: direction
 

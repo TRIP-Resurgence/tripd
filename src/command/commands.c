@@ -50,8 +50,6 @@
 int
 cmd_end(parser_t *parser, int no, char *args)
 {
-    if (parser->state.ctx == CTX_PREFIXLIST)
-        trib_update(parser->manager->trib);
     parser->state.ctx = CTX_ROOT;
     if (parser->state.ctx == CTX_ROOT)
         parser->state.enabled = 0;
@@ -64,10 +62,7 @@ cmd_exit(parser_t *parser, int no, char *args)
     switch (parser->state.ctx) {
     case CTX_ROOT: parser->state.enabled = 0; break;
     case CTX_CONFIG: parser->state.ctx = CTX_ROOT; break;
-    case CTX_PREFIXLIST: {
-        parser->state.ctx = CTX_CONFIG;
-        trib_update(parser->manager->trib);
-    } break;
+    case CTX_ROUTEMAP: parser->state.ctx = CTX_CONFIG; break;
     case CTX_TRIP: parser->state.ctx = CTX_CONFIG; break;
     default: return -1;
     }
@@ -191,8 +186,8 @@ cmd_show(parser_t *parser, int no, char *args)
                     "\tE - E.164, D - decimal, P - pentadecimal\n");
             for (int i = 0; i < t->loc_trib.size; i++)
                 printf("%c %c %s via %s:%s\n",
-                    "SCT"[t->loc_trib.table[i]->type],
-                    "EDP"[t->loc_trib.table[i]->af - 1],
+                    "TCS"[t->loc_trib.table[i]->type],
+                    "DPETC"[t->loc_trib.table[i]->af - 1],
                     t->loc_trib.table[i]->prefix,
                     app_proto_str(t->loc_trib.table[i]->app_proto),
                     t->loc_trib.table[i]->nexthop);
@@ -308,9 +303,9 @@ cmd_config_bind(parser_t *parser, int no, char *args)
 }
 
 int
-cmd_config_prefixlist(parser_t *parser, int no, char *args)
+cmd_config_routemap(parser_t *parser, int no, char *args)
 {
-    parser->state.ctx = CTX_PREFIXLIST;
+    parser->state.ctx = CTX_ROUTEMAP;
 
     return 0;
 }
@@ -337,8 +332,6 @@ cmd_config_trip(parser_t *parser, int no, char *args)
 
     return 0;
 }
-
-/* prefix list context */
 
 static int
 atoaf(const char *s)
@@ -373,40 +366,69 @@ atoappproto(const char *s)
 }
 
 int
-cmd_config_prefixlist_prefix(parser_t *parser, int no, char *args)
+cmd_config_route(parser_t *parser, int no, char *args)
 {
     args = strip(args);
 
-    char *af = strtok(args, " ");
-    char *pfx = strtok(NULL, " ");
-    char *app_proto = strtok(NULL, " ");
-    char *srv = strtok(NULL, " ");
+    if (strncmp(args, "add ", 4) == 0) {
+        args += 4;
+        args = strip(args);
 
-    if (!af || !pfx || !app_proto || !srv) {
-        fprintf(parser->outf, "error: invalid route format\n");
+        char *af = strtok(args, " ");
+        char *pfx = strtok(NULL, " ");
+        char *app_proto = strtok(NULL, " ");
+        char *srv = strtok(NULL, " ");
+
+        if (!af || !pfx || !app_proto || !srv) {
+            fprintf(parser->outf, "error: invalid route format\n");
+            return -1;
+        }
+
+        entry_t *e = malloc(sizeof(entry_t));
+        e->af = atoaf(af);
+        e->app_proto = atoappproto(app_proto);
+        e->prefix = strdup(pfx);
+        e->type = ENTRY_TYPE_STATIC;
+        e->nexthop = strdup(srv);
+        e->learn_itad = parser->manager->itad;
+        e->learn_lsid = 0;
+        e->seq = 0;
+        e->time = time(NULL);
+        e->local_pref = UINT32_MAX;
+        e->metric = UINT32_MAX;
+        e->itad_path = NULL;
+        e->itad_path_size = 0;
+        e->withdrawn= 0;
+
+        trib_table_add(&parser->manager->trib->local_routes, e);
+    } else if (strncmp(args, "del ", 4) == 0) {
+
+    } else {
+        printf("route: unrecognized argument\n");
         return -1;
     }
 
-    entry_t *e = malloc(sizeof(entry_t));
-    e->af = atoaf(af);
-    e->app_proto = atoappproto(app_proto);
-    e->prefix = strdup(pfx);
-    e->type = ENTRY_TYPE_STATIC;
-    e->nexthop = strdup(srv);
-    e->itad = parser->manager->itad;
-    e->lsid = 0;
-    e->seq = 0;
-    e->time = time(NULL);
-    e->local_pref = UINT32_MAX;
-    e->metric = UINT32_MAX;
-    e->itad_path = NULL;
-    e->itad_path_size = 0;
-    e->withdrawn= 0;
-
-    trib_table_add(&parser->manager->trib->local_routes, e);
+    trib_update(parser->manager->trib);
 
     return 0;
 }
+
+/* routemap context */
+
+int
+cmd_config_routemap_match(parser_t *parser, int no, char *args)
+{
+    /* TODO: */
+    return 0;
+}
+
+int
+cmd_config_routemap_set(parser_t *parser, int no, char *args)
+{
+    /* TODO: */
+    return 0;
+}
+
 
 /* trip context */
 
@@ -541,16 +563,17 @@ const cmd_def_t cmds_config[] = {
     { "help",           &cmd_help,"show command help", NULL },
     { "log",            &cmd_config_log, "set log file", "log <log file>" },
     { "bind-address",   &cmd_config_bind, "set bind address and port", "bind-address <addr> <port>" },
-    { "prefix-list",    &cmd_config_prefixlist, "define local prefix list", "prefix-list" },
+    { "route",          &cmd_config_route, "insert route into routing table", "route { add <af> <prefix> <app-proto> <server> | del <af> <prefi> }" },
     { "trip",           &cmd_config_trip, "trip configuration", "trip <itad>" },
     { NULL,             NULL, NULL, NULL }
 };
 
-const cmd_def_t cmds_prefixlist[] = {
+const cmd_def_t cmds_routemap[] = {
     { "end",            &cmd_end, "exit from configure mode", NULL },
     { "exit",           &cmd_exit,"exit current context", NULL },
     { "help",           &cmd_help,"show command help", NULL },
-    { "prefix",         &cmd_config_prefixlist_prefix, "add prefix", "prefix <pfx-type> <prefix> <app-layer-proto> <server>" },
+    { "match",          &cmd_config_routemap_match, "match routes", "match <af> <acl-name> [ <acl-name> ... ]" },
+    { "set",            &cmd_config_routemap_set, "modify routes", "set <attribute> <value> ... see documentation" },
     { NULL,             NULL, NULL, NULL }
 };
 
@@ -560,14 +583,14 @@ const cmd_def_t cmds_trip[] = {
     { "help",           &cmd_help,"show command help", NULL },
     { "ls-id",          &cmd_config_trip_lsid, "set local id", "ls-id <id in dotted notation" },
     { "timers",         &cmd_config_trip_timers, "set timers", "timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]" },
-    { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> remote-itad <itad>" },
+    { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> { remote-itad <itad> | route-map <map-name> }" },
     { NULL,             NULL, NULL, NULL }
 };
 
 const cmd_def_t *ctx_cmds[] = {
     cmds_root,
     cmds_config,
-    cmds_prefixlist,
+    cmds_routemap,
     cmds_trip
 };
 

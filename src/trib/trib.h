@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <time.h>
 
+
 typedef enum {
     ENTRY_TYPE_TRIP,
     ENTRY_TYPE_CONNECTED,
@@ -43,11 +44,13 @@ typedef struct {
     char       *prefix;         /**< Route prefix (address) */
 
     entry_type_t type;          /**< Route type */
+
+    uint32_t    origin_itad;    /**< ITAD routed originated from */
     
     /* learned from */
-    uint32_t    itad;           /**< Peer ITAD for internal or external used for
+    uint32_t    learn_itad;     /**< Peer ITAD for internal or external used for
                                     Ext-TRIB and Loc-TRIB */
-    uint32_t    lsid;           /**< Peer LS ID */
+    uint32_t    learn_lsid;     /**< Peer LS ID */
 
     uint32_t    seq;            /**< Sequence number */
     time_t      time;           /**< Learn time */

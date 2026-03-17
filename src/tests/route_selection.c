@@ -32,16 +32,16 @@ generate_entry(entry_t *e, int comb)
     e->type = (int[]){ ENTRY_TYPE_TRIP, ENTRY_TYPE_STATIC }[(comb >> 5) & 1];
     e->itad_path_size = (int[]){ 3, 5 }[(comb >> 4) & 1];
     e->metric = (int[]){ 100, 200 }[(comb >> 3) & 1];
-    e->itad = (int[]){ 20, 10 }[(comb >> 2) & 1];
+    e->learn_itad = (int[]){ 20, 10 }[(comb >> 2) & 1];
     e->time = (int[]){ 200, 100 }[(comb >> 1) & 1];
-    e->lsid = (int[]){ 10, 20 }[(comb >> 0) & 1];
+    e->learn_lsid = (int[]){ 10, 20 }[(comb >> 0) & 1];
 }
 
 void
 print_entry(entry_t *e)
 {
     printf("%d  %c    %ld    %d %d   %ld %d",
-        e->local_pref, "SCT"[e->type], e->itad_path_size, e->metric, e->itad, e->time, e->lsid);
+        e->local_pref, "SCT"[e->type], e->itad_path_size, e->metric, e->learn_itad, e->time, e->learn_lsid);
 }
 
 int

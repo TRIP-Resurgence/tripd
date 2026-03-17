@@ -33,7 +33,7 @@
 typedef enum {
     CTX_ROOT,       /**< Root context */
     CTX_CONFIG,     /**< Config context */
-    CTX_PREFIXLIST, /**< Prefix list context */
+    CTX_ROUTEMAP,   /**< Prefix list context */
     CTX_TRIP,       /**< TRIP routing context */
 } cmd_context_t;
 

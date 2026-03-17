@@ -54,15 +54,18 @@ int cmd_shutdown(parser_t *parser, int no, char *args);
 int cmd_config_log(parser_t *parser, int no, char *args);
 /** \brief Bind address */
 int cmd_config_bind(parser_t *parser, int no, char *args);
-/** \brief Prefix list */
-int cmd_config_prefixlist(parser_t *parser, int no, char *args);
+/** \brief Route map */
+int cmd_config_routemap(parser_t *parser, int no, char *args);
 /** \brief TRIP routing context */
 int cmd_config_trip(parser_t *parser, int no, char *args);
 
-/* prefixlist context */
+/* routemap context */
 
-/** \brief New prefix */
-int cmd_config_prefixlist_prefix(parser_t *parser, int no, char *args);
+/** \brief Match attribute */
+int cmd_config_routemap_match(parser_t *parser, int no, char *args);
+
+/** \brief Set attribute */
+int cmd_config_routemap_set(parser_t *parser, int no, char *args);
 
 /* trip context */
 
@@ -89,7 +92,7 @@ typedef struct {
 /* command definitions per context */
 extern const cmd_def_t cmds_root[];
 extern const cmd_def_t cmds_config[];
-extern const cmd_def_t cmds_prefixlist[];
+extern const cmd_def_t cmds_routemap[];
 extern const cmd_def_t cmds_trip[];
 extern const cmd_def_t *ctx_cmds[];
 
