@@ -27,22 +27,48 @@
 #include <protocol/protocol.h>
 
 #include <stddef.h>
+#include <time.h>
 
+typedef enum {
+    ENTRY_TYPE_TRIP,
+    ENTRY_TYPE_CONNECTED,
+    ENTRY_TYPE_STATIC
+} entry_type_t;
 
 /** \brief Route Entry */
 typedef struct {
-    int     af;
-    int     app_proto;
-    char   *prefix;
-    char   *nexthop;
+    /* route */
+    uint16_t    af;             /**< Address family */
+    uint16_t    app_proto;      /**< Application protocol */
+    char       *prefix;         /**< Route prefix (address) */
+
+    entry_type_t type;          /**< Route type */
+    
+    /* learned from */
+    uint32_t    itad;           /**< Peer ITAD for internal or external used for
+                                    Ext-TRIB and Loc-TRIB */
+    uint32_t    lsid;           /**< Peer LS ID */
+
+    uint32_t    seq;            /**< Sequence number */
+    time_t      time;           /**< Learn time */
+
+    /* attributes */
+    char       *nexthop;        /**< Next hop server */
+
+    uint32_t    local_pref;     /**< Degree of Preference */
+    uint32_t    metric;         /**< MultiExitDisc */
+    uint32_t   *itad_path;      /**< RoutedPath */
+    size_t      itad_path_size;
+
+    int         withdrawn;      /**< Mark as withdrawn */
 } entry_t;
 
 /** \brief Route Table */
 typedef struct {
-    entry_t    *table;
+    uint32_t    peer_itad;      /**< Peer ITAD used in Adj-TRIBs */
+    entry_t   **table;
     size_t      size;
     size_t      capacity;
-    uint32_t    itad;           /**< internal or external */
 } table_t;
 
 /** \brief Telephony Routing Information Base
@@ -69,6 +95,8 @@ typedef struct {
  * ```
  */
 typedef struct {
+    uint32_t    local_itad;   /**< local LS ITAD */
+
     table_t     loc_trib;
 
     table_t    *adj_tribs_in, *adj_tribs_out;
@@ -80,14 +108,36 @@ typedef struct {
 } trib_t;
 
 
-void trib_table_add(table_t *table, const entry_t *route);
+/** \brief New entry
+ *
+ * Not marked withdrawned
+ */
+entry_t *entry_new(uint16_t af, uint16_t app_proto, const char *prefix,
+    const char *nexthop, uint32_t seq, time_t time, uint32_t local_pref,
+    uint32_t metric);
 
+/** \brief Destroy entry */
+void entry_destroy(entry_t *entry);
+
+/** \brief Deinitialize table */
 void trib_table_deinit(table_t *t);
 
-trib_t *trib_new();
+/** \brief Initialize TRIB structure */
+trib_t *trib_new(uint32_t local_itad);
+/** \brief Add and init pair of tables in Adj-TRIBs-* vector */
 void trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out);
+/** \brief Deinit TRIB structure */
 void trib_destroy(trib_t *trib);
 
+/** \brief Add route to table */
+void trib_table_add(table_t *table, entry_t *route);
+
+/** \brief Execute route selection
+ *
+ * Takes Ext-TRIBs-in and locala routes
+ * Updates Ext-TRIB, Loc-TRIB and Ext-TRIBs-out
+ */
+void trib_update(trib_t *trib);
 
 #endif /* _TRIB_H */
 
