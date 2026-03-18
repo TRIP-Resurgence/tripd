@@ -35,7 +35,8 @@
 #include <logging/logging.h>
 #include <protocol/protocol.h>
 #include "session.h"
-#include "trib/trib.h"
+#include <db/trib.h>
+#include <db/pib.h>
 #include <util/util.h>
 
 #include <netinet/in.h>
@@ -624,6 +625,7 @@ manager_new(const struct sockaddr_in6 *listen_addr)
 
     m->locator = locator_new();
     m->trib = trib_new(m->itad);
+    m->pib = pib_new();
 
     m->sessions_size = 0;
     m->sessions_capacity = 16;
@@ -796,6 +798,7 @@ manager_destroy(manager_t *manager)
 {
     locator_destroy(manager->locator);
     trib_destroy(manager->trib);
+    pib_destroy(manager->pib);
     free(manager->sessions);
     manager->itad = 0;
 }

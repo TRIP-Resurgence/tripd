@@ -33,7 +33,7 @@
 #include <logging/logging.h>
 #include <netinet/in.h>
 #include <util/util.h>
-#include <trib/trib.h>
+#include <db/trib.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -302,37 +302,6 @@ cmd_config_bind(parser_t *parser, int no, char *args)
     return 0;
 }
 
-int
-cmd_config_routemap(parser_t *parser, int no, char *args)
-{
-    parser->state.ctx = CTX_ROUTEMAP;
-
-    return 0;
-}
-
-int
-cmd_config_trip(parser_t *parser, int no, char *args)
-{
-    if (!parser->manager) {
-        fprintf(parser->outf, "bind-address must be set first\n");
-        return -1;
-    }
-
-    args = strip(args);
-    uint32_t itad = strtoul(args, NULL, 10);
-
-    if (parser->manager->itad != 0 && parser->manager->itad != itad) {
-        fprintf(parser->outf,
-            "error: changing itad of existing instance unallowed\n");
-        return -1;
-    }
-
-    parser->state.ctx = CTX_TRIP;
-    parser->manager->itad = itad;
-
-    return 0;
-}
-
 static int
 atoaf(const char *s)
 {
@@ -409,6 +378,47 @@ cmd_config_route(parser_t *parser, int no, char *args)
     }
 
     trib_update(parser->manager->trib);
+
+    return 0;
+}
+
+int
+cmd_config_acl(parser_t *parser, int no, char *args)
+{
+    args = strip(args);
+
+    /* TODO: */
+
+    return 0;
+}
+
+int
+cmd_config_routemap(parser_t *parser, int no, char *args)
+{
+    parser->state.ctx = CTX_ROUTEMAP;
+
+    return 0;
+}
+
+int
+cmd_config_trip(parser_t *parser, int no, char *args)
+{
+    if (!parser->manager) {
+        fprintf(parser->outf, "bind-address not set\n");
+        return -1;
+    }
+
+    args = strip(args);
+    uint32_t itad = strtoul(args, NULL, 10);
+
+    if (parser->manager->itad != 0 && parser->manager->itad != itad) {
+        fprintf(parser->outf,
+            "error: changing itad of existing instance unallowed\n");
+        return -1;
+    }
+
+    parser->state.ctx = CTX_TRIP;
+    parser->manager->itad = itad;
 
     return 0;
 }
@@ -564,6 +574,8 @@ const cmd_def_t cmds_config[] = {
     { "log",            &cmd_config_log, "set log file", "log <log file>" },
     { "bind-address",   &cmd_config_bind, "set bind address and port", "bind-address <addr> <port>" },
     { "route",          &cmd_config_route, "insert route into routing table", "route { add <af> <prefix> <app-proto> <server> | del <af> <prefi> }" },
+    { "acl",            &cmd_config_acl, "add acl entry", "acl <acl-name> { permit | deny } <expression>" },
+    { "route-map",      &cmd_config_routemap, "define route map", "route-map <map-name> [ permit | deny ]" },
     { "trip",           &cmd_config_trip, "trip configuration", "trip <itad>" },
     { NULL,             NULL, NULL, NULL }
 };

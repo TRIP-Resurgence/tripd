@@ -19,7 +19,8 @@
 */
 
 /** \file
- * \brief Telephony Routing Information Base */
+ * \brief Telephony Routing Information Base
+ */
 
 #ifndef _TRIB_H
 #define _TRIB_H

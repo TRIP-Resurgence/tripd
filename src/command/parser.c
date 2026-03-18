@@ -63,8 +63,10 @@ parser_parse_cmd(parser_t *parser, char *cmd)
 
     const cmd_def_t *cmds = ctx_cmds[parser->state.ctx];
 
+    size_t cmdlen = strchr(cmd, ' ') - cmd;
+
     int no = 0;
-    if (strcmp("no", cmd) == 0) {
+    if (strlen(cmd) > 2 && strncmp("no", cmd, 2) == 0 && cmd[2] == ' ') {
         no = 1;
         cmd = strip(cmd + 2);
     }
@@ -76,7 +78,7 @@ parser_parse_cmd(parser_t *parser, char *cmd)
     }
 
     for (size_t i = 0; cmds[i].cmd; i++)
-        if (strncmp(cmd, cmds[i].cmd, strlen(cmds[i].cmd)) == 0)
+        if (strncmp(cmd, cmds[i].cmd, cmdlen) == 0)
             return cmds[i].cmd_handler(parser, no,
                 cmd + strlen(cmds[i].cmd));
 

@@ -87,7 +87,7 @@ Add or remove local routes
 
 #### `acl <acl-name> { permit | deny } <expression>`
 
-Define access list
+Add entry to ACL
 
  - acl-num: access list name
  - expression: Prefix or Asterisk style dialplan pattern match expression

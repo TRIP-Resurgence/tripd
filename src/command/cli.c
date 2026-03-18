@@ -44,7 +44,7 @@ struct termios oldt;
 const char *ctx_prompts[] = {
     "",
     "(config)",
-    "(config-pfxlist)",
+    "(config-routemap)",
     "(config-trip)"
 };
 

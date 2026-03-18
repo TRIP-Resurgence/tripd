@@ -30,7 +30,7 @@
 #include "locator.h"
 #include <protocol/protocol.h>
 #include <util/util.h>
-#include <trib/trib.h>
+#include <db/trib.h>
 
 #include <netinet/in.h>
 

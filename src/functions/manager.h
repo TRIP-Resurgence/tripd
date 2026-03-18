@@ -32,7 +32,8 @@
 
 #include "session.h"
 #include "locator.h"
-#include <trib/trib.h>
+#include <db/trib.h>
+#include <db/pib.h>
 
 
 /** \brief Manager object */
@@ -42,24 +43,26 @@ typedef struct {
     pthread_t   maintenance_thread;
     int         fd;
 
-    /* local */
+    /* Local */
     uint32_t    itad;
     uint32_t    id;
 
-    /* peer information */
+    /* Peer information */
     locator_t  *locator;
 
-    /* telephony routing information base */
+    /* Telephony Routing Information Base */
     trib_t     *trib;
+    /* Policy Information Base */
+    pib_t      *pib;
 
-    /* session instances */
+    /* Session instances */
     session_t **sessions;
     size_t      sessions_size, sessions_capacity;
 
-    /* timers peer default  */
+    /* Timers peer default  */
     uint16_t    hold;
     uint16_t    keepalive;
-    /* timers per trip instance */
+    /* Timers per trip instance */
     int         connect_retry;
     int         max_purge_time;
     int         disable_time;

@@ -1,7 +1,6 @@
 #include "logging/logging.h"
 #include "protocol/protocol.h"
-#include "trib/trib.h"
-#include <trib/trib.c>
+#include <db/trib.c>
 
 /* compare colliding routes */
 

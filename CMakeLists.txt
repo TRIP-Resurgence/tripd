@@ -8,7 +8,7 @@ include_directories("src/")
 
 file(GLOB PROTOCOL_SRC "src/protocol/*.c")
 file(GLOB FUNCTIONS_SRC "src/functions/*.c")
-file(GLOB TRIB_SRC "src/trib/*.c")
+file(GLOB DB_SRC "src/db/*.c")
 file(GLOB COMMAND_SRC "src/command/*.c")
 file(GLOB LOGGING_SRC "src/logging/*.c")
 file(GLOB UTIL_SRC "src/util/*.c")
@@ -26,14 +26,14 @@ add_library(util STATIC ${UTIL_SRC})
 add_library(protocol STATIC ${PROTOCOL_SRC})
 target_link_libraries(protocol logging)
 
-add_library(trib STATIC ${TRIB_SRC})
-target_link_libraries(trib logging)
+add_library(db STATIC ${DB_SRC})
+target_link_libraries(db logging)
 
 add_library(functions STATIC ${FUNCTIONS_SRC})
-target_link_libraries(functions trib protocol logging util)
+target_link_libraries(functions db protocol logging util)
 
 add_library(command STATIC ${COMMAND_SRC})
-target_link_libraries(command trib functions trib logging)
+target_link_libraries(command db functions logging)
 
 # main executable
 
