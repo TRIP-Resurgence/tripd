@@ -205,6 +205,32 @@ cmd_show(parser_t *parser, int no, char *args)
                     pib->acls[i].entries[j].expression);
             }
         }
+    } else if (strncmp(args, "route-map", 9) == 0) {
+        const pib_t *pib = parser->manager->pib;
+        for (size_t i = 0; i < pib->routemaps_size; i++) {
+            printf("%s %s:\n", pib->routemaps[i].name,
+                (const char *[]){ "permit", "deny" }
+                    [pib->routemaps[i].deny]);
+            for (size_t j = 0; j < pib->routemaps[i].matchers_size; j++)
+                printf(" match %s %s\n",
+                    af_strs[pib->routemaps[i].matchers[j].af],
+                    pib->routemaps[i].matchers[j].acl->name);
+            for (size_t j = 0; j < pib->routemaps[i].setters_size; j++) {
+                printf(" set %s",
+                    (const char *[]){ "local-preference", "metric", "next-hop" }
+                        [pib->routemaps[i].setters[j].attribute]); /* TODO: take this out */
+                switch (pib->routemaps[i].setters[j].attribute) {
+                    case ROUTEMAP_SET_LOCALPREF:
+                    case ROUTEMAP_SET_METRIC:
+                        printf(" %d\n", pib->routemaps[i].setters[j].value);
+                    break;
+                    case ROUTEMAP_SET_NEXTHOP:
+                        printf( "%s %s\n", pib->routemaps[i].setters[j].valstr1,
+                            pib->routemaps[i].setters[j].valstr2);
+                    break;
+                }
+            }
+        }
     } else {
         printf("show: unrecognized argument\n");
     }

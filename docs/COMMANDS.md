@@ -53,9 +53,16 @@ Exit privileged mode
 
 Enter configuration context
 
-#### `show < running-config | peers | sessions | session <host> | route >`
+#### `show <options>`
 
 Show running LS information
+
+ - `running-config`
+ - `peers`
+ - `session [peer address]`
+ - `route [ for <prefix or number> ]`
+ - `acl [name]`
+ - `route-map [name]`
 
 #### `shutdown`
 
