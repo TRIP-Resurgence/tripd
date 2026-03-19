@@ -104,6 +104,8 @@ Starts with character '_'
  - N: The letter N or n matches any digit from 2-9.
  - .: The '.' character matches one or more characters.
 
+Note: "[]" charsets not supported yet
+
 #### `route-map <map-name> [ permit | deny ]`
 
 Enter a route map context to define

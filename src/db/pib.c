@@ -158,6 +158,15 @@ acl_insert(acl_t *acl, int deny, const char *expression)
     e->expression = strdup(expression);
 }
 
+acl_entry_t *
+acl_find(acl_t *acl, const char *expression)
+{
+    for (size_t i = 0; i < acl->entries_size; i++)
+        if (strcmp(acl->entries[i].expression, expression) == 0)
+            return &acl->entries[i];
+    return NULL;
+}
+
 void
 routemap_insert_matcher(routemap_t *routemap, acl_t *acl)
 {

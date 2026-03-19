@@ -90,6 +90,8 @@ routemap_t *pib_routemap_find(pib_t *pib, const char *name);
 
 /** \brief Create and insert entry into ACL */
 void acl_insert(acl_t *acl, int deny, const char *expression);
+/** \brief Find entry in ACL */
+acl_entry_t *acl_find(acl_t *acl, const char *expression);
 /** \brief Insert matcher ACL (stored in PIB) into route map */
 void routemap_insert_matcher(routemap_t *routemap, acl_t *acl);
 /** \brief Insert setter action (copy) into route map */

@@ -26,6 +26,7 @@
 
 #include "cli.h"
 #include "command/parser.h"
+#include "db/pib.h"
 #include "functions/manager.h"
 #include "functions/session.h"
 #include "protocol/protocol.h"
@@ -193,6 +194,16 @@ cmd_show(parser_t *parser, int no, char *args)
                     t->loc_trib.table[i]->nexthop);
         } else {
             printf("show route: unrecognized argument\n");
+        }
+    } else if (strncmp(args, "acls", 4) == 0) {
+        const pib_t *pib = parser->manager->pib;
+        for (size_t i = 0; i < pib->acls_size; i++) {
+            for (size_t j = 0; j < pib->acls[i].entries_size; j++) {
+                printf("%s\t%s\t%s\n", pib->acls[i].name,
+                    (const char *[]){ "permit", "deny" }
+                        [pib->acls[i].entries[j].deny],
+                    pib->acls[i].entries[j].expression);
+            }
         }
     } else {
         printf("show: unrecognized argument\n");
@@ -382,12 +393,77 @@ cmd_config_route(parser_t *parser, int no, char *args)
     return 0;
 }
 
+static int
+ispfxdigit(char c)
+{
+    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'E');
+}
+
+static int
+check_acl_expr(const char *expr)
+{
+    int ispfx = 1;
+    const char *p = expr;
+    while (*p) {
+        if (!ispfxdigit(*p)) {
+            ispfx = 0;
+            break;
+        }
+        p++;
+    }
+
+    if (ispfx)
+        return 0;
+
+    if (*expr != '_')
+        return -1;
+
+    p = expr + 1;
+    while (*p) {
+        if (!ispfxdigit(*p) && *p != 'X' && *p != 'Z' && *p != 'N' && *p != '.')
+            return -1;
+        p++;
+    }
+
+    return 0;
+}
+
 int
 cmd_config_acl(parser_t *parser, int no, char *args)
 {
     args = strip(args);
 
-    /* TODO: */
+    char *name = strtok(args, " ");
+    char *access = strtok(NULL, " ");
+    char *expr = strtok(NULL, " ");
+
+    int deny = 0;
+    if (strcmp(access, "permit") == 0)
+        deny = 0;
+    else if (strcmp(access, "deny") == 0)
+        deny = 1;
+    else {
+        printf("acl: unrecognized access: %s\n", access);
+        return -1;
+    }
+
+
+    if (check_acl_expr(expr) < 0) {
+        printf("acl: invalid expression\n");
+        return -1;
+    }
+
+
+    acl_t *acl = pib_acl_find(parser->manager->pib, name);
+
+    if (!acl)
+        acl = pib_acl_new(parser->manager->pib, name);
+    else if (acl_find(acl, expr)) {
+        printf("acl: entry already exists for expression\n");
+        return -1;
+    }
+
+    acl_insert(acl, deny, expr);
 
     return 0;
 }
