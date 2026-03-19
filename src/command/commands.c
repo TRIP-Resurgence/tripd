@@ -366,7 +366,15 @@ cmd_config_route(parser_t *parser, int no, char *args)
 
         entry_t *e = malloc(sizeof(entry_t));
         e->af = atoaf(af);
+        if (e->af == 0) {
+            printf("route: invalid address family\n");
+            return -1;
+        }
         e->app_proto = atoappproto(app_proto);
+        if (e->app_proto == 0) {
+            printf("route: invalid application protocol\n");
+            return -1;
+        }
         e->prefix = strdup(pfx);
         e->type = ENTRY_TYPE_STATIC;
         e->nexthop = strdup(srv);
@@ -471,7 +479,31 @@ cmd_config_acl(parser_t *parser, int no, char *args)
 int
 cmd_config_routemap(parser_t *parser, int no, char *args)
 {
+    args = strip(args);
+
+    const char *name = strtok(args, " ");
+    const char *access = strtok(NULL, " ");
+
+    int deny = 0;
+
+    if (access) {
+        if (strcmp(access, "permit") == 0)
+            deny = 0;
+        else if (strcmp(access, "deny") == 0)
+            deny = 1;
+        else {
+            printf("route-map: unrecognized access: %s\n", access);
+            return -1;
+        }
+    }
+
+    routemap_t *routemap = pib_routemap_find(parser->manager->pib, name);
+
+    if (!routemap)
+        routemap = pib_routemap_new(parser->manager->pib, name, deny);
+
     parser->state.ctx = CTX_ROUTEMAP;
+    parser->state.routemap = routemap;
 
     return 0;
 }
@@ -504,14 +536,77 @@ cmd_config_trip(parser_t *parser, int no, char *args)
 int
 cmd_config_routemap_match(parser_t *parser, int no, char *args)
 {
-    /* TODO: */
+    args = strip(args);
+
+    const char *af_s = strtok(args, " ");
+    int af = atoaf(af_s);
+    if (af == 0) {
+        printf("match: invalid address family\n");
+        return -1;
+    }
+
+    const char *acl_name = NULL;
+    while ((acl_name = strtok(NULL, " "))) {
+        acl_t *acl = pib_acl_find(parser->manager->pib, acl_name);
+        if (!acl) {
+            printf("match: access list not found: %s\n", acl_name);
+            return -1;
+        }
+
+        if (routemap_matcher_find(parser->state.routemap, af, acl)) {
+            printf("match: duplicate af:acl %s:%s\n", af_strs[af], acl_name);
+            continue;
+        }
+
+        routemap_matcher_insert(parser->state.routemap, af, acl);
+    }
+
     return 0;
 }
 
 int
 cmd_config_routemap_set(parser_t *parser, int no, char *args)
 {
-    /* TODO: */
+    routemap_setter_t s = { 0 };
+    
+    args = strip(args);
+    const char *attr = strtok(args, " ");
+    const char *v1 = strtok(NULL, " ");
+    const char *v2 = strtok(NULL, " ");
+
+    if (!attr || !v1) {
+        printf("set: attribute and or value required\n");
+        return -1;
+    }
+
+
+    if (strcmp(attr, "local-preference") == 0) {
+        s.attribute = ROUTEMAP_SET_LOCALPREF;
+        s.value = atoi(v1);
+    } else if (strcmp(attr, "metric") == 0) {
+        s.attribute = ROUTEMAP_SET_METRIC;
+        s.value = atoi(v1);
+    } else if (strcmp(attr, "next-hop") == 0) {
+        if (!v2) {
+            printf("set: server required\n");
+            return -1;
+        }
+
+        s.attribute = ROUTEMAP_SET_NEXTHOP;
+        s.valstr1 = strdup(v1);
+        s.valstr2 = strdup(v2);
+    } else {
+        printf("set: unrecognized attribute: %s\n", args);
+        return -1;
+    }
+
+    if (routemap_setter_find(parser->state.routemap, s.attribute)) {
+        printf("set: duplicate attribute %s\n", attr);
+        return -1;
+    }
+
+    routemap_setter_insert(parser->state.routemap, &s);
+
     return 0;
 }
 

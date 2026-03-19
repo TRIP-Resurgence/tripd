@@ -101,7 +101,7 @@ pib_acl_new(pib_t *pib, const char *name)
 }
 
 routemap_t *
-pib_routemap_new(pib_t *pib, const char *name)
+pib_routemap_new(pib_t *pib, const char *name, int deny)
 {
     if (pib->routemaps_capacity < pib->acls_size + 1) {
         pib->routemaps_capacity *= 2;
@@ -112,6 +112,7 @@ pib_routemap_new(pib_t *pib, const char *name)
     routemap_t *r = &pib->routemaps[pib->routemaps_size++];
 
     r->name = strdup(name);
+    r->deny = deny;
 
     r->matchers_capacity = INIT_VEC_CAPACITY;
     r->matchers_size = 0;
@@ -168,7 +169,7 @@ acl_find(acl_t *acl, const char *expression)
 }
 
 void
-routemap_insert_matcher(routemap_t *routemap, acl_t *acl)
+routemap_matcher_insert(routemap_t *routemap, int af, acl_t *acl)
 {
     if (routemap->matchers_capacity < routemap->matchers_size + 1) {
         routemap->matchers_capacity *= 2;
@@ -176,11 +177,23 @@ routemap_insert_matcher(routemap_t *routemap, acl_t *acl)
             routemap->matchers_capacity * sizeof(acl_t*));
     }
 
-    routemap->matchers[routemap->matchers_size++] = acl;
+    routemap_matcher_t *m = &routemap->matchers[routemap->matchers_size++];
+
+    m->af = af;
+    m->acl= acl;
+}
+
+routemap_matcher_t *
+routemap_matcher_find(routemap_t *routemap, int af, const acl_t *acl)
+{
+    for (size_t i = 0; i < routemap->matchers_size; i++)
+        if (routemap->matchers[i].af == af && routemap->matchers[i].acl == acl)
+            return &routemap->matchers[i];
+    return NULL;
 }
 
 void
-routemap_insert_setter(routemap_t *routemap, const routemap_setter_t *setter)
+routemap_setter_insert(routemap_t *routemap, const routemap_setter_t *setter)
 {
     if (routemap->setters_capacity < routemap->setters_size + 1) {
         routemap->setters_capacity *= 2;
@@ -191,5 +204,14 @@ routemap_insert_setter(routemap_t *routemap, const routemap_setter_t *setter)
     routemap_setter_t *s = &routemap->setters[routemap->setters_size++];
 
     memcpy(s, setter, sizeof(routemap_setter_t));
+}
+
+routemap_setter_t *
+routemap_setter_find(routemap_t *routemap, routemap_set_attr_t attribute)
+{
+    for (size_t i = 0; i < routemap->setters_size; i++)
+        if (routemap->setters[i].attribute == attribute)
+            return &routemap->setters[i];
+    return NULL;
 }
 

@@ -49,6 +49,12 @@ typedef enum {
     ROUTEMAP_SET_NEXTHOP    /**< string valstr1 af, valstr2 nexthop */
 } routemap_set_attr_t;
 
+/** \brief ACL matcher */
+typedef struct {
+    int                 af;
+    acl_t              *acl;
+} routemap_matcher_t;
+
 /** \brief Set action */
 typedef struct {
     routemap_set_attr_t attribute;
@@ -59,7 +65,8 @@ typedef struct {
 /** \brief Route map */
 typedef struct {
     char               *name;
-    acl_t             **matchers;
+    int                 deny;
+    routemap_matcher_t *matchers;
     size_t              matchers_size, matchers_capacity;
     routemap_setter_t  *setters;
     size_t              setters_size, setters_capacity;
@@ -82,7 +89,7 @@ void pib_destroy(pib_t *pib);
 /** \brief Create and insert ACL into PIB */
 acl_t *pib_acl_new(pib_t *pib, const char *name);
 /** \brief Create and insert route map into PIB */
-routemap_t *pib_routemap_new(pib_t *pib, const char *name);
+routemap_t *pib_routemap_new(pib_t *pib, const char *name, int deny);
 /** \brief Find an ACL by name */
 acl_t *pib_acl_find(pib_t *pib, const char *name);
 /** \brief Find a route map by name */
@@ -93,10 +100,16 @@ void acl_insert(acl_t *acl, int deny, const char *expression);
 /** \brief Find entry in ACL */
 acl_entry_t *acl_find(acl_t *acl, const char *expression);
 /** \brief Insert matcher ACL (stored in PIB) into route map */
-void routemap_insert_matcher(routemap_t *routemap, acl_t *acl);
+void routemap_matcher_insert(routemap_t *routemap, int af, acl_t *acl);
+/** \brief Find matcher by address family and ACL */
+routemap_matcher_t *routemap_matcher_find(routemap_t *routemap,
+    int af, const acl_t *acl);
 /** \brief Insert setter action (copy) into route map */
-void routemap_insert_setter(routemap_t *routemap,
+void routemap_setter_insert(routemap_t *routemap,
     const routemap_setter_t *setter);
+/** \brief Find setter by attribute */
+routemap_setter_t *routemap_setter_find(routemap_t *routemap,
+    routemap_set_attr_t attribute);
 
 #endif /* _PIB_H */
 
