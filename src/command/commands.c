@@ -48,6 +48,26 @@
 #include <time.h>
 
 
+static const char *set_attr_strs[] = {
+    "local-preference",
+    "metric",
+    "next-hop"
+};
+
+static const char *access_strs[] = {
+    "permit",
+    "deny"
+};
+
+static const char *af_strs_short[] = {
+    "nil",
+    "decimal",
+    "pentadecimal",
+    "e164",
+    "trunkgroup",
+    "carrier"
+};
+
 int
 cmd_end(parser_t *parser, int no, char *args)
 {
@@ -119,9 +139,13 @@ cmd_show(parser_t *parser, int no, char *args)
 {
     args = strip(args);
     // show < running-config | peers | sessions | session <host> >
-    if (strncmp(args, "running-config", 14) == 0) {
+    //
+
+    const char *subcmd = strtok(args, " ");
+
+    if (strcmp(subcmd, "running-config") == 0) {
         
-    } else if (strncmp(args, "peers", 5) == 0) {
+    } else if (strcmp(subcmd, "peers") == 0) {
         const locator_t *locator = parser->manager->locator;
         printf("  %8s  %-30s %-6s %-12s\n", "itad", "host", "hold", "transmode");
         for (int i = 0; i < locator->peers_size; i++)
@@ -129,59 +153,64 @@ cmd_show(parser_t *parser, int no, char *args)
                 sockaddr6_str(&locator->peers[i].addr),
                 locator->peers[i].hold,
                 capinfo_transmode_strs[locator->peers[i].transmode]);
-    } else if (strncmp(args, "sessions", 8) == 0) {
+    } else if (strcmp(subcmd, "session") == 0) {
         const manager_t *manager = parser->manager;
-        printf("  %8s  %-30s %-6s %-12s %-10s\n", "itad", "host", "hold", "id", "state");
-        for (int i = 0; i < manager->sessions_size; i++) {
-            if (manager->sessions[i]->mark_stop_init)
-                continue;
-            printf("  %8d  %-30s %-6d %-12s %-10s\n",
-                manager->sessions[i]->peer->itad,
-                sockaddr6_str(&manager->sessions[i]->peer->addr),
-                manager->sessions[i]->hold,
-                inaddr_str(manager->sessions[i]->id),
-                session_state_strs[manager->sessions[i]->state]);
-        }
-    } else if (strncmp(args, "session ", 8) == 0) {
-        const manager_t *manager = parser->manager;
-        struct sockaddr_in6 show_addr;
-        if (normalize_str_addr(&show_addr, args + 8) < 0)
-            return -1;
+        const char *s_addr = strtok(NULL, " ");
 
-        session_t *show_session =
-            manager_session_lookup_address(parser->manager, &show_addr);
+        if (!s_addr) {
+            printf("  %8s  %-30s %-6s %-12s %-10s\n", "itad", "host", "hold", "id", "state");
+            for (int i = 0; i < manager->sessions_size; i++) {
+                if (manager->sessions[i]->mark_stop_init)
+                    continue;
+                printf("  %8d  %-30s %-6d %-12s %-10s\n",
+                    manager->sessions[i]->peer->itad,
+                    sockaddr6_str(&manager->sessions[i]->peer->addr),
+                    manager->sessions[i]->hold,
+                    inaddr_str(manager->sessions[i]->id),
+                    session_state_strs[manager->sessions[i]->state]);
+            }
+        } else {
+            struct sockaddr_in6 show_addr;
+            if (normalize_str_addr(&show_addr, s_addr) < 0)
+                return -1;
 
-        if (!show_session) {
-            printf("show session: session not found\n");
-            return -1;
-        }
+            session_t *show_session =
+                manager_session_lookup_address(parser->manager, &show_addr);
 
-        printf(
-            "TRIP peer is %s, remote ITAD %d\n"
-            "  TRIP version 1, remote LS ID %s\n"
-            "  TRIP state = %s",
-            sockaddr6_str(&show_session->peer->addr), show_session->peer->itad,
-            inaddr_str(show_session->id),
-            session_state_strs[show_session->state]
-        );
+            if (!show_session) {
+                printf("show session: session not found\n");
+                return -1;
+            }
 
-        char established[16], last_read[16], last_write[16];
-        time_since(established, show_session->established_time);
-        time_since(last_read, show_session->last_read_time);
-        time_since(last_write, show_session->last_write_time);
-        if (show_session->state == STATE_ESTABLISHED)
             printf(
-                ", up for %s\n"
-                "  last read %s, last write %s, hold time is %d, "
-                "keepalive interval is %d seconds\n"
-                "  neighbor capabilities:\n",
-                established, last_read, last_write,
-                show_session->hold, show_session->keepalive
+                "TRIP peer is %s, remote ITAD %d\n"
+                "  TRIP version 1, remote LS ID %s\n"
+                "  TRIP state = %s",
+                sockaddr6_str(&show_session->peer->addr), show_session->peer->itad,
+                inaddr_str(show_session->id),
+                session_state_strs[show_session->state]
             );
-        else
-            printf("\n");
-    } else if (strncmp(args, "routes", 6) == 0) {
-        if (!*strip(args + 6)) {
+
+            char established[16], last_read[16], last_write[16];
+            time_since(established, show_session->established_time);
+            time_since(last_read, show_session->last_read_time);
+            time_since(last_write, show_session->last_write_time);
+            if (show_session->state == STATE_ESTABLISHED)
+                printf(
+                    ", up for %s\n"
+                    "  last read %s, last write %s, hold time is %d, "
+                    "keepalive interval is %d seconds\n"
+                    "  neighbor capabilities:\n",
+                    established, last_read, last_write,
+                    show_session->hold, show_session->keepalive
+                );
+            else
+                printf("\n");
+        }
+    } else if (strcmp(subcmd, "route") == 0) {
+        const char *for_s = strtok(NULL, " ");
+
+        if (!for_s) {
             const trib_t *t = parser->manager->trib;
             printf("\tS - static, C - connected, T - TRIP derived\n"
                     "\tE - E.164, D - decimal, P - pentadecimal\n");
@@ -193,39 +222,43 @@ cmd_show(parser_t *parser, int no, char *args)
                     app_proto_str(t->loc_trib.table[i]->app_proto),
                     t->loc_trib.table[i]->nexthop);
         } else {
-            printf("show route: unrecognized argument\n");
         }
-    } else if (strncmp(args, "acls", 4) == 0) {
+    } else if (strcmp(subcmd, "acl") == 0) {
         const pib_t *pib = parser->manager->pib;
+        const char *acl = strtok(NULL, " ");
+
         for (size_t i = 0; i < pib->acls_size; i++) {
+            if (acl && strcmp(pib->acls[i].name, acl) != 0)
+                continue;
             for (size_t j = 0; j < pib->acls[i].entries_size; j++) {
                 printf("%s\t%s\t%s\n", pib->acls[i].name,
-                    (const char *[]){ "permit", "deny" }
-                        [pib->acls[i].entries[j].deny],
+                    access_strs[pib->acls[i].entries[j].deny],
                     pib->acls[i].entries[j].expression);
             }
         }
-    } else if (strncmp(args, "route-map", 9) == 0) {
+    } else if (strcmp(subcmd, "route-map") == 0) {
         const pib_t *pib = parser->manager->pib;
+        const char *routemap = strtok(NULL, " ");
+
         for (size_t i = 0; i < pib->routemaps_size; i++) {
+            if (routemap && strcmp(pib->routemaps[i].name, routemap) != 0)
+                continue;
             printf("%s %s:\n", pib->routemaps[i].name,
-                (const char *[]){ "permit", "deny" }
-                    [pib->routemaps[i].deny]);
+                access_strs[pib->routemaps[i].deny]);
             for (size_t j = 0; j < pib->routemaps[i].matchers_size; j++)
-                printf(" match %s %s\n",
-                    af_strs[pib->routemaps[i].matchers[j].af],
+                printf(" match\t%s\t\t\t%s\n",
+                    af_strs_short[pib->routemaps[i].matchers[j].af],
                     pib->routemaps[i].matchers[j].acl->name);
             for (size_t j = 0; j < pib->routemaps[i].setters_size; j++) {
-                printf(" set %s",
-                    (const char *[]){ "local-preference", "metric", "next-hop" }
-                        [pib->routemaps[i].setters[j].attribute]); /* TODO: take this out */
+                printf(" set\t%s",
+                    set_attr_strs[pib->routemaps[i].setters[j].attribute]);
                 switch (pib->routemaps[i].setters[j].attribute) {
                     case ROUTEMAP_SET_LOCALPREF:
                     case ROUTEMAP_SET_METRIC:
-                        printf(" %d\n", pib->routemaps[i].setters[j].value);
+                        printf("\t%d\n", pib->routemaps[i].setters[j].value);
                     break;
                     case ROUTEMAP_SET_NEXTHOP:
-                        printf( "%s %s\n", pib->routemaps[i].setters[j].valstr1,
+                        printf( "\t%s\t%s\n", pib->routemaps[i].setters[j].valstr1,
                             pib->routemaps[i].setters[j].valstr2);
                     break;
                 }
@@ -759,7 +792,7 @@ const cmd_def_t cmds_root[] = {
     { "enable",         &cmd_enable, "enable privileged commands", NULL },
     { "disable",        &cmd_disable, "disable privileged commands", NULL },
     { "configure",      &cmd_configure, "enter configuration mode", NULL },
-    { "show",           &cmd_show, "show running system information", "show < running-config | peers | sessions | session <host> | route >" },
+    { "show",           &cmd_show, "show running system information", "show < running-config | peers | session [addr] | route [destination] | acl [name] | route-map [name] >" },
     { "shutdown",       &cmd_shutdown, "shutdown system", NULL },
     { NULL,             NULL, NULL, NULL }
 };
