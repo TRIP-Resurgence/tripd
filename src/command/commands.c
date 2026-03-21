@@ -138,13 +138,11 @@ int
 cmd_show(parser_t *parser, int no, char *args)
 {
     args = strip(args);
-    // show < running-config | peers | sessions | session <host> >
-    //
 
     const char *subcmd = strtok(args, " ");
 
     if (strcmp(subcmd, "running-config") == 0) {
-        
+        printf("soon\n"); /* TODO: this cmd */
     } else if (strcmp(subcmd, "peers") == 0) {
         const locator_t *locator = parser->manager->locator;
         printf("  %8s  %-30s %-6s %-12s\n", "itad", "host", "hold", "transmode");
@@ -231,7 +229,7 @@ cmd_show(parser_t *parser, int no, char *args)
             if (acl && strcmp(pib->acls[i].name, acl) != 0)
                 continue;
             for (size_t j = 0; j < pib->acls[i].entries_size; j++) {
-                printf("%s\t%s\t%s\n", pib->acls[i].name,
+                printf("%-20s %-7s %s\n", pib->acls[i].name,
                     access_strs[pib->acls[i].entries[j].deny],
                     pib->acls[i].entries[j].expression);
             }
@@ -246,19 +244,19 @@ cmd_show(parser_t *parser, int no, char *args)
             printf("%s %s:\n", pib->routemaps[i].name,
                 access_strs[pib->routemaps[i].deny]);
             for (size_t j = 0; j < pib->routemaps[i].matchers_size; j++)
-                printf(" match\t%s\t\t\t%s\n",
+                printf(" match %-20s%s\n",
                     af_strs_short[pib->routemaps[i].matchers[j].af],
                     pib->routemaps[i].matchers[j].acl->name);
             for (size_t j = 0; j < pib->routemaps[i].setters_size; j++) {
-                printf(" set\t%s",
+                printf(" set   %-20s",
                     set_attr_strs[pib->routemaps[i].setters[j].attribute]);
                 switch (pib->routemaps[i].setters[j].attribute) {
                     case ROUTEMAP_SET_LOCALPREF:
                     case ROUTEMAP_SET_METRIC:
-                        printf("\t%d\n", pib->routemaps[i].setters[j].value);
+                        printf("%d\n", pib->routemaps[i].setters[j].value);
                     break;
                     case ROUTEMAP_SET_NEXTHOP:
-                        printf( "\t%s\t%s\n", pib->routemaps[i].setters[j].valstr1,
+                        printf( "%-20s%s\n", pib->routemaps[i].setters[j].valstr1,
                             pib->routemaps[i].setters[j].valstr2);
                     break;
                 }

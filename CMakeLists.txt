@@ -63,6 +63,10 @@ add_executable(test_route_selection "src/tests/route_selection.c")
 target_link_libraries(test_route_selection logging command)
 add_test(NAME test_route_selection COMMAND test_route_selection)
 
+add_executable(test_pattern "src/tests/pattern.c")
+target_link_libraries(test_pattern logging command)
+add_test(NAME test_pattern COMMAND test_pattern)
+
 include(CTest)
 enable_testing()
 

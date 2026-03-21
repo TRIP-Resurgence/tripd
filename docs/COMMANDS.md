@@ -111,7 +111,10 @@ Starts with character '_'
  - N: The letter N or n matches any digit from 2-9.
  - .: The '.' character matches one or more characters.
 
-Note: "[]" charsets not supported yet
+Notes:
+
+ - "[]" charsets not supported yet
+ - '.' can only be at the end of the pattern
 
 #### `route-map <map-name> [ permit | deny ]`
 
@@ -175,4 +178,9 @@ Define route map
  - host: peer hostname to apply to
  - map-name: map identifier to aply
  - `{ in | out }`: direction
+
+## Doubts
+
+ - Should peer be neighbor
+ - Should peers and sessions be under a trip subcmd
 

@@ -33,6 +33,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #define INIT_VEC_CAPACITY   16
 
@@ -126,7 +127,7 @@ pib_routemap_new(pib_t *pib, const char *name, int deny)
 }
 
 acl_t *
-pib_acl_find(pib_t *pib, const char *name)
+pib_acl_find(const pib_t *pib, const char *name)
 {
     for (size_t i = 0; i < pib->acls_size; i++)
         if (strcmp(pib->acls[i].name, name) == 0)
@@ -135,7 +136,7 @@ pib_acl_find(pib_t *pib, const char *name)
 }
 
 routemap_t *
-pib_routemap_find(pib_t *pib, const char *name)
+pib_routemap_find(const pib_t *pib, const char *name)
 {
     for (size_t i = 0; i < pib->routemaps_size; i++)
         if (strcmp(pib->routemaps[i].name, name) == 0)
@@ -160,12 +161,86 @@ acl_insert(acl_t *acl, int deny, const char *expression)
 }
 
 acl_entry_t *
-acl_find(acl_t *acl, const char *expression)
+acl_find(const acl_t *acl, const char *expression)
 {
     for (size_t i = 0; i < acl->entries_size; i++)
         if (strcmp(acl->entries[i].expression, expression) == 0)
             return &acl->entries[i];
     return NULL;
+}
+
+static int
+ispfxdigit(char c)
+{
+    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'E');
+}
+
+/**
+ * \brief Check target against asterisk pattern
+ *
+ * \return 1 on match 0 on no match
+ */
+static int
+pattern_check(const char *pat, const char *target)
+{
+    pat++; /* strip initiating _ */
+    while (1) {
+        /* both consumed - pattern matched */
+        if (!*pat && !*target)
+            return 1;
+
+        /* wildcard matches end */
+        if (*pat == '.' && !*target)
+            return 1;
+
+        /* consumed with leftover */
+        if (!*pat || !*target)
+            return 0;
+
+        /* wildcard */
+        if (*pat == '.') {
+            if (ispfxdigit(*target)) {
+                target++;
+                continue;
+            } else {
+                return 0;
+            }
+        }
+
+        /* digit check */
+        if (ispfxdigit(*pat) && *pat != *target)
+            return 0;
+        if (*pat == 'X' && !isdigit(*target))
+            return 0;
+        if (*pat == 'Z' && !(*target >= '1' && *target <= '9'))
+            return 0;
+        if (*pat == 'N' && !(*target >= '2' && *target <= '9'))
+            return 0;
+
+        /* matched digit */
+        target++;
+        pat++;
+    }
+}
+
+/**
+ * \brief Check target against ACL
+ *
+ * \return 0 on permit, 1 on deny
+ */
+int
+acl_check(const acl_t *acl, const char *target)
+{
+    for (size_t i = 0; i < acl->entries_size; i++) {
+        const char *expr = acl->entries[i].expression;
+        if (ispfxdigit(expr[0]) && strncmp(expr, target, strlen(expr)) == 0) {
+            return acl->entries[i].deny;
+        } else if (pattern_check(expr, target)) {
+            return acl->entries[i].deny;
+        }
+    }
+
+    return 1; /* default deny */
 }
 
 void
@@ -184,7 +259,7 @@ routemap_matcher_insert(routemap_t *routemap, int af, acl_t *acl)
 }
 
 routemap_matcher_t *
-routemap_matcher_find(routemap_t *routemap, int af, const acl_t *acl)
+routemap_matcher_find(const routemap_t *routemap, int af, const acl_t *acl)
 {
     for (size_t i = 0; i < routemap->matchers_size; i++)
         if (routemap->matchers[i].af == af && routemap->matchers[i].acl == acl)
@@ -207,7 +282,7 @@ routemap_setter_insert(routemap_t *routemap, const routemap_setter_t *setter)
 }
 
 routemap_setter_t *
-routemap_setter_find(routemap_t *routemap, routemap_set_attr_t attribute)
+routemap_setter_find(const routemap_t *routemap, routemap_set_attr_t attribute)
 {
     for (size_t i = 0; i < routemap->setters_size; i++)
         if (routemap->setters[i].attribute == attribute)

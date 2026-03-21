@@ -91,24 +91,24 @@ acl_t *pib_acl_new(pib_t *pib, const char *name);
 /** \brief Create and insert route map into PIB */
 routemap_t *pib_routemap_new(pib_t *pib, const char *name, int deny);
 /** \brief Find an ACL by name */
-acl_t *pib_acl_find(pib_t *pib, const char *name);
+acl_t *pib_acl_find(const pib_t *pib, const char *name);
 /** \brief Find a route map by name */
-routemap_t *pib_routemap_find(pib_t *pib, const char *name);
+routemap_t *pib_routemap_find(const pib_t *pib, const char *name);
 
 /** \brief Create and insert entry into ACL */
 void acl_insert(acl_t *acl, int deny, const char *expression);
 /** \brief Find entry in ACL */
-acl_entry_t *acl_find(acl_t *acl, const char *expression);
+acl_entry_t *acl_find(const acl_t *acl, const char *expression);
 /** \brief Insert matcher ACL (stored in PIB) into route map */
 void routemap_matcher_insert(routemap_t *routemap, int af, acl_t *acl);
 /** \brief Find matcher by address family and ACL */
-routemap_matcher_t *routemap_matcher_find(routemap_t *routemap,
+routemap_matcher_t *routemap_matcher_find(const routemap_t *routemap,
     int af, const acl_t *acl);
 /** \brief Insert setter action (copy) into route map */
 void routemap_setter_insert(routemap_t *routemap,
     const routemap_setter_t *setter);
 /** \brief Find setter by attribute */
-routemap_setter_t *routemap_setter_find(routemap_t *routemap,
+routemap_setter_t *routemap_setter_find(const routemap_t *routemap,
     routemap_set_attr_t attribute);
 
 #endif /* _PIB_H */
