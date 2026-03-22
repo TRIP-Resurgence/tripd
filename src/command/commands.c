@@ -168,14 +168,14 @@ cmd_show(parser_t *parser, int no, char *args)
                     session_state_strs[manager->sessions[i]->state]);
             }
         } else {
-            struct sockaddr_in6 show_addr;
-            if (normalize_str_addr(&show_addr, s_addr) < 0)
+            struct sockaddr_in6 addr;
+            if (normalize_str_addr(&addr, s_addr) < 0)
                 return -1;
 
-            session_t *show_session =
-                manager_session_lookup_address(parser->manager, &show_addr);
+            session_t *session =
+                manager_session_lookup_address(parser->manager, &addr);
 
-            if (!show_session) {
+            if (!session) {
                 printf("show session: session not found\n");
                 return -1;
             }
@@ -185,35 +185,40 @@ cmd_show(parser_t *parser, int no, char *args)
                 "TRIP peer is %s, remote ITAD %d\n"
                 "  transmission mode %s\n"
                 "  route map in %s, out %s\n",
-                sockaddr6_str(&show_session->peer->addr),
-                show_session->peer->itad,
-                capinfo_transmode_strs[show_session->peer->transmode],
-                show_session->peer->routemap_in ?
-                    show_session->peer->routemap_in->name : "undefined",
-                show_session->peer->routemap_out ?
-                    show_session->peer->routemap_out->name : "undefined");
+                sockaddr6_str(&session->peer->addr),
+                session->peer->itad,
+                capinfo_transmode_strs[session->peer->transmode],
+                session->peer->routemap_in ?
+                    session->peer->routemap_in->name : "(undefined)",
+                session->peer->routemap_out ?
+                    session->peer->routemap_out->name : "(undefined)");
 
             /* session info */
             char state_time[16], last_read_time[16], last_write_time[16];
-            time_since(state_time, show_session->state_time);
+            time_since(state_time, session->state_time);
             printf(
                 "  TRIP version 1\n"
                 "  TRIP state = %s for %s\n"
                 "  remote LS ID %s\n",
-                session_state_strs[show_session->state], state_time,
-                inaddr_str(show_session->id)
+                session_state_strs[session->state], state_time,
+                inaddr_str(session->id)
             );
 
-            if (show_session->state == STATE_ESTABLISHED) {
-                time_since(last_read_time, show_session->last_read_time);
-                time_since(last_write_time, show_session->last_write_time);
+            if (session->state == STATE_ESTABLISHED) {
+                time_since(last_read_time, session->last_read_time);
+                time_since(last_write_time, session->last_write_time);
                 printf(
                     "  last read %s, last write %s, hold time is %d seconds, "
                     "keepalive interval is %d seconds\n"
                     "  neighbor capabilities:\n",
-                    last_read_time, last_write_time, show_session->hold,
-                        show_session->keepalive
+                    last_read_time, last_write_time, session->hold,
+                        session->keepalive
                 );
+                printf("    route types:\n");
+                for (size_t i = 0; i < session->routetypes_count; i++)
+                    printf("      %s:%s\n",
+                        af_strs[session->routetypes[i].routetype_af],
+                        app_proto_str(session->routetypes[i].routetype_app_proto));
             } else
                 printf("\n");
         }
