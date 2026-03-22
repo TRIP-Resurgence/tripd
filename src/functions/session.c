@@ -81,6 +81,7 @@ session_change_state(session_t *s, session_state_t new_state)
         DEBUG("peer session %s changed state from %s to %s", session_str(s),
             session_state_strs[s->state], session_state_strs[new_state]);
     s->state = new_state;
+    s->state_time = time(NULL);
 }
 
 int

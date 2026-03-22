@@ -79,8 +79,11 @@ session_t *manager_session_lookup_address(const manager_t *m,
 manager_t *manager_new(const struct sockaddr_in6 *listen_addr);
 
 /** \brief Add known peer to underlaying locator */
-void manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
+void manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     uint32_t itad);
+
+/** \brief Find known peer by address */
+peer_t *manager_peer_find(manager_t *manager, const struct sockaddr_in6 *addr);
 
 /** \brief Run accept loop in thread */
 void manager_run(manager_t *manager);

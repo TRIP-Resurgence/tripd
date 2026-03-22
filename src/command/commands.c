@@ -180,29 +180,41 @@ cmd_show(parser_t *parser, int no, char *args)
                 return -1;
             }
 
+            /* peer info */
             printf(
                 "TRIP peer is %s, remote ITAD %d\n"
-                "  TRIP version 1, remote LS ID %s\n"
-                "  TRIP state = %s",
-                sockaddr6_str(&show_session->peer->addr), show_session->peer->itad,
-                inaddr_str(show_session->id),
-                session_state_strs[show_session->state]
+                "  transmission mode %s\n"
+                "  route map in %s, out %s\n",
+                sockaddr6_str(&show_session->peer->addr),
+                show_session->peer->itad,
+                capinfo_transmode_strs[show_session->peer->transmode],
+                show_session->peer->routemap_in ?
+                    show_session->peer->routemap_in->name : "undefined",
+                show_session->peer->routemap_out ?
+                    show_session->peer->routemap_out->name : "undefined");
+
+            /* session info */
+            char state_time[16], last_read_time[16], last_write_time[16];
+            time_since(state_time, show_session->state_time);
+            printf(
+                "  TRIP version 1\n"
+                "  TRIP state = %s for %s\n"
+                "  remote LS ID %s\n",
+                session_state_strs[show_session->state], state_time,
+                inaddr_str(show_session->id)
             );
 
-            char established[16], last_read[16], last_write[16];
-            time_since(established, show_session->established_time);
-            time_since(last_read, show_session->last_read_time);
-            time_since(last_write, show_session->last_write_time);
-            if (show_session->state == STATE_ESTABLISHED)
+            if (show_session->state == STATE_ESTABLISHED) {
+                time_since(last_read_time, show_session->last_read_time);
+                time_since(last_write_time, show_session->last_write_time);
                 printf(
-                    ", up for %s\n"
-                    "  last read %s, last write %s, hold time is %d, "
+                    "  last read %s, last write %s, hold time is %d seconds, "
                     "keepalive interval is %d seconds\n"
                     "  neighbor capabilities:\n",
-                    established, last_read, last_write,
-                    show_session->hold, show_session->keepalive
+                    last_read_time, last_write_time, show_session->hold,
+                        show_session->keepalive
                 );
-            else
+            } else
                 printf("\n");
         }
     } else if (strcmp(subcmd, "route") == 0) {
@@ -734,21 +746,15 @@ int
 cmd_config_trip_peer(parser_t *parser, int no, char *args)
 {
     args = strip(args);
-    char *peer = strtok(args, " ");
-    char *remote_itad_arg = strtok(NULL, " ");
-    char *remote_itad = strtok(NULL, " ");
-
-    /* check args */
-    if (!peer || !remote_itad_arg || !remote_itad ||
-        strcmp(remote_itad_arg, "remote-itad") != 0)
-    {
-        fprintf(parser->outf, "peer: invalid args: %s\n", args);
+    char *peer_s = strtok(args, " ");
+    if (!peer_s) {
+        fprintf(parser->outf, "peer: must provide a peer\n");
         return -1;
     }
 
     /* resolve host */
     struct addrinfo *peer_addrs;
-    int res = getaddrinfo(peer, NULL, NULL, &peer_addrs);
+    int res = getaddrinfo(peer_s, NULL, NULL, &peer_addrs);
     if (res != 0) {
         fprintf(parser->outf, "peer: getaddrinfo() error: %s\n",
             gai_strerror(res));
@@ -773,10 +779,64 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
 
     freeaddrinfo(peer_addrs);
 
-    uint32_t remote_itad_num = strtoul(remote_itad, NULL, 10);
+    peer_t *peer = manager_peer_find(parser->manager, &peer_addr);
 
-    /* pick first */
-    manager_add_peer(parser->manager, &peer_addr, remote_itad_num);
+    char *subcmd = strtok(NULL, " ");
+    if (!subcmd) {
+        fprintf(parser->outf, "peer: must provide a peer\n");
+        return -1;
+    }
+
+    if (strcmp(subcmd, "remote-itad") == 0) {
+        char *remote_itad = strtok(NULL, " ");
+
+        /* check args */
+        if (!remote_itad) {
+            fprintf(parser->outf, "peer: remote ITAD required\n");
+            return -1;
+        }
+
+        uint32_t remote_itad_num = strtoul(remote_itad, NULL, 10);
+
+        if (peer) {
+            fprintf(parser->outf, "peer: peer exists\n");
+            return -1;
+        }
+
+        /* pick first */
+        manager_peer_add(parser->manager, &peer_addr, remote_itad_num);
+    } else if (strcmp(subcmd, "route-map") == 0) {
+        char *routemap_name = strtok(NULL, " ");
+        if (!routemap_name) {
+            fprintf(parser->outf, "peer: route map name required\n");
+            return -1;
+        }
+
+        routemap_t *routemap = pib_routemap_find(parser->manager->pib,
+            routemap_name);
+        if (!routemap) {
+            fprintf(parser->outf, "peer: route map not found\n");
+            return -1;
+        }
+
+        char *direction = strtok(NULL, " ");
+        if (!direction) {
+            fprintf(parser->outf, "peer: directon required\n");
+            return -1;
+        }
+
+        if (strcmp(direction, "in"))
+            peer->routemap_in = routemap;
+        else if (strcmp(direction, "out"))
+            peer->routemap_out = routemap;
+        else {
+            fprintf(parser->outf, "peer: unrecognized direction\n");
+            return -1;
+        }
+    } else {
+        fprintf(parser->outf, "peer: unrecognized argument: %s\n", subcmd);
+        return -1;
+    }
     
     return 0;
 }

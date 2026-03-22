@@ -473,7 +473,7 @@ peer_handshake(void *arg)
             if (s->state == STATE_OPENCONFIRM)
                 session_change_state(s, STATE_ESTABLISHED);
             time_t now = time(NULL);
-            s->established_time = s->last_read_time = now;
+            s->last_read_time = now;
 
             /* Hand newly established session off to session_loop */
             session_loop(arg);
@@ -721,7 +721,7 @@ connect_loop(void *arg)
 
 
 void
-manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
+manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     uint32_t itad)
 {
     /* add peer to peer locator */
@@ -744,6 +744,12 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     connect_data[1] = s;
 
     pthread_create(&s->thread, NULL, &connect_loop, connect_data);
+}
+
+peer_t *
+manager_peer_find(manager_t *manager, const struct sockaddr_in6 *addr)
+{
+    return locator_lookup(manager->locator, addr);
 }
 
 void

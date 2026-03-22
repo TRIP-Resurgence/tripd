@@ -68,7 +68,7 @@ typedef struct {
     uint32_t                id;         /**< Found in OPEN */
 
     /* times */
-    time_t                  established_time;   /**< Time of establishment */
+    time_t                  state_time;         /**< Time since entered state */
     time_t                  last_read_time;     /**< Time of last read */
     time_t                  last_write_time;    /**< Time of last write */
 
