@@ -26,6 +26,7 @@
 #define _PIB_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 
 /** \brief Access Control List entry */
@@ -49,27 +50,35 @@ typedef enum {
     ROUTEMAP_SET_NEXTHOP    /**< string valstr1 af, valstr2 nexthop */
 } routemap_set_attr_t;
 
-/** \brief ACL matcher */
+/** \brief Route map ACL matcher */
 typedef struct {
     int                 af;
-    acl_t              *acl;
+    acl_t             **acls;
+    size_t              size, capacity;
 } routemap_matcher_t;
 
-/** \brief Set action */
+/** \brief Route map Action */
 typedef struct {
     routemap_set_attr_t attribute;
     int                 value;
     char               *valstr1, *valstr2;
-} routemap_setter_t;
+} routemap_action_t;
 
-/** \brief Route map */
+/** \brief Route map statement */
 typedef struct {
-    char               *name;
+    uint32_t            seq;
     int                 deny;
     routemap_matcher_t *matchers;
     size_t              matchers_size, matchers_capacity;
-    routemap_setter_t  *setters;
-    size_t              setters_size, setters_capacity;
+    routemap_action_t  *actions;
+    size_t              actions_size, actions_capacity;
+} routemap_statement_t;
+
+/** \brief Route map */
+typedef struct {
+    char                   *name;
+    routemap_statement_t   *statements;
+    size_t                  size, capacity;
 } routemap_t;
 
 
@@ -99,17 +108,36 @@ routemap_t *pib_routemap_find(const pib_t *pib, const char *name);
 void acl_insert(acl_t *acl, int deny, const char *expression);
 /** \brief Find entry in ACL */
 acl_entry_t *acl_find(const acl_t *acl, const char *expression);
-/** \brief Insert matcher ACL (stored in PIB) into route map */
-void routemap_matcher_insert(routemap_t *routemap, int af, acl_t *acl);
-/** \brief Find matcher by address family and ACL */
-routemap_matcher_t *routemap_matcher_find(const routemap_t *routemap,
-    int af, const acl_t *acl);
-/** \brief Insert setter action (copy) into route map */
-void routemap_setter_insert(routemap_t *routemap,
-    const routemap_setter_t *setter);
-/** \brief Find setter by attribute */
-routemap_setter_t *routemap_setter_find(const routemap_t *routemap,
-    routemap_set_attr_t attribute);
+
+
+/** \brief Allocate a matcher in a route map statement */
+routemap_matcher_t *routemap_statement_matcher_new(routemap_statement_t *statement, int af);
+/** \brief Insert action (copy) into route map */
+void routemap_statement_insert_action(routemap_statement_t *statement,
+    const routemap_action_t *action);
+/** \brief Deinit route map action */
+void routemap_statement_action_deinit(routemap_action_t *action);
+
+/** \brief Insert ACL into route map matcher */
+void routemap_matcher_insert(routemap_matcher_t *matcher, const acl_t *acl);
+/** \brief Deinitialize a route map matcher */
+void routemap_matcher_deinit(routemap_matcher_t *matcher);
+
+/** \brief Find action by attribute */
+routemap_action_t *routemap_statement_action_find(
+    const routemap_statement_t *statement, routemap_set_attr_t attribute);
+
+/** \brief Allocate statement in route map */
+routemap_statement_t *routemap_statement_new(routemap_t *routemap, uint32_t seq,
+    int deny);
+/** \brief Find statement in route map by sequence number */
+routemap_statement_t *routemap_statement_find(routemap_t *routemap, uint32_t seq);
+
+
+/** \brief Match route against route map matchers
+ *
+ * Matchers are OR'd together, ACL's inside a matcher are AND'd together */
+int routemap_match(const routemap_t *routemap, const char *route);
 
 #endif /* _PIB_H */
 

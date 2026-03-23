@@ -39,11 +39,11 @@ typedef enum {
 
 /** \brief Parser state */
 typedef struct {
-    int                 enabled;
-    cmd_context_t       ctx;
+    int                     enabled;
+    cmd_context_t           ctx;
 
-    uint32_t            itad;       /**< TRIP context ITAD */
-    routemap_t         *routemap;   /**< Route map context */
+    uint32_t                itad;       /**< TRIP context ITAD */
+    routemap_statement_t   *routemap_statement;/**< Route map statement context*/
 } parser_state_t;
 
 /** \brief Parser object */

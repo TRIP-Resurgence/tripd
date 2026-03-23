@@ -116,11 +116,13 @@ Notes:
  - "[]" charsets not supported yet
  - '.' can only be at the end of the pattern
 
-#### `route-map <map-name> [ permit | deny ]`
+#### `route-map <map-tag> [ permit | deny ] [seq]`
 
 Enter a route map context to define
 
- - map-name: route map identifier
+ - map-tag: route map identifier
+ - `[ permit | deny ]`: redistribute or not
+ - seq: sequence number
 
 #### `trip <itad>`
 
@@ -171,12 +173,12 @@ Adds a peer
  - host: hostname of the peer (`getaddrinfo()`)
  - itad: expected ITAD number of peer
 
-#### `peer <host> route-map <map-name> { in | out }`
+#### `peer <host> route-map <map-tag> { in | out }`
 
 Define route map
 
  - host: peer hostname to apply to
- - map-name: map identifier to aply
+ - map-tag: map identifier to apply
  - `{ in | out }`: direction
 
 ## Doubts

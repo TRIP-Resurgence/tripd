@@ -69,14 +69,16 @@ pib_destroy(pib_t *pib)
     free(pib->acls);
 
     for (size_t i = 0; i < pib->routemaps_size; i++) {
-        for (size_t j = 0; i < pib->routemaps[j].setters_size; j++) {
-            if (pib->routemaps[i].setters[j].valstr1)
-                free(pib->routemaps[i].setters[j].valstr1);
-            if (pib->routemaps[i].setters[j].valstr2)
-                free(pib->routemaps[i].setters[j].valstr2);
+        for (size_t j = 0; j < pib->routemaps[i].size; j++) {
+            for (size_t k = 0; k < pib->routemaps[i].statements[j].matchers_size; k++)
+                free(pib->routemaps[i].statements[j].matchers[k].acls);
+
+            for (size_t k = 0; k < pib->routemaps[i].statements[j].actions_size; k++)
+                routemap_statement_action_deinit(
+                    &pib->routemaps[i].statements[j].actions[k]);
+            free(pib->routemaps[i].statements[j].matchers);
+            free(pib->routemaps[i].statements[j].actions);
         }
-        free(pib->routemaps[i].matchers);
-        free(pib->routemaps[i].setters);
         free(pib->routemaps[i].name);
     }
     free(pib->routemaps);
@@ -113,15 +115,10 @@ pib_routemap_new(pib_t *pib, const char *name, int deny)
     routemap_t *r = &pib->routemaps[pib->routemaps_size++];
 
     r->name = strdup(name);
-    r->deny = deny;
 
-    r->matchers_capacity = INIT_VEC_CAPACITY;
-    r->matchers_size = 0;
-    r->matchers = malloc(r->matchers_capacity * sizeof(acl_t*));
-
-    r->setters_capacity = INIT_VEC_CAPACITY;
-    r->setters_size = 0;
-    r->setters = malloc(r->setters_capacity * sizeof(routemap_setter_t));
+    r->size = 0;
+    r->capacity = INIT_VEC_CAPACITY;
+    r->statements = malloc(r->capacity * sizeof(routemap_statement_t));
 
     return r;
 }
@@ -226,7 +223,7 @@ pattern_check(const char *pat, const char *target)
 /**
  * \brief Check target against ACL
  *
- * \return 0 on permit, 1 on deny
+ * \return 1 on permit, 0 on deny
  */
 int
 acl_check(const acl_t *acl, const char *target)
@@ -234,59 +231,130 @@ acl_check(const acl_t *acl, const char *target)
     for (size_t i = 0; i < acl->entries_size; i++) {
         const char *expr = acl->entries[i].expression;
         if (ispfxdigit(expr[0]) && strncmp(expr, target, strlen(expr)) == 0) {
-            return acl->entries[i].deny;
+            return !acl->entries[i].deny;
         } else if (pattern_check(expr, target)) {
-            return acl->entries[i].deny;
+            return !acl->entries[i].deny;
         }
     }
 
-    return 1; /* default deny */
-}
-
-void
-routemap_matcher_insert(routemap_t *routemap, int af, acl_t *acl)
-{
-    if (routemap->matchers_capacity < routemap->matchers_size + 1) {
-        routemap->matchers_capacity *= 2;
-        routemap->matchers = realloc(routemap->matchers,
-            routemap->matchers_capacity * sizeof(acl_t*));
-    }
-
-    routemap_matcher_t *m = &routemap->matchers[routemap->matchers_size++];
-
-    m->af = af;
-    m->acl= acl;
+    return 0; /* default deny */
 }
 
 routemap_matcher_t *
-routemap_matcher_find(const routemap_t *routemap, int af, const acl_t *acl)
+routemap_statement_matcher_new(routemap_statement_t *statement, int af)
 {
-    for (size_t i = 0; i < routemap->matchers_size; i++)
-        if (routemap->matchers[i].af == af && routemap->matchers[i].acl == acl)
-            return &routemap->matchers[i];
-    return NULL;
+    if (statement->matchers_capacity < statement->matchers_size + 1) {
+        statement->matchers_capacity *= 2;
+        statement->matchers = realloc(statement->matchers,
+            statement->matchers_capacity * sizeof(routemap_matcher_t));
+    }
+
+    routemap_matcher_t *m = &statement->matchers[statement->matchers_size++];
+
+    m->af = af;
+    m->size = 0;
+    m->capacity = INIT_VEC_CAPACITY;
+    m->acls = malloc(m->capacity * sizeof(acl_t*));
+
+    return m;
 }
 
 void
-routemap_setter_insert(routemap_t *routemap, const routemap_setter_t *setter)
+routemap_statement_insert_action(routemap_statement_t *statement,
+    const routemap_action_t *action)
 {
-    if (routemap->setters_capacity < routemap->setters_size + 1) {
-        routemap->setters_capacity *= 2;
-        routemap->setters = realloc(routemap->setters,
-            routemap->setters_capacity * sizeof(routemap_setter_t));
+    if (statement->actions_capacity < statement->actions_size + 1) {
+        statement->actions_capacity *= 2;
+        statement->actions = realloc(statement->actions,
+            statement->actions_capacity * sizeof(routemap_action_t));
     }
 
-    routemap_setter_t *s = &routemap->setters[routemap->setters_size++];
-
-    memcpy(s, setter, sizeof(routemap_setter_t));
+    routemap_action_t *s = &statement->actions[statement->actions_size++];
+    memcpy(s, action, sizeof(routemap_action_t));
 }
 
-routemap_setter_t *
-routemap_setter_find(const routemap_t *routemap, routemap_set_attr_t attribute)
+void
+routemap_statement_action_deinit(routemap_action_t *action)
 {
-    for (size_t i = 0; i < routemap->setters_size; i++)
-        if (routemap->setters[i].attribute == attribute)
-            return &routemap->setters[i];
+    if (action->valstr1)
+        free(action->valstr1);
+    if (action->valstr2)
+        free(action->valstr2);
+}
+
+void
+routemap_matcher_insert(routemap_matcher_t *matcher, const acl_t *acl)
+{
+    if (matcher->capacity < matcher->size + 1) {
+        matcher->capacity *= 2;
+        matcher->acls = realloc(matcher->acls,
+            matcher->capacity * sizeof(acl_t*));
+    }
+
+    matcher->acls[matcher->size++] = (acl_t *)acl;
+}
+
+void
+routemap_matcher_deinit(routemap_matcher_t *matcher)
+{
+    free(matcher->acls);
+}
+
+
+routemap_action_t *
+routemap_statement_action_find(const routemap_statement_t *statement,
+    routemap_set_attr_t attribute)
+{
+    for (size_t i = 0; i < statement->actions_size; i++)
+        if (statement->actions[i].attribute == attribute)
+            return &statement->actions[i];
     return NULL;
+}
+
+
+routemap_statement_t *
+routemap_statement_new(routemap_t *routemap, uint32_t seq, int deny)
+{
+    if (routemap->capacity < routemap->size + 1) {
+        routemap->capacity *= 2;
+        routemap->statements = realloc(routemap->statements,
+            routemap->capacity * sizeof(acl_t*));
+    }
+
+    routemap_statement_t *s = &routemap->statements[routemap->size++];
+    s->seq = seq;
+    s->deny = deny;
+
+    s->matchers_size = s->actions_size = 0;
+    s->matchers_capacity = s->actions_capacity = INIT_VEC_CAPACITY;
+    s->matchers = malloc(s->matchers_capacity * sizeof(routemap_matcher_t));
+    s->actions = malloc(s->actions_capacity * sizeof(routemap_action_t));
+
+    return s;
+}
+
+routemap_statement_t *
+routemap_statement_find(routemap_t *routemap, uint32_t seq)
+{
+    for (size_t i = 0; i < routemap->size; i++)
+        if (routemap->statements[i].seq == seq)
+            return &routemap->statements[i];
+    return NULL;
+}
+
+int
+routemap_match(const routemap_t *routemap, const char *route)
+{
+#if 0
+    for (size_t i = 0; i < routemap->matchers_size; i++) {
+        int t = 1;
+        for (size_t j = 0; j < routemap->matchers[i].size; j++)
+            t &= acl_check(routemap->matchers[i].acls[j], route);
+        if (t)
+            return 1;
+    }
+#endif
+
+    return 0;
 }
 

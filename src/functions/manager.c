@@ -547,6 +547,8 @@ listen_loop(void *arg)
         s->fd = request_fd;
         s->initiated = 0;
         trib_adj_pair_new(m->trib, &s->adj_trib_in, &s->adj_trib_out);
+        s->adj_trib_in->routemap = peer->routemap_in;
+        s->adj_trib_out->routemap = peer->routemap_out;
 
         void **handshake_data = malloc(2 * sizeof(void*));
         handshake_data[0] = m;
@@ -735,6 +737,8 @@ manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     s->state = STATE_IDLE;
     s->initiated = 1;
     trib_adj_pair_new(manager->trib, &s->adj_trib_in, &s->adj_trib_out);
+    s->adj_trib_in->routemap = peer->routemap_in;
+    s->adj_trib_out->routemap = peer->routemap_out;
 
     /* add session to manager session vector */
     manager_session_add(manager, s);

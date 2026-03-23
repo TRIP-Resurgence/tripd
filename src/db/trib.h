@@ -27,6 +27,8 @@
 
 #include <protocol/protocol.h>
 
+#include "pib.h"
+
 #include <stddef.h>
 #include <time.h>
 
@@ -71,8 +73,8 @@ typedef struct {
 typedef struct {
     uint32_t    peer_itad;      /**< Peer ITAD used in Adj-TRIBs */
     entry_t   **table;
-    size_t      size;
-    size_t      capacity;
+    size_t      size, capacity;
+    routemap_t *routemap;       /**< Insertion routemap */
 } table_t;
 
 /** \brief Telephony Routing Information Base
@@ -109,6 +111,8 @@ typedef struct {
     table_t     ext_trib;
 
     table_t     local_routes;
+
+    table_t     opt_trib; /* optimized Loc-TRIB */
 } trib_t;
 
 
@@ -134,7 +138,7 @@ void trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out);
 void trib_destroy(trib_t *trib);
 
 /** \brief Add route to table */
-void trib_table_add(table_t *table, entry_t *route);
+void trib_table_insert(table_t *table, entry_t *route);
 
 /** \brief Execute route selection
  *

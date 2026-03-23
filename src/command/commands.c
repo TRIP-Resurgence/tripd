@@ -258,24 +258,34 @@ cmd_show(parser_t *parser, int no, char *args)
         for (size_t i = 0; i < pib->routemaps_size; i++) {
             if (routemap && strcmp(pib->routemaps[i].name, routemap) != 0)
                 continue;
-            printf("%s %s:\n", pib->routemaps[i].name,
-                access_strs[pib->routemaps[i].deny]);
-            for (size_t j = 0; j < pib->routemaps[i].matchers_size; j++)
-                printf(" match %-20s%s\n",
-                    af_strs_short[pib->routemaps[i].matchers[j].af],
-                    pib->routemaps[i].matchers[j].acl->name);
-            for (size_t j = 0; j < pib->routemaps[i].setters_size; j++) {
-                printf(" set   %-20s",
-                    set_attr_strs[pib->routemaps[i].setters[j].attribute]);
-                switch (pib->routemaps[i].setters[j].attribute) {
+
+            printf("%s:\n", pib->routemaps[i].name);
+
+            for (size_t j = 0; j < pib->routemaps[i].size; j++) {
+                printf(" statement %s %d:\n",
+                    access_strs[pib->routemaps[i].statements[j].deny],
+                    pib->routemaps[i].statements[j].seq);
+                for (size_t k = 0; k < pib->routemaps[i].statements[j].matchers_size; k++) {
+                    printf("  match %s",
+                        af_strs_short[pib->routemaps[i].statements[j].matchers[k].af]);
+                    for (size_t l = 0; l < pib->routemaps[i].statements[j].matchers[k].size; l++)
+                        printf(" %s", pib->routemaps[i].statements[j].matchers[k].acls[l]->name);
+                    printf("\n");
+                }
+                for (size_t k = 0; k < pib->routemaps[i].statements[j].actions_size; k++) {
+                    printf("  set %s",
+                        set_attr_strs[pib->routemaps[i].statements[j].actions[k].attribute]);
+                    switch (pib->routemaps[i].statements[j].actions[k].attribute) {
                     case ROUTEMAP_SET_LOCALPREF:
                     case ROUTEMAP_SET_METRIC:
-                        printf("%d\n", pib->routemaps[i].setters[j].value);
+                        printf(" %d\n", pib->routemaps[i].statements[j].actions[k].value);
                     break;
                     case ROUTEMAP_SET_NEXTHOP:
-                        printf( "%-20s%s\n", pib->routemaps[i].setters[j].valstr1,
-                            pib->routemaps[i].setters[j].valstr2);
+                        printf( "%s %s\n",
+                            pib->routemaps[i].statements[j].actions[k].valstr1,
+                            pib->routemaps[i].statements[j].actions[k].valstr2);
                     break;
+                    }
                 }
             }
         }
@@ -462,7 +472,7 @@ cmd_config_route(parser_t *parser, int no, char *args)
         e->itad_path_size = 0;
         e->withdrawn= 0;
 
-        trib_table_add(&parser->manager->trib->local_routes, e);
+        trib_table_insert(&parser->manager->trib->local_routes, e);
     } else if (strncmp(args, "del ", 4) == 0) {
 
     } else {
@@ -557,6 +567,7 @@ cmd_config_routemap(parser_t *parser, int no, char *args)
 
     const char *name = strtok(args, " ");
     const char *access = strtok(NULL, " ");
+    const char *seq_s = strtok(NULL, " ");
 
     int deny = 0;
 
@@ -576,8 +587,14 @@ cmd_config_routemap(parser_t *parser, int no, char *args)
     if (!routemap)
         routemap = pib_routemap_new(parser->manager->pib, name, deny);
 
+    uint32_t seq = seq_s ? atoi(seq_s) : 10;
+    routemap_statement_t *statement = routemap_statement_find(routemap, seq);
+
+    if (!statement)
+        statement = routemap_statement_new(routemap, seq, deny);
+
     parser->state.ctx = CTX_ROUTEMAP;
-    parser->state.routemap = routemap;
+    parser->state.routemap_statement = statement;
 
     return 0;
 }
@@ -619,6 +636,9 @@ cmd_config_routemap_match(parser_t *parser, int no, char *args)
         return -1;
     }
 
+    routemap_matcher_t *m = routemap_statement_matcher_new(
+        parser->state.routemap_statement, af);
+
     const char *acl_name = NULL;
     while ((acl_name = strtok(NULL, " "))) {
         acl_t *acl = pib_acl_find(parser->manager->pib, acl_name);
@@ -627,12 +647,7 @@ cmd_config_routemap_match(parser_t *parser, int no, char *args)
             return -1;
         }
 
-        if (routemap_matcher_find(parser->state.routemap, af, acl)) {
-            printf("match: duplicate af:acl %s:%s\n", af_strs[af], acl_name);
-            continue;
-        }
-
-        routemap_matcher_insert(parser->state.routemap, af, acl);
+        routemap_matcher_insert(m, acl);
     }
 
     return 0;
@@ -641,7 +656,7 @@ cmd_config_routemap_match(parser_t *parser, int no, char *args)
 int
 cmd_config_routemap_set(parser_t *parser, int no, char *args)
 {
-    routemap_setter_t s = { 0 };
+    routemap_action_t s = { 0 };
     
     args = strip(args);
     const char *attr = strtok(args, " ");
@@ -674,12 +689,14 @@ cmd_config_routemap_set(parser_t *parser, int no, char *args)
         return -1;
     }
 
-    if (routemap_setter_find(parser->state.routemap, s.attribute)) {
+    if (routemap_statement_action_find(parser->state.routemap_statement,
+        s.attribute))
+    {
         printf("set: duplicate attribute %s\n", attr);
         return -1;
     }
 
-    routemap_setter_insert(parser->state.routemap, &s);
+    routemap_statement_insert_action(parser->state.routemap_statement, &s);
 
     return 0;
 }
