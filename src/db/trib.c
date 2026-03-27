@@ -249,26 +249,26 @@ optimize_table(table_t *dst, table_t *src)
 static void
 apply_policy(table_t *dst, table_t *src)
 {
-#if 0
     for (size_t i = 0; i < src->size; i++) {
         entry_t *e = entry_clone(src->table[i]);
 
-        if (routemap_match(dst->routemap, src->table[i]->prefix)) {
-            for (size_t j = 0; j < dst->routemap->setters_size; j++) {
-                switch (dst->routemap->setters[j].attribute) {
-                case ROUTEMAP_SET_LOCALPREF:
-                case ROUTEMAP_SET_METRIC:
-                    e->local_pref = dst->routemap->setters[j].value; break;
-                case ROUTEMAP_SET_NEXTHOP:
-                    e->nexthop = strdup(dst->routemap->setters[j].valstr2); break;
-                }
+        const routemap_statement_t *s =
+            routemap_match(dst->routemap, src->table[i]->prefix);
+        if (!s)
+            continue;   /* default deny */
+
+        for (size_t j = 0; j < s->actions_size; j++) {
+            switch (s->actions[j].attribute) {
+            case ROUTEMAP_SET_LOCALPREF:
+            case ROUTEMAP_SET_METRIC:
+                e->local_pref = s->actions[j].value; break;
+            case ROUTEMAP_SET_NEXTHOP:
+                e->nexthop = strdup(s->actions[j].valstr2); break;
             }
-            continue;
         }
 
         trib_table_insert(dst, e);
     }
-#endif
 }
 
 

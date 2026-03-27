@@ -321,7 +321,16 @@ routemap_statement_new(routemap_t *routemap, uint32_t seq, int deny)
             routemap->capacity * sizeof(acl_t*));
     }
 
-    routemap_statement_t *s = &routemap->statements[routemap->size++];
+    /* ordered insert by seq */
+    size_t i = 0;
+    for (; i < routemap->size && routemap->statements[i].seq < seq; i++);
+
+    memmove(&routemap->statements[i + 1], &routemap->statements[i],
+        sizeof(routemap_statement_t));
+    routemap->size++;
+
+
+    routemap_statement_t *s = &routemap->statements[i];
     s->seq = seq;
     s->deny = deny;
 
@@ -342,19 +351,19 @@ routemap_statement_find(routemap_t *routemap, uint32_t seq)
     return NULL;
 }
 
-int
+const routemap_statement_t *
 routemap_match(const routemap_t *routemap, const char *route)
 {
-#if 0
-    for (size_t i = 0; i < routemap->matchers_size; i++) {
-        int t = 1;
-        for (size_t j = 0; j < routemap->matchers[i].size; j++)
-            t &= acl_check(routemap->matchers[i].acls[j], route);
-        if (t)
-            return 1;
+    for (size_t i = 0; i < routemap->size; i++) {
+        for (size_t j = 0; j < routemap->statements[i].matchers_size; j++) {
+            int t = 1;
+            for (size_t k = 0; t && k < routemap->statements[i].matchers[j].size; k++)
+                t &= acl_check(routemap->statements[i].matchers[j].acls[k], route);
+            if (t)
+                return &routemap->statements[i];
+        }
     }
-#endif
 
-    return 0;
+    return NULL;
 }
 

@@ -111,7 +111,8 @@ acl_entry_t *acl_find(const acl_t *acl, const char *expression);
 
 
 /** \brief Allocate a matcher in a route map statement */
-routemap_matcher_t *routemap_statement_matcher_new(routemap_statement_t *statement, int af);
+routemap_matcher_t *routemap_statement_matcher_new(
+    routemap_statement_t *statement, int af);
 /** \brief Insert action (copy) into route map */
 void routemap_statement_insert_action(routemap_statement_t *statement,
     const routemap_action_t *action);
@@ -131,13 +132,15 @@ routemap_action_t *routemap_statement_action_find(
 routemap_statement_t *routemap_statement_new(routemap_t *routemap, uint32_t seq,
     int deny);
 /** \brief Find statement in route map by sequence number */
-routemap_statement_t *routemap_statement_find(routemap_t *routemap, uint32_t seq);
+routemap_statement_t *routemap_statement_find(routemap_t *routemap,
+    uint32_t seq);
 
 
 /** \brief Match route against route map matchers
  *
  * Matchers are OR'd together, ACL's inside a matcher are AND'd together */
-int routemap_match(const routemap_t *routemap, const char *route);
+const routemap_statement_t *routemap_match(const routemap_t *routemap,
+    const char *route);
 
 #endif /* _PIB_H */
 
