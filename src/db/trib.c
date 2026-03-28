@@ -115,7 +115,6 @@ trib_new(uint32_t local_itad)
     table_init(&t->local_routes);
     table_init(&t->ext_trib);
     table_init(&t->loc_trib);
-    table_init(&t->opt_trib);
 
     t->adj_tribs_capacity = 256;
     t->adj_tribs_size = 0;
@@ -150,7 +149,6 @@ trib_destroy(trib_t *trib)
     trib_table_deinit(&trib->local_routes);
     trib_table_deinit(&trib->ext_trib);
     trib_table_deinit(&trib->loc_trib);
-    trib_table_deinit(&trib->opt_trib);
     free(trib->adj_tribs_in);
     free(trib->adj_tribs_out);
 }
@@ -247,7 +245,7 @@ optimize_table(table_t *dst, table_t *src)
 
 /** \brief Copy routes applying a policy */
 static void
-apply_policy(table_t *dst, table_t *src)
+apply_policy(table_t *dst, table_t *src, uint32_t local_itad)
 {
     for (size_t i = 0; i < src->size; i++) {
         entry_t *e = entry_clone(src->table[i]);
@@ -261,9 +259,18 @@ apply_policy(table_t *dst, table_t *src)
             switch (s->actions[j].attribute) {
             case ROUTEMAP_SET_LOCALPREF:
             case ROUTEMAP_SET_METRIC:
-                e->local_pref = s->actions[j].value; break;
+                e->local_pref = s->actions[j].value;
+                break;
             case ROUTEMAP_SET_NEXTHOP:
-                e->nexthop = strdup(s->actions[j].valstr2); break;
+                e->nexthop = strdup(s->actions[j].valstr2);
+                break;
+            case ROUTEMAP_SET_ITADPATH_PREPEND:
+                e->itad_path_size = s->actions[j].value + e->itad_path_size;
+                e->itad_path = realloc(e->itad_path,
+                    e->itad_path_size * sizeof(uint32_t));
+                for (size_t k = 0; k < s->actions[j].value; k++)
+                    e->itad_path[k] = local_itad;
+                break;
             }
         }
 
@@ -277,14 +284,24 @@ trib_update(trib_t *trib)
 {
     trib->ext_trib.size = 0;
     trib->loc_trib.size = 0;
-    trib->opt_trib.size = 0;
     
     /* Phase 2a: local routes and external Ext-TRIBs-in to Ext-TRIB */
+    table_t scratch;
+    table_init(&scratch);
+
     table_select_into(&trib->ext_trib, &trib->local_routes, trib->local_itad);
-    for (size_t i = 0; i < trib->adj_tribs_size; i++)
-        if (trib->adj_tribs_in[i].peer_itad != trib->local_itad)
-            table_select_into(&trib->ext_trib, &trib->adj_tribs_in[i],
-                trib->local_itad);
+    for (size_t i = 0; i < trib->adj_tribs_size; i++) {
+        if (trib->adj_tribs_in[i].peer_itad != trib->local_itad) {
+            scratch.size = 0;
+            /* apply input policy if applicable */
+            if (trib->adj_tribs_in[i].routemap) {
+                apply_policy(&scratch, &trib->adj_tribs_in[i], trib->local_itad);
+                table_select_into(&trib->ext_trib, &scratch, trib->local_itad);
+            } else
+                table_select_into(&trib->ext_trib, &trib->adj_tribs_in[i],
+                    trib->local_itad);
+        }
+    }
 
     /* Phase 2b: Ext-TRIB and internal Ext-TRIBs-in to Loc-TRIB */
     table_select_into(&trib->loc_trib, &trib->ext_trib, trib->local_itad);
@@ -294,14 +311,15 @@ trib_update(trib_t *trib)
                 trib->local_itad);
 
     /* Phase 3: Loc-TRIB to Ext-TRIBs-Out */
-    optimize_table(&trib->opt_trib, &trib->loc_trib);
+    optimize_table(&scratch, &trib->loc_trib); /* optimize table */
 
     for (size_t i = 0; i < trib->adj_tribs_size; i++) {
         trib->adj_tribs_out[i].size = 0;
+        /* apply output policy if applicable */
         if (trib->adj_tribs_out[i].routemap)
-            apply_policy(&trib->adj_tribs_out[i], &trib->opt_trib);
+            apply_policy(&trib->adj_tribs_out[i], &scratch, trib->local_itad);
         else
-            table_copy(&trib->adj_tribs_out[i], &trib->opt_trib);
+            table_copy(&trib->adj_tribs_out[i], &scratch);
     }
 }
 

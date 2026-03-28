@@ -47,7 +47,8 @@ typedef struct {
 typedef enum {
     ROUTEMAP_SET_LOCALPREF, /**< int value */
     ROUTEMAP_SET_METRIC,    /**< int value */
-    ROUTEMAP_SET_NEXTHOP    /**< string valstr1 af, valstr2 nexthop */
+    ROUTEMAP_SET_NEXTHOP,   /**< string valstr1 af, valstr2 nexthop */
+    ROUTEMAP_SET_ITADPATH_PREPEND /**< int value */
 } routemap_set_attr_t;
 
 /** \brief Route map ACL matcher */

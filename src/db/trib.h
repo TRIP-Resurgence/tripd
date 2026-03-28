@@ -111,8 +111,6 @@ typedef struct {
     table_t     ext_trib;
 
     table_t     local_routes;
-
-    table_t     opt_trib; /* optimized Loc-TRIB */
 } trib_t;
 
 

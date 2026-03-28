@@ -146,6 +146,9 @@ Set route attributes in map
  - `local-preference <local-pref>`
  - `metric <metric>`
  - `next-hop <af> <server>`
+ - `itad-path prepend <n>`
+
+ - n: numer of times to prepend route's ITAD-path with local ITAD
 
 ### TRIP context
 

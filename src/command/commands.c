@@ -51,7 +51,8 @@
 static const char *set_attr_strs[] = {
     "local-preference",
     "metric",
-    "next-hop"
+    "next-hop",
+    "itad-path prepend",
 };
 
 static const char *access_strs[] = {
@@ -278,13 +279,14 @@ cmd_show(parser_t *parser, int no, char *args)
                     switch (pib->routemaps[i].statements[j].actions[k].attribute) {
                     case ROUTEMAP_SET_LOCALPREF:
                     case ROUTEMAP_SET_METRIC:
+                    case ROUTEMAP_SET_ITADPATH_PREPEND:
                         printf(" %d\n", pib->routemaps[i].statements[j].actions[k].value);
-                    break;
+                        break;
                     case ROUTEMAP_SET_NEXTHOP:
                         printf( "%s %s\n",
                             pib->routemaps[i].statements[j].actions[k].valstr1,
                             pib->routemaps[i].statements[j].actions[k].valstr2);
-                    break;
+                        break;
                     }
                 }
             }
@@ -684,6 +686,14 @@ cmd_config_routemap_set(parser_t *parser, int no, char *args)
         s.attribute = ROUTEMAP_SET_NEXTHOP;
         s.valstr1 = strdup(v1);
         s.valstr2 = strdup(v2);
+    } else if (strcmp(attr, "next-hop") == 0) {
+        if (strcmp(v1, "prepend") != 0) {
+            printf("set: unsupported itad-path set\n");
+            return -1;
+        }
+
+        s.attribute = ROUTEMAP_SET_ITADPATH_PREPEND;
+        s.value = atoi(v2);
     } else {
         printf("set: unrecognized attribute: %s\n", args);
         return -1;
