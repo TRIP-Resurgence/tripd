@@ -245,13 +245,14 @@ optimize_table(table_t *dst, table_t *src)
 
 /** \brief Copy routes applying a policy */
 static void
-apply_policy(table_t *dst, table_t *src, uint32_t local_itad)
+apply_policy(table_t *dst, const table_t *src, uint32_t local_itad,
+    const routemap_t *policy)
 {
     for (size_t i = 0; i < src->size; i++) {
         entry_t *e = entry_clone(src->table[i]);
 
         const routemap_statement_t *s =
-            routemap_match(dst->routemap, src->table[i]->prefix);
+            routemap_match(policy, src->table[i]->prefix);
         if (!s)
             continue;   /* default deny */
 
@@ -295,7 +296,9 @@ trib_update(trib_t *trib)
             scratch.size = 0;
             /* apply input policy if applicable */
             if (trib->adj_tribs_in[i].routemap) {
-                apply_policy(&scratch, &trib->adj_tribs_in[i], trib->local_itad);
+                scratch.size = 0;
+                apply_policy(&scratch, &trib->adj_tribs_in[i], trib->local_itad,
+                    trib->adj_tribs_in[i].routemap);
                 table_select_into(&trib->ext_trib, &scratch, trib->local_itad);
             } else
                 table_select_into(&trib->ext_trib, &trib->adj_tribs_in[i],
@@ -317,7 +320,8 @@ trib_update(trib_t *trib)
         trib->adj_tribs_out[i].size = 0;
         /* apply output policy if applicable */
         if (trib->adj_tribs_out[i].routemap)
-            apply_policy(&trib->adj_tribs_out[i], &scratch, trib->local_itad);
+            apply_policy(&trib->adj_tribs_out[i], &scratch, trib->local_itad,
+                trib->adj_tribs_out[i].routemap);
         else
             table_copy(&trib->adj_tribs_out[i], &scratch);
     }

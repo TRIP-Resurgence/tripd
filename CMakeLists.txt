@@ -67,6 +67,10 @@ add_executable(test_pattern "src/tests/pattern.c")
 target_link_libraries(test_pattern logging command)
 add_test(NAME test_pattern COMMAND test_pattern)
 
+add_executable(test_policy "src/tests/policy.c")
+target_link_libraries(test_policy logging command)
+add_test(NAME test_policy COMMAND test_policy)
+
 include(CTest)
 enable_testing()
 
