@@ -775,6 +775,26 @@ cmd_config_trip_timers(parser_t *parser, int no, char *args)
 }
 
 int
+cmd_config_trip_default(parser_t *parser, int no, char *args)
+{
+    args = strip(args);
+
+    char *attr = strtok(args, " ");
+    char *val = strtok(NULL, " ");
+
+    if (strcmp(attr, "local-pref") == 0) {
+        parser->manager->def_local_pref = atoi(val);
+    } else if (strcmp(attr, "metric") == 0) {
+        parser->manager->def_metric = atoi(val);
+    } else {
+        printf("unrecognized attribute\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int
 cmd_config_trip_peer(parser_t *parser, int no, char *args)
 {
     args = strip(args);
@@ -915,6 +935,7 @@ const cmd_def_t cmds_trip[] = {
     { "help",           &cmd_help,"show command help", NULL },
     { "ls-id",          &cmd_config_trip_lsid, "set local id", "ls-id <id in dotted notation" },
     { "timers",         &cmd_config_trip_timers, "set timers", "timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]" },
+    { "default",        &cmd_config_trip_default, "set defaults", "default { local-preference | metric } <value>" },
     { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> { remote-itad <itad> | route-map <map-name> }" },
     { NULL,             NULL, NULL, NULL }
 };

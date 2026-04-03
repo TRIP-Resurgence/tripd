@@ -642,6 +642,9 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->min_itad_orig_int = TIMER_MIN_ITAD_ORIG_INT;
     m->min_route_advert_int = TIMER_MIN_ROUTE_ADVERT_INT;
 
+    m->def_local_pref = DEF_LOCAL_PREF;
+    m->def_metric = DEF_METRIC;
+
     /* create listen socket */
     m->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     if (m->fd < 0) {

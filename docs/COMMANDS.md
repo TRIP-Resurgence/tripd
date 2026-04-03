@@ -164,10 +164,17 @@ Sets LS timers
 
  - hold: hold time in seconds, time to declare connection dead
  - keep-alive: time between sending keepalives
- - max-purge-time:
- - disable-time:
- - min-itad-orig-int:
- - min-route-advert-int:
+ - max-purge-time: time to maintain routes marked as withdrawn in databases
+ - disable-time: when maxsequencenum-1 is reached, disable TRIP for this time to allow routes to be removed
+ - min-itad-orig-int: minimum time between advertisements with changes within ITAD
+ - min-route-advert-int: minimum default time between advertisements per external peer
+
+#### `default <attribute> <value>`
+
+ - attribute: `{ local-preference | metric }`
+ - value: default value for incoming routes without attribute present
+
+Note: default local-preference default and metric is 100
 
 #### `peer <host> remote-itad <itad>`
 

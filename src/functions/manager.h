@@ -62,12 +62,15 @@ typedef struct {
     /* Timers peer default  */
     uint16_t    hold;
     uint16_t    keepalive;
-    /* Timers per trip instance */
     int         connect_retry;
     int         max_purge_time;
     int         disable_time;
     int         min_itad_orig_int;
     int         min_route_advert_int;
+
+    /* Default attribute values */
+    uint32_t    def_local_pref;
+    uint32_t    def_metric;
 } manager_t;
 
 

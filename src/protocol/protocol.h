@@ -462,6 +462,11 @@ extern const char *runtime_error_strs[];
 #define TIMER_MIN_ROUTE_ADVERT_INT      30
 
 
+/* default attribute values (when not present) */
+
+#define DEF_LOCAL_PREF                  100
+#define DEF_METRIC                      100
+
 
 /* objects */
 
