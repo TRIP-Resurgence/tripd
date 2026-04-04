@@ -325,5 +325,7 @@ trib_update(trib_t *trib)
         else
             table_copy(&trib->adj_tribs_out[i], &scratch);
     }
+
+    trib_table_deinit(&scratch);
 }
 

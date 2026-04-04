@@ -61,7 +61,7 @@ void
 pib_destroy(pib_t *pib)
 {
     for (size_t i = 0; i < pib->acls_size; i++) {
-        for (size_t j = 0; i < pib->acls[j].entries_size; j++)
+        for (size_t j = 0; j < pib->acls[i].entries_size; j++)
             free(pib->acls[i].entries[j].expression);
         free(pib->acls[i].entries);
         free(pib->acls[i].name);
@@ -80,6 +80,7 @@ pib_destroy(pib_t *pib)
             free(pib->routemaps[i].statements[j].actions);
         }
         free(pib->routemaps[i].name);
+        free(pib->routemaps[i].statements);
     }
     free(pib->routemaps);
 }
