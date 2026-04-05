@@ -8,7 +8,7 @@ include_directories("src/")
 
 file(GLOB PROTOCOL_SRC "src/protocol/*.c")
 file(GLOB FUNCTIONS_SRC "src/functions/*.c")
-file(GLOB TRIB_SRC "src/trib/*.c")
+file(GLOB DB_SRC "src/db/*.c")
 file(GLOB COMMAND_SRC "src/command/*.c")
 file(GLOB LOGGING_SRC "src/logging/*.c")
 file(GLOB UTIL_SRC "src/util/*.c")
@@ -26,14 +26,14 @@ add_library(util STATIC ${UTIL_SRC})
 add_library(protocol STATIC ${PROTOCOL_SRC})
 target_link_libraries(protocol logging)
 
-add_library(trib STATIC ${TRIB_SRC})
-target_link_libraries(trib logging)
+add_library(db STATIC ${DB_SRC})
+target_link_libraries(db logging)
 
 add_library(functions STATIC ${FUNCTIONS_SRC})
-target_link_libraries(functions trib protocol logging util)
+target_link_libraries(functions db protocol logging util)
 
 add_library(command STATIC ${COMMAND_SRC})
-target_link_libraries(command trib functions trib logging)
+target_link_libraries(command db functions logging)
 
 # main executable
 
@@ -62,6 +62,14 @@ add_test(NAME test_collision COMMAND test_collision)
 add_executable(test_route_selection "src/tests/route_selection.c")
 target_link_libraries(test_route_selection logging command)
 add_test(NAME test_route_selection COMMAND test_route_selection)
+
+add_executable(test_pattern "src/tests/pattern.c")
+target_link_libraries(test_pattern logging command)
+add_test(NAME test_pattern COMMAND test_pattern)
+
+add_executable(test_policy "src/tests/policy.c")
+target_link_libraries(test_policy logging command)
+add_test(NAME test_policy COMMAND test_policy)
 
 include(CTest)
 enable_testing()

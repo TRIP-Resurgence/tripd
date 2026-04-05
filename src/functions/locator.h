@@ -28,6 +28,7 @@
 #define _LOCATOR_H
 
 #include <protocol/protocol.h>
+#include <db/pib.h>
 
 #include <netinet/in.h>
 
@@ -41,6 +42,9 @@ typedef struct {
 
     /* timers */
     uint16_t                hold;
+
+    /* policy */
+    routemap_t             *routemap_in, *routemap_out;
 } peer_t;
 
 /** \brief Peer locator */
@@ -54,11 +58,11 @@ typedef struct {
 locator_t *locator_new();
 
 /** \brief Add a known peer */
-const peer_t *locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
+peer_t *locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     uint32_t itad, uint16_t hold, capinfo_transmode_t transmode);
 
 /** \brief Lookup peer by its address */
-const peer_t *locator_lookup(locator_t *locator,
+peer_t *locator_lookup(locator_t *locator,
     const struct sockaddr_in6 *addr);
 
 /** \brief Destroy locator object */

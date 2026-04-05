@@ -32,7 +32,8 @@
 
 #include "session.h"
 #include "locator.h"
-#include <trib/trib.h>
+#include <db/trib.h>
+#include <db/pib.h>
 
 
 /** \brief Manager object */
@@ -42,29 +43,34 @@ typedef struct {
     pthread_t   maintenance_thread;
     int         fd;
 
-    /* local */
+    /* Local */
     uint32_t    itad;
     uint32_t    id;
 
-    /* peer information */
+    /* Peer information */
     locator_t  *locator;
 
-    /* telephony routing information base */
+    /* Telephony Routing Information Base */
     trib_t     *trib;
+    /* Policy Information Base */
+    pib_t      *pib;
 
-    /* session instances */
+    /* Session instances */
     session_t **sessions;
     size_t      sessions_size, sessions_capacity;
 
-    /* timers peer default  */
+    /* Timers peer default  */
     uint16_t    hold;
     uint16_t    keepalive;
-    /* timers per trip instance */
     int         connect_retry;
     int         max_purge_time;
     int         disable_time;
     int         min_itad_orig_int;
     int         min_route_advert_int;
+
+    /* Default attribute values */
+    uint32_t    def_local_pref;
+    uint32_t    def_metric;
 } manager_t;
 
 
@@ -76,8 +82,11 @@ session_t *manager_session_lookup_address(const manager_t *m,
 manager_t *manager_new(const struct sockaddr_in6 *listen_addr);
 
 /** \brief Add known peer to underlaying locator */
-void manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
+void manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     uint32_t itad);
+
+/** \brief Find known peer by address */
+peer_t *manager_peer_find(manager_t *manager, const struct sockaddr_in6 *addr);
 
 /** \brief Run accept loop in thread */
 void manager_run(manager_t *manager);

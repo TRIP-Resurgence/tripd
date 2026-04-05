@@ -53,9 +53,16 @@ Exit privileged mode
 
 Enter configuration context
 
-#### `show < running-config | peers | sessions | session <host> | route >`
+#### `show <options>`
 
 Show running LS information
+
+ - `running-config`
+ - `peers`
+ - `session [peer address]`
+ - `route [ for <prefix or number> ]`
+ - `acl [name]`
+ - `route-map [name]`
 
 #### `shutdown`
 
@@ -76,9 +83,46 @@ What interface to bind to
 
  - address: address or localhost (`getaddrinfo()`)
 
-#### `prefix-list`
+#### `route { add <af> <prefix> <app-proto> <server> | del <af> <prefix> }`
 
-Enter prefix list context
+Add or remove local routes
+
+ - af: address family { `e164` }
+ - prefix: the prefix in the address family format
+ - app-proto: application protocol { `sip` | `h323-h225-0-q931` | `h323-h225-0-ras` | `h323-h225-0-anxg` | `iax2` }
+ - server: hostname or address that serves the prefix with that protocol
+
+#### `acl <acl-name> { permit | deny } <expression>`
+
+Add entry to ACL
+
+ - acl-num: access list name
+ - expression: Prefix or Asterisk style dialplan pattern match expression
+
+##### Patterns
+
+Starts with character '_'
+
+[Asterisk pattern matching](https://docs.asterisk.org/Configuration/Dialplan/Pattern-Matching/)
+
+ - 0-9: A number matchis this number.
+ - X: The letter X or x represents a single digit from 0 to 9.
+ - Z: The letter Z or z represents any digit from 1 to 9.
+ - N: The letter N or n matches any digit from 2-9.
+ - .: The '.' character matches one or more characters.
+
+Notes:
+
+ - "[]" charsets not supported yet
+ - '.' can only be at the end of the pattern
+
+#### `route-map <map-tag> [ permit | deny ] [seq]`
+
+Enter a route map context to define
+
+ - map-tag: route map identifier
+ - `[ permit | deny ]`: redistribute or not
+ - seq: sequence number
 
 #### `trip <itad>`
 
@@ -86,16 +130,25 @@ Enter TRIP routing context, setting the ITAD for this LS
 
  - itad: ITAD number as registered at the [IANA registry](https://www.iana.org/assignments/trip-parameters/trip-parameters.xhtml#trip-parameters-5)
 
-### Prefix list context
+### Route Map context
 
-#### `prefix <af> <prefix> <app-proto> <server>`
+#### `match <af> <acl-name> [ <acl-name> ... ]`
 
-Defines a prefix
+Configure route map to match prefixes that are permitted by an access list
 
- - af: address family { `e164` }
- - prefix: the prefix in the address family format
- - app-proto: application protocol { `sip` | `h323-h225-0-q931` | `h323-h225-0-ras` | `h323-h225-0-anxg` | `iax2` }
- - server: hostname or address that serves the prefix with that protocol
+ - af: Address family
+ - acl-name: access control list name
+
+#### `set <...>`
+
+Set route attributes in map
+
+ - `local-preference <local-pref>`
+ - `metric <metric>`
+ - `next-hop <af> <server>`
+ - `itad-path prepend <n>`
+
+ - n: numer of times to prepend route's ITAD-path with local ITAD
 
 ### TRIP context
 
@@ -111,15 +164,35 @@ Sets LS timers
 
  - hold: hold time in seconds, time to declare connection dead
  - keep-alive: time between sending keepalives
- - max-purge-time:
- - disable-time:
- - min-itad-orig-int:
- - min-route-advert-int:
+ - max-purge-time: time to maintain routes marked as withdrawn in databases
+ - disable-time: when maxsequencenum-1 is reached, disable TRIP for this time to allow routes to be removed
+ - min-itad-orig-int: minimum time between advertisements with changes within ITAD
+ - min-route-advert-int: minimum default time between advertisements per external peer
+
+#### `default <attribute> <value>`
+
+ - attribute: `{ local-preference | metric }`
+ - value: default value for incoming routes without attribute present
+
+Note: default local-preference default and metric is 100
 
 #### `peer <host> remote-itad <itad>`
 
-Adds a known peer
+Adds a peer
 
  - host: hostname of the peer (`getaddrinfo()`)
  - itad: expected ITAD number of peer
+
+#### `peer <host> route-map <map-tag> { in | out }`
+
+Define route map
+
+ - host: peer hostname to apply to
+ - map-tag: map identifier to apply
+ - `{ in | out }`: direction
+
+## Doubts
+
+ - Should peer be neighbor
+ - Should peers and sessions be under a trip subcmd
 

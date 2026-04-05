@@ -43,7 +43,7 @@ locator_new()
     return &g_locator;
 }
 
-const peer_t *
+peer_t *
 locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     uint32_t itad, uint16_t hold, capinfo_transmode_t transmode)
 {
@@ -62,7 +62,7 @@ locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     return p;
 }
 
-const peer_t *
+peer_t *
 locator_lookup(locator_t *locator, const struct sockaddr_in6 *addr)
 {
     peer_t *p = NULL;

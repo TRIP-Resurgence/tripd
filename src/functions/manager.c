@@ -35,7 +35,8 @@
 #include <logging/logging.h>
 #include <protocol/protocol.h>
 #include "session.h"
-#include "trib/trib.h"
+#include <db/trib.h>
+#include <db/pib.h>
 #include <util/util.h>
 
 #include <netinet/in.h>
@@ -472,7 +473,7 @@ peer_handshake(void *arg)
             if (s->state == STATE_OPENCONFIRM)
                 session_change_state(s, STATE_ESTABLISHED);
             time_t now = time(NULL);
-            s->established_time = s->last_read_time = now;
+            s->last_read_time = now;
 
             /* Hand newly established session off to session_loop */
             session_loop(arg);
@@ -546,6 +547,8 @@ listen_loop(void *arg)
         s->fd = request_fd;
         s->initiated = 0;
         trib_adj_pair_new(m->trib, &s->adj_trib_in, &s->adj_trib_out);
+        s->adj_trib_in->routemap = peer->routemap_in;
+        s->adj_trib_out->routemap = peer->routemap_out;
 
         void **handshake_data = malloc(2 * sizeof(void*));
         handshake_data[0] = m;
@@ -624,6 +627,7 @@ manager_new(const struct sockaddr_in6 *listen_addr)
 
     m->locator = locator_new();
     m->trib = trib_new(m->itad);
+    m->pib = pib_new();
 
     m->sessions_size = 0;
     m->sessions_capacity = 16;
@@ -637,6 +641,9 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->disable_time = TIMER_DISABLE_TIME;
     m->min_itad_orig_int = TIMER_MIN_ITAD_ORIG_INT;
     m->min_route_advert_int = TIMER_MIN_ROUTE_ADVERT_INT;
+
+    m->def_local_pref = DEF_LOCAL_PREF;
+    m->def_metric = DEF_METRIC;
 
     /* create listen socket */
     m->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
@@ -719,7 +726,7 @@ connect_loop(void *arg)
 
 
 void
-manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
+manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     uint32_t itad)
 {
     /* add peer to peer locator */
@@ -733,6 +740,8 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     s->state = STATE_IDLE;
     s->initiated = 1;
     trib_adj_pair_new(manager->trib, &s->adj_trib_in, &s->adj_trib_out);
+    s->adj_trib_in->routemap = peer->routemap_in;
+    s->adj_trib_out->routemap = peer->routemap_out;
 
     /* add session to manager session vector */
     manager_session_add(manager, s);
@@ -742,6 +751,12 @@ manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
     connect_data[1] = s;
 
     pthread_create(&s->thread, NULL, &connect_loop, connect_data);
+}
+
+peer_t *
+manager_peer_find(manager_t *manager, const struct sockaddr_in6 *addr)
+{
+    return locator_lookup(manager->locator, addr);
 }
 
 void
@@ -796,6 +811,7 @@ manager_destroy(manager_t *manager)
 {
     locator_destroy(manager->locator);
     trib_destroy(manager->trib);
+    pib_destroy(manager->pib);
     free(manager->sessions);
     manager->itad = 0;
 }

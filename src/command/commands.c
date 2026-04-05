@@ -26,6 +26,7 @@
 
 #include "cli.h"
 #include "command/parser.h"
+#include "db/pib.h"
 #include "functions/manager.h"
 #include "functions/session.h"
 #include "protocol/protocol.h"
@@ -33,7 +34,7 @@
 #include <logging/logging.h>
 #include <netinet/in.h>
 #include <util/util.h>
-#include <trib/trib.h>
+#include <db/trib.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -47,11 +48,30 @@
 #include <time.h>
 
 
+static const char *set_attr_strs[] = {
+    "local-preference",
+    "metric",
+    "next-hop",
+    "itad-path prepend",
+};
+
+static const char *access_strs[] = {
+    "permit",
+    "deny"
+};
+
+static const char *af_strs_short[] = {
+    "nil",
+    "decimal",
+    "pentadecimal",
+    "e164",
+    "trunkgroup",
+    "carrier"
+};
+
 int
 cmd_end(parser_t *parser, int no, char *args)
 {
-    if (parser->state.ctx == CTX_PREFIXLIST)
-        trib_update(parser->manager->trib);
     parser->state.ctx = CTX_ROOT;
     if (parser->state.ctx == CTX_ROOT)
         parser->state.enabled = 0;
@@ -64,10 +84,7 @@ cmd_exit(parser_t *parser, int no, char *args)
     switch (parser->state.ctx) {
     case CTX_ROOT: parser->state.enabled = 0; break;
     case CTX_CONFIG: parser->state.ctx = CTX_ROOT; break;
-    case CTX_PREFIXLIST: {
-        parser->state.ctx = CTX_CONFIG;
-        trib_update(parser->manager->trib);
-    } break;
+    case CTX_ROUTEMAP: parser->state.ctx = CTX_CONFIG; break;
     case CTX_TRIP: parser->state.ctx = CTX_CONFIG; break;
     default: return -1;
     }
@@ -122,10 +139,12 @@ int
 cmd_show(parser_t *parser, int no, char *args)
 {
     args = strip(args);
-    // show < running-config | peers | sessions | session <host> >
-    if (strncmp(args, "running-config", 14) == 0) {
-        
-    } else if (strncmp(args, "peers", 5) == 0) {
+
+    const char *subcmd = strtok(args, " ");
+
+    if (strcmp(subcmd, "running-config") == 0) {
+        printf("soon\n"); /* TODO: this cmd */
+    } else if (strcmp(subcmd, "peers") == 0) {
         const locator_t *locator = parser->manager->locator;
         printf("  %8s  %-30s %-6s %-12s\n", "itad", "host", "hold", "transmode");
         for (int i = 0; i < locator->peers_size; i++)
@@ -133,71 +152,144 @@ cmd_show(parser_t *parser, int no, char *args)
                 sockaddr6_str(&locator->peers[i].addr),
                 locator->peers[i].hold,
                 capinfo_transmode_strs[locator->peers[i].transmode]);
-    } else if (strncmp(args, "sessions", 8) == 0) {
+    } else if (strcmp(subcmd, "session") == 0) {
         const manager_t *manager = parser->manager;
-        printf("  %8s  %-30s %-6s %-12s %-10s\n", "itad", "host", "hold", "id", "state");
-        for (int i = 0; i < manager->sessions_size; i++) {
-            if (manager->sessions[i]->mark_stop_init)
-                continue;
-            printf("  %8d  %-30s %-6d %-12s %-10s\n",
-                manager->sessions[i]->peer->itad,
-                sockaddr6_str(&manager->sessions[i]->peer->addr),
-                manager->sessions[i]->hold,
-                inaddr_str(manager->sessions[i]->id),
-                session_state_strs[manager->sessions[i]->state]);
-        }
-    } else if (strncmp(args, "session ", 8) == 0) {
-        const manager_t *manager = parser->manager;
-        struct sockaddr_in6 show_addr;
-        if (normalize_str_addr(&show_addr, args + 8) < 0)
-            return -1;
+        const char *s_addr = strtok(NULL, " ");
 
-        session_t *show_session =
-            manager_session_lookup_address(parser->manager, &show_addr);
+        if (!s_addr) {
+            printf("  %8s  %-30s %-6s %-12s %-10s\n", "itad", "host", "hold", "id", "state");
+            for (int i = 0; i < manager->sessions_size; i++) {
+                if (manager->sessions[i]->mark_stop_init)
+                    continue;
+                printf("  %8d  %-30s %-6d %-12s %-10s\n",
+                    manager->sessions[i]->peer->itad,
+                    sockaddr6_str(&manager->sessions[i]->peer->addr),
+                    manager->sessions[i]->hold,
+                    inaddr_str(manager->sessions[i]->id),
+                    session_state_strs[manager->sessions[i]->state]);
+            }
+        } else {
+            struct sockaddr_in6 addr;
+            if (normalize_str_addr(&addr, s_addr) < 0)
+                return -1;
 
-        if (!show_session) {
-            printf("show session: session not found\n");
-            return -1;
-        }
+            session_t *session =
+                manager_session_lookup_address(parser->manager, &addr);
 
-        printf(
-            "TRIP peer is %s, remote ITAD %d\n"
-            "  TRIP version 1, remote LS ID %s\n"
-            "  TRIP state = %s",
-            sockaddr6_str(&show_session->peer->addr), show_session->peer->itad,
-            inaddr_str(show_session->id),
-            session_state_strs[show_session->state]
-        );
+            if (!session) {
+                printf("show session: session not found\n");
+                return -1;
+            }
 
-        char established[16], last_read[16], last_write[16];
-        time_since(established, show_session->established_time);
-        time_since(last_read, show_session->last_read_time);
-        time_since(last_write, show_session->last_write_time);
-        if (show_session->state == STATE_ESTABLISHED)
+            /* peer info */
             printf(
-                ", up for %s\n"
-                "  last read %s, last write %s, hold time is %d, "
-                "keepalive interval is %d seconds\n"
-                "  neighbor capabilities:\n",
-                established, last_read, last_write,
-                show_session->hold, show_session->keepalive
+                "TRIP peer is %s, remote ITAD %d\n"
+                "  transmission mode %s\n"
+                "  route map in %s, out %s\n",
+                sockaddr6_str(&session->peer->addr),
+                session->peer->itad,
+                capinfo_transmode_strs[session->peer->transmode],
+                session->peer->routemap_in ?
+                    session->peer->routemap_in->name : "(undefined)",
+                session->peer->routemap_out ?
+                    session->peer->routemap_out->name : "(undefined)");
+
+            /* session info */
+            char state_time[16], last_read_time[16], last_write_time[16];
+            time_since(state_time, session->state_time);
+            printf(
+                "  TRIP version 1\n"
+                "  TRIP state = %s for %s\n"
+                "  remote LS ID %s\n",
+                session_state_strs[session->state], state_time,
+                inaddr_str(session->id)
             );
-        else
-            printf("\n");
-    } else if (strncmp(args, "routes", 6) == 0) {
-        if (!*strip(args + 6)) {
+
+            if (session->state == STATE_ESTABLISHED) {
+                time_since(last_read_time, session->last_read_time);
+                time_since(last_write_time, session->last_write_time);
+                printf(
+                    "  last read %s, last write %s, hold time is %d seconds, "
+                    "keepalive interval is %d seconds\n"
+                    "  neighbor capabilities:\n",
+                    last_read_time, last_write_time, session->hold,
+                        session->keepalive
+                );
+                printf("    route types:\n");
+                for (size_t i = 0; i < session->routetypes_count; i++)
+                    printf("      %s:%s\n",
+                        af_strs[session->routetypes[i].routetype_af],
+                        app_proto_str(session->routetypes[i].routetype_app_proto));
+            } else
+                printf("\n");
+        }
+    } else if (strcmp(subcmd, "route") == 0) {
+        const char *for_s = strtok(NULL, " ");
+
+        if (!for_s) {
             const trib_t *t = parser->manager->trib;
             printf("\tS - static, C - connected, T - TRIP derived\n"
                     "\tE - E.164, D - decimal, P - pentadecimal\n");
             for (int i = 0; i < t->loc_trib.size; i++)
                 printf("%c %c %s via %s:%s\n",
-                    "SCT"[t->loc_trib.table[i]->type],
-                    "EDP"[t->loc_trib.table[i]->af - 1],
+                    "TCS"[t->loc_trib.table[i]->type],
+                    "DPETC"[t->loc_trib.table[i]->af - 1],
                     t->loc_trib.table[i]->prefix,
                     app_proto_str(t->loc_trib.table[i]->app_proto),
                     t->loc_trib.table[i]->nexthop);
         } else {
-            printf("show route: unrecognized argument\n");
+        }
+    } else if (strcmp(subcmd, "acl") == 0) {
+        const pib_t *pib = parser->manager->pib;
+        const char *acl = strtok(NULL, " ");
+
+        for (size_t i = 0; i < pib->acls_size; i++) {
+            if (acl && strcmp(pib->acls[i].name, acl) != 0)
+                continue;
+            for (size_t j = 0; j < pib->acls[i].entries_size; j++) {
+                printf("%-20s %-7s %s\n", pib->acls[i].name,
+                    access_strs[pib->acls[i].entries[j].deny],
+                    pib->acls[i].entries[j].expression);
+            }
+        }
+    } else if (strcmp(subcmd, "route-map") == 0) {
+        const pib_t *pib = parser->manager->pib;
+        const char *routemap = strtok(NULL, " ");
+
+        for (size_t i = 0; i < pib->routemaps_size; i++) {
+            if (routemap && strcmp(pib->routemaps[i].name, routemap) != 0)
+                continue;
+
+            printf("%s:\n", pib->routemaps[i].name);
+
+            for (size_t j = 0; j < pib->routemaps[i].size; j++) {
+                printf(" statement %s %d:\n",
+                    access_strs[pib->routemaps[i].statements[j].deny],
+                    pib->routemaps[i].statements[j].seq);
+                for (size_t k = 0; k < pib->routemaps[i].statements[j].matchers_size; k++) {
+                    printf("  match %s",
+                        af_strs_short[pib->routemaps[i].statements[j].matchers[k].af]);
+                    for (size_t l = 0; l < pib->routemaps[i].statements[j].matchers[k].size; l++)
+                        printf(" %s", pib->routemaps[i].statements[j].matchers[k].acls[l]->name);
+                    printf("\n");
+                }
+                for (size_t k = 0; k < pib->routemaps[i].statements[j].actions_size; k++) {
+                    printf("  set %s",
+                        set_attr_strs[pib->routemaps[i].statements[j].actions[k].attribute]);
+                    switch (pib->routemaps[i].statements[j].actions[k].attribute) {
+                    case ROUTEMAP_SET_LOCALPREF:
+                    case ROUTEMAP_SET_METRIC:
+                    case ROUTEMAP_SET_ITADPATH_PREPEND:
+                        printf(" %d\n", pib->routemaps[i].statements[j].actions[k].value);
+                        break;
+                    case ROUTEMAP_SET_NEXTHOP:
+                        printf( "%s %s\n",
+                            pib->routemaps[i].statements[j].actions[k].valstr1,
+                            pib->routemaps[i].statements[j].actions[k].valstr2);
+                        break;
+                    }
+                }
+            }
         }
     } else {
         printf("show: unrecognized argument\n");
@@ -307,39 +399,6 @@ cmd_config_bind(parser_t *parser, int no, char *args)
     return 0;
 }
 
-int
-cmd_config_prefixlist(parser_t *parser, int no, char *args)
-{
-    parser->state.ctx = CTX_PREFIXLIST;
-
-    return 0;
-}
-
-int
-cmd_config_trip(parser_t *parser, int no, char *args)
-{
-    if (!parser->manager) {
-        fprintf(parser->outf, "bind-address must be set first\n");
-        return -1;
-    }
-
-    args = strip(args);
-    uint32_t itad = strtoul(args, NULL, 10);
-
-    if (parser->manager->itad != 0 && parser->manager->itad != itad) {
-        fprintf(parser->outf,
-            "error: changing itad of existing instance unallowed\n");
-        return -1;
-    }
-
-    parser->state.ctx = CTX_TRIP;
-    parser->manager->itad = itad;
-
-    return 0;
-}
-
-/* prefix list context */
-
 static int
 atoaf(const char *s)
 {
@@ -373,40 +432,285 @@ atoappproto(const char *s)
 }
 
 int
-cmd_config_prefixlist_prefix(parser_t *parser, int no, char *args)
+cmd_config_route(parser_t *parser, int no, char *args)
 {
     args = strip(args);
 
-    char *af = strtok(args, " ");
-    char *pfx = strtok(NULL, " ");
-    char *app_proto = strtok(NULL, " ");
-    char *srv = strtok(NULL, " ");
+    if (strncmp(args, "add ", 4) == 0) {
+        args += 4;
+        args = strip(args);
 
-    if (!af || !pfx || !app_proto || !srv) {
-        fprintf(parser->outf, "error: invalid route format\n");
+        char *af = strtok(args, " ");
+        char *pfx = strtok(NULL, " ");
+        char *app_proto = strtok(NULL, " ");
+        char *srv = strtok(NULL, " ");
+
+        if (!af || !pfx || !app_proto || !srv) {
+            fprintf(parser->outf, "error: invalid route format\n");
+            return -1;
+        }
+
+        entry_t *e = malloc(sizeof(entry_t));
+        e->af = atoaf(af);
+        if (e->af == 0) {
+            printf("route: invalid address family\n");
+            return -1;
+        }
+        e->app_proto = atoappproto(app_proto);
+        if (e->app_proto == 0) {
+            printf("route: invalid application protocol\n");
+            return -1;
+        }
+        e->prefix = strdup(pfx);
+        e->type = ENTRY_TYPE_STATIC;
+        e->nexthop = strdup(srv);
+        e->learn_itad = parser->manager->itad;
+        e->learn_lsid = 0;
+        e->seq = 0;
+        e->time = time(NULL);
+        e->local_pref = UINT32_MAX;
+        e->metric = UINT32_MAX;
+        e->itad_path = NULL;
+        e->itad_path_size = 0;
+        e->withdrawn= 0;
+
+        trib_table_insert(&parser->manager->trib->local_routes, e);
+    } else if (strncmp(args, "del ", 4) == 0) {
+
+    } else {
+        printf("route: unrecognized argument\n");
         return -1;
     }
 
-    entry_t *e = malloc(sizeof(entry_t));
-    e->af = atoaf(af);
-    e->app_proto = atoappproto(app_proto);
-    e->prefix = strdup(pfx);
-    e->type = ENTRY_TYPE_STATIC;
-    e->nexthop = strdup(srv);
-    e->itad = parser->manager->itad;
-    e->lsid = 0;
-    e->seq = 0;
-    e->time = time(NULL);
-    e->local_pref = UINT32_MAX;
-    e->metric = UINT32_MAX;
-    e->itad_path = NULL;
-    e->itad_path_size = 0;
-    e->withdrawn= 0;
-
-    trib_table_add(&parser->manager->trib->local_routes, e);
+    trib_update(parser->manager->trib);
 
     return 0;
 }
+
+static int
+ispfxdigit(char c)
+{
+    return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'E');
+}
+
+static int
+check_acl_expr(const char *expr)
+{
+    int ispfx = 1;
+    const char *p = expr;
+    while (*p) {
+        if (!ispfxdigit(*p)) {
+            ispfx = 0;
+            break;
+        }
+        p++;
+    }
+
+    if (ispfx)
+        return 0;
+
+    if (*expr != '_')
+        return -1;
+
+    p = expr + 1;
+    while (*p) {
+        if (!ispfxdigit(*p) && *p != 'X' && *p != 'Z' && *p != 'N' && *p != '.')
+            return -1;
+        p++;
+    }
+
+    return 0;
+}
+
+int
+cmd_config_acl(parser_t *parser, int no, char *args)
+{
+    args = strip(args);
+
+    char *name = strtok(args, " ");
+    char *access = strtok(NULL, " ");
+    char *expr = strtok(NULL, " ");
+
+    int deny = 0;
+    if (strcmp(access, "permit") == 0)
+        deny = 0;
+    else if (strcmp(access, "deny") == 0)
+        deny = 1;
+    else {
+        printf("acl: unrecognized access: %s\n", access);
+        return -1;
+    }
+
+
+    if (check_acl_expr(expr) < 0) {
+        printf("acl: invalid expression\n");
+        return -1;
+    }
+
+
+    acl_t *acl = pib_acl_find(parser->manager->pib, name);
+
+    if (!acl)
+        acl = pib_acl_new(parser->manager->pib, name);
+    else if (acl_find(acl, expr)) {
+        printf("acl: entry already exists for expression\n");
+        return -1;
+    }
+
+    acl_insert(acl, deny, expr);
+
+    return 0;
+}
+
+int
+cmd_config_routemap(parser_t *parser, int no, char *args)
+{
+    args = strip(args);
+
+    const char *name = strtok(args, " ");
+    const char *access = strtok(NULL, " ");
+    const char *seq_s = strtok(NULL, " ");
+
+    int deny = 0;
+
+    if (access) {
+        if (strcmp(access, "permit") == 0)
+            deny = 0;
+        else if (strcmp(access, "deny") == 0)
+            deny = 1;
+        else {
+            printf("route-map: unrecognized access: %s\n", access);
+            return -1;
+        }
+    }
+
+    routemap_t *routemap = pib_routemap_find(parser->manager->pib, name);
+
+    if (!routemap)
+        routemap = pib_routemap_new(parser->manager->pib, name, deny);
+
+    uint32_t seq = seq_s ? atoi(seq_s) : 10;
+    routemap_statement_t *statement = routemap_statement_find(routemap, seq);
+
+    if (!statement)
+        statement = routemap_statement_new(routemap, seq, deny);
+
+    parser->state.ctx = CTX_ROUTEMAP;
+    parser->state.routemap_statement = statement;
+
+    return 0;
+}
+
+int
+cmd_config_trip(parser_t *parser, int no, char *args)
+{
+    if (!parser->manager) {
+        fprintf(parser->outf, "bind-address not set\n");
+        return -1;
+    }
+
+    args = strip(args);
+    uint32_t itad = strtoul(args, NULL, 10);
+
+    if (parser->manager->itad != 0 && parser->manager->itad != itad) {
+        fprintf(parser->outf,
+            "error: changing itad of existing instance unallowed\n");
+        return -1;
+    }
+
+    parser->state.ctx = CTX_TRIP;
+    parser->manager->itad = itad;
+
+    return 0;
+}
+
+/* routemap context */
+
+int
+cmd_config_routemap_match(parser_t *parser, int no, char *args)
+{
+    args = strip(args);
+
+    const char *af_s = strtok(args, " ");
+    int af = atoaf(af_s);
+    if (af == 0) {
+        printf("match: invalid address family\n");
+        return -1;
+    }
+
+    routemap_matcher_t *m = routemap_statement_matcher_new(
+        parser->state.routemap_statement, af);
+
+    const char *acl_name = NULL;
+    while ((acl_name = strtok(NULL, " "))) {
+        acl_t *acl = pib_acl_find(parser->manager->pib, acl_name);
+        if (!acl) {
+            printf("match: access list not found: %s\n", acl_name);
+            return -1;
+        }
+
+        routemap_matcher_insert(m, acl);
+    }
+
+    return 0;
+}
+
+int
+cmd_config_routemap_set(parser_t *parser, int no, char *args)
+{
+    routemap_action_t s = { 0 };
+    
+    args = strip(args);
+    const char *attr = strtok(args, " ");
+    const char *v1 = strtok(NULL, " ");
+    const char *v2 = strtok(NULL, " ");
+
+    if (!attr || !v1) {
+        printf("set: attribute and or value required\n");
+        return -1;
+    }
+
+
+    if (strcmp(attr, "local-preference") == 0) {
+        s.attribute = ROUTEMAP_SET_LOCALPREF;
+        s.value = atoi(v1);
+    } else if (strcmp(attr, "metric") == 0) {
+        s.attribute = ROUTEMAP_SET_METRIC;
+        s.value = atoi(v1);
+    } else if (strcmp(attr, "next-hop") == 0) {
+        if (!v2) {
+            printf("set: server required\n");
+            return -1;
+        }
+
+        s.attribute = ROUTEMAP_SET_NEXTHOP;
+        s.valstr1 = strdup(v1);
+        s.valstr2 = strdup(v2);
+    } else if (strcmp(attr, "next-hop") == 0) {
+        if (strcmp(v1, "prepend") != 0) {
+            printf("set: unsupported itad-path set\n");
+            return -1;
+        }
+
+        s.attribute = ROUTEMAP_SET_ITADPATH_PREPEND;
+        s.value = atoi(v2);
+    } else {
+        printf("set: unrecognized attribute: %s\n", args);
+        return -1;
+    }
+
+    if (routemap_statement_action_find(parser->state.routemap_statement,
+        s.attribute))
+    {
+        printf("set: duplicate attribute %s\n", attr);
+        return -1;
+    }
+
+    routemap_statement_insert_action(parser->state.routemap_statement, &s);
+
+    return 0;
+}
+
 
 /* trip context */
 
@@ -471,24 +775,38 @@ cmd_config_trip_timers(parser_t *parser, int no, char *args)
 }
 
 int
+cmd_config_trip_default(parser_t *parser, int no, char *args)
+{
+    args = strip(args);
+
+    char *attr = strtok(args, " ");
+    char *val = strtok(NULL, " ");
+
+    if (strcmp(attr, "local-pref") == 0) {
+        parser->manager->def_local_pref = atoi(val);
+    } else if (strcmp(attr, "metric") == 0) {
+        parser->manager->def_metric = atoi(val);
+    } else {
+        printf("unrecognized attribute\n");
+        return -1;
+    }
+
+    return 0;
+}
+
+int
 cmd_config_trip_peer(parser_t *parser, int no, char *args)
 {
     args = strip(args);
-    char *peer = strtok(args, " ");
-    char *remote_itad_arg = strtok(NULL, " ");
-    char *remote_itad = strtok(NULL, " ");
-
-    /* check args */
-    if (!peer || !remote_itad_arg || !remote_itad ||
-        strcmp(remote_itad_arg, "remote-itad") != 0)
-    {
-        fprintf(parser->outf, "peer: invalid args: %s\n", args);
+    char *peer_s = strtok(args, " ");
+    if (!peer_s) {
+        fprintf(parser->outf, "peer: must provide a peer\n");
         return -1;
     }
 
     /* resolve host */
     struct addrinfo *peer_addrs;
-    int res = getaddrinfo(peer, NULL, NULL, &peer_addrs);
+    int res = getaddrinfo(peer_s, NULL, NULL, &peer_addrs);
     if (res != 0) {
         fprintf(parser->outf, "peer: getaddrinfo() error: %s\n",
             gai_strerror(res));
@@ -513,10 +831,64 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
 
     freeaddrinfo(peer_addrs);
 
-    uint32_t remote_itad_num = strtoul(remote_itad, NULL, 10);
+    peer_t *peer = manager_peer_find(parser->manager, &peer_addr);
 
-    /* pick first */
-    manager_add_peer(parser->manager, &peer_addr, remote_itad_num);
+    char *subcmd = strtok(NULL, " ");
+    if (!subcmd) {
+        fprintf(parser->outf, "peer: must provide a peer\n");
+        return -1;
+    }
+
+    if (strcmp(subcmd, "remote-itad") == 0) {
+        char *remote_itad = strtok(NULL, " ");
+
+        /* check args */
+        if (!remote_itad) {
+            fprintf(parser->outf, "peer: remote ITAD required\n");
+            return -1;
+        }
+
+        uint32_t remote_itad_num = strtoul(remote_itad, NULL, 10);
+
+        if (peer) {
+            fprintf(parser->outf, "peer: peer exists\n");
+            return -1;
+        }
+
+        /* pick first */
+        manager_peer_add(parser->manager, &peer_addr, remote_itad_num);
+    } else if (strcmp(subcmd, "route-map") == 0) {
+        char *routemap_name = strtok(NULL, " ");
+        if (!routemap_name) {
+            fprintf(parser->outf, "peer: route map name required\n");
+            return -1;
+        }
+
+        routemap_t *routemap = pib_routemap_find(parser->manager->pib,
+            routemap_name);
+        if (!routemap) {
+            fprintf(parser->outf, "peer: route map not found\n");
+            return -1;
+        }
+
+        char *direction = strtok(NULL, " ");
+        if (!direction) {
+            fprintf(parser->outf, "peer: directon required\n");
+            return -1;
+        }
+
+        if (strcmp(direction, "in"))
+            peer->routemap_in = routemap;
+        else if (strcmp(direction, "out"))
+            peer->routemap_out = routemap;
+        else {
+            fprintf(parser->outf, "peer: unrecognized direction\n");
+            return -1;
+        }
+    } else {
+        fprintf(parser->outf, "peer: unrecognized argument: %s\n", subcmd);
+        return -1;
+    }
     
     return 0;
 }
@@ -530,7 +902,7 @@ const cmd_def_t cmds_root[] = {
     { "enable",         &cmd_enable, "enable privileged commands", NULL },
     { "disable",        &cmd_disable, "disable privileged commands", NULL },
     { "configure",      &cmd_configure, "enter configuration mode", NULL },
-    { "show",           &cmd_show, "show running system information", "show < running-config | peers | sessions | session <host> | route >" },
+    { "show",           &cmd_show, "show running system information", "show < running-config | peers | session [addr] | route [destination] | acl [name] | route-map [name] >" },
     { "shutdown",       &cmd_shutdown, "shutdown system", NULL },
     { NULL,             NULL, NULL, NULL }
 };
@@ -541,16 +913,19 @@ const cmd_def_t cmds_config[] = {
     { "help",           &cmd_help,"show command help", NULL },
     { "log",            &cmd_config_log, "set log file", "log <log file>" },
     { "bind-address",   &cmd_config_bind, "set bind address and port", "bind-address <addr> <port>" },
-    { "prefix-list",    &cmd_config_prefixlist, "define local prefix list", "prefix-list" },
+    { "route",          &cmd_config_route, "insert route into routing table", "route { add <af> <prefix> <app-proto> <server> | del <af> <prefi> }" },
+    { "acl",            &cmd_config_acl, "add acl entry", "acl <acl-name> { permit | deny } <expression>" },
+    { "route-map",      &cmd_config_routemap, "define route map", "route-map <map-name> [ permit | deny ]" },
     { "trip",           &cmd_config_trip, "trip configuration", "trip <itad>" },
     { NULL,             NULL, NULL, NULL }
 };
 
-const cmd_def_t cmds_prefixlist[] = {
+const cmd_def_t cmds_routemap[] = {
     { "end",            &cmd_end, "exit from configure mode", NULL },
     { "exit",           &cmd_exit,"exit current context", NULL },
     { "help",           &cmd_help,"show command help", NULL },
-    { "prefix",         &cmd_config_prefixlist_prefix, "add prefix", "prefix <pfx-type> <prefix> <app-layer-proto> <server>" },
+    { "match",          &cmd_config_routemap_match, "match routes", "match <af> <acl-name> [ <acl-name> ... ]" },
+    { "set",            &cmd_config_routemap_set, "modify routes", "set <attribute> <value> ... see documentation" },
     { NULL,             NULL, NULL, NULL }
 };
 
@@ -560,14 +935,15 @@ const cmd_def_t cmds_trip[] = {
     { "help",           &cmd_help,"show command help", NULL },
     { "ls-id",          &cmd_config_trip_lsid, "set local id", "ls-id <id in dotted notation" },
     { "timers",         &cmd_config_trip_timers, "set timers", "timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]" },
-    { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> remote-itad <itad>" },
+    { "default",        &cmd_config_trip_default, "set defaults", "default { local-preference | metric } <value>" },
+    { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> { remote-itad <itad> | route-map <map-name> }" },
     { NULL,             NULL, NULL, NULL }
 };
 
 const cmd_def_t *ctx_cmds[] = {
     cmds_root,
     cmds_config,
-    cmds_prefixlist,
+    cmds_routemap,
     cmds_trip
 };
 

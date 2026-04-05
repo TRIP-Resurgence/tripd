@@ -33,16 +33,17 @@
 typedef enum {
     CTX_ROOT,       /**< Root context */
     CTX_CONFIG,     /**< Config context */
-    CTX_PREFIXLIST, /**< Prefix list context */
+    CTX_ROUTEMAP,   /**< Prefix list context */
     CTX_TRIP,       /**< TRIP routing context */
 } cmd_context_t;
 
 /** \brief Parser state */
 typedef struct {
-    int                 enabled;
-    cmd_context_t       ctx;
+    int                     enabled;
+    cmd_context_t           ctx;
 
-    uint32_t            itad; /**< TRIP context ITAD */
+    uint32_t                itad;       /**< TRIP context ITAD */
+    routemap_statement_t   *routemap_statement;/**< Route map statement context*/
 } parser_state_t;
 
 /** \brief Parser object */

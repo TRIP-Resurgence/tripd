@@ -19,15 +19,19 @@
 */
 
 /** \file
- * \brief Telephony Routing Information Base */
+ * \brief Telephony Routing Information Base
+ */
 
 #ifndef _TRIB_H
 #define _TRIB_H
 
 #include <protocol/protocol.h>
 
+#include "pib.h"
+
 #include <stddef.h>
 #include <time.h>
+
 
 typedef enum {
     ENTRY_TYPE_TRIP,
@@ -43,11 +47,13 @@ typedef struct {
     char       *prefix;         /**< Route prefix (address) */
 
     entry_type_t type;          /**< Route type */
+
+    uint32_t    origin_itad;    /**< ITAD routed originated from */
     
     /* learned from */
-    uint32_t    itad;           /**< Peer ITAD for internal or external used for
+    uint32_t    learn_itad;     /**< Peer ITAD for internal or external used for
                                     Ext-TRIB and Loc-TRIB */
-    uint32_t    lsid;           /**< Peer LS ID */
+    uint32_t    learn_lsid;     /**< Peer LS ID */
 
     uint32_t    seq;            /**< Sequence number */
     time_t      time;           /**< Learn time */
@@ -67,8 +73,8 @@ typedef struct {
 typedef struct {
     uint32_t    peer_itad;      /**< Peer ITAD used in Adj-TRIBs */
     entry_t   **table;
-    size_t      size;
-    size_t      capacity;
+    size_t      size, capacity;
+    routemap_t *routemap;       /**< Insertion routemap */
 } table_t;
 
 /** \brief Telephony Routing Information Base
@@ -130,7 +136,7 @@ void trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out);
 void trib_destroy(trib_t *trib);
 
 /** \brief Add route to table */
-void trib_table_add(table_t *table, entry_t *route);
+void trib_table_insert(table_t *table, entry_t *route);
 
 /** \brief Execute route selection
  *
