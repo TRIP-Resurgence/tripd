@@ -27,7 +27,7 @@
 
 #include "pib.h"
 
-#define _COMPONENT_ "pib"
+#define _COMPONENT_ "db"
 
 #include <logging/logging.h>
 

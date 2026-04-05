@@ -28,7 +28,7 @@
 #include "trib.h"
 #include "db/pib.h"
 
-#define _COMPONENT_ "trib"
+#define _COMPONENT_ "db"
 
 #include <logging/logging.h>
 
