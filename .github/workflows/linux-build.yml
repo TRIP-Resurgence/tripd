@@ -53,13 +53,13 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: tripd-linux-deb
-        path: ./*.deb
+        path: ./tripd*.deb
 
     - name: Upload TGZ artifact
       uses: actions/upload-artifact@v4
       with:
         name: tripd-linux-tarball
-        path: ./*.tar.gz
+        path: ./tripd*.tar.gz
 
   deploy:
     environment:
