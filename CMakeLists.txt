@@ -29,10 +29,6 @@ project(
 # gnu dirs
 include(GNUInstallDirs)
 
-if(CMAKE_INSTALL_PREFIX STREQUAL "/usr")
-    set(CMAKE_INSTALL_SYSCONFDIR "/etc" CACHE PATH "" FORCE)
-endif()
-
 
 # source
 include_directories("src/")
@@ -50,7 +46,13 @@ add_compile_options(-Wall -Wextra -Wno-pedantic -Wno-sign-compare -Wno-unused-pa
 add_link_options(-coverage)
 
 add_compile_definitions(TRIPD_VERSION="${TRIPD_VERSION}")
-add_compile_definitions(TRIPD_CONFIG="${CMAKE_INSTALL_SYSCONFDIR}/tripd.conf")
+
+if(CMAKE_INSTALL_PREFIX STREQUAL "/usr")
+    set(CONFIG_PATH "/etc")
+else()
+    set(CONFIG_PATH "${CMAKE_INSTALL_PREFIX}/etc")
+endif()
+add_compile_definitions(TRIPD_CONFIG="${CONFIG_PATH}/tripd.conf")
 
 # components
 
@@ -132,13 +134,26 @@ endif()
 
 
 install(TARGETS tripd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES tripd.conf DESTINATION ${CMAKE_INSTALL_SYSCONFDIR})
+
+# config
+if(CMAKE_INSTALL_PREFIX STREQUAL "/usr")
+    install(FILES tripd.conf DESTINATION "/etc")
+else()
+    install(FILES tripd.conf DESTINATION "etc")
+endif()
 
 
 # packaging
 
+set(CPACK_GENERATOR "TGZ;DEB")
+
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
+
 set(CPACK_PACKAGE_NAME tripd)
 set(CPACK_PACKAGE_VERSION ${TRIPD_VERSION})
+set(CPACK_SET_DESTDIR YES)
+set(CPACK_PACKAGING_INSTALL_PREFIX "/")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "arf20 <arf20@arf20.com>")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6")
