@@ -121,8 +121,14 @@ endif()
 
 # installation
 
-install(TARGETS tripd RUNTIME DESTINATION bin)
-install(FILES tripd.conf DESTINATION etc)
+include(GNUInstallDirs)
+
+if(CMAKE_INSTALL_PREFIX STREQUAL "/usr")
+    set(CMAKE_INSTALL_SYSCONFDIR "/etc" CACHE PATH "" FORCE)
+endif()
+
+install(TARGETS tripd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES tripd.conf DESTINATION ${CMAKE_INSTALL_SYSCONFDIR})
 
 
 # packaging
