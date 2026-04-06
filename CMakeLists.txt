@@ -26,6 +26,14 @@ project(
     LANGUAGES C
 )
 
+# gnu dirs
+include(GNUInstallDirs)
+
+if(CMAKE_INSTALL_PREFIX STREQUAL "/usr")
+    set(CMAKE_INSTALL_SYSCONFDIR "/etc" CACHE PATH "" FORCE)
+endif()
+
+
 # source
 include_directories("src/")
 
@@ -42,6 +50,7 @@ add_compile_options(-Wall -Wextra -Wno-pedantic -Wno-sign-compare -Wno-unused-pa
 add_link_options(-coverage)
 
 add_compile_definitions(TRIPD_VERSION="${TRIPD_VERSION}")
+add_compile_definitions(TRIPD_CONFIG="${CMAKE_INSTALL_SYSCONFDIR}/tripd.conf")
 
 # components
 
@@ -121,11 +130,6 @@ endif()
 
 # installation
 
-include(GNUInstallDirs)
-
-if(CMAKE_INSTALL_PREFIX STREQUAL "/usr")
-    set(CMAKE_INSTALL_SYSCONFDIR "/etc" CACHE PATH "" FORCE)
-endif()
 
 install(TARGETS tripd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES tripd.conf DESTINATION ${CMAKE_INSTALL_SYSCONFDIR})

@@ -38,7 +38,7 @@
 
 #include <unistd.h>
 
-#define DEFAULT_CONFIG_PATH "/usr/local/etc/tripd.conf"
+#define DEFAULT_CONFIG_PATH TRIPD_CONFIG
 
 
 static parser_t *g_parser = NULL;
