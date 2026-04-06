@@ -46,6 +46,21 @@ jobs:
       working-directory: ${{github.workspace}}/build
       run: ctest -C ${{env.BUILD_TYPE}} -T test -T coverage
 
+    - name: Package
+      run: cpack --config build/CPackConfig.cmake --verbose -G "TGZ;DEB"
+
+    - name: Upload DEB artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tripd-linux-deb
+        path: ./*.deb
+
+    - name: Upload TGZ artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tripd-linux-tarball
+        path: ./*.tar.gz
+
   deploy:
     environment:
       name: github-pages

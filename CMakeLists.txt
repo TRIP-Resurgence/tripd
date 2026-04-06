@@ -1,9 +1,30 @@
 cmake_minimum_required(VERSION 3.20)
 
+# cmake modules
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(GitVersionDetect)
+
+# version from tag
+set(TRIPD_VERSION_MAJOR ${GITVERSIONDETECT_VERSION_MAJOR})
+set(TRIPD_VERSION_MINOR ${GITVERSIONDETECT_VERSION_MINOR})
+set(TRIPD_VERSION_PATCH ${GITVERSIONDETECT_VERSION_PATCH})
+set(TRIPD_VERSION ${TRIPD_VERSION_MAJOR}.${TRIPD_VERSION_MINOR}.${TRIPD_VERSION_PATCH})
+set(TRIPD_NUM_COMMIT ${GITVERSIONDETECT_VERSION_COMMIT_NUM}-${GITVERSIONDETECT_VERSION_COMMIT_SHA})
+
+message(STATUS "Git version ${GITVERSIONDETECT_VERSION}")
+
+# commands for code server
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-project(trip)
+project(
+    trip
+    VERSION ${TRIPD_VERSION}
+    DESCRIPTION "TRIP Resurgence Routing Daemon"
+    HOMEPAGE_URL "https://github.com/TRIP-Resurgence/tripd"
+    LANGUAGES C
+)
 
+# source
 include_directories("src/")
 
 file(GLOB PROTOCOL_SRC "src/protocol/*.c")
@@ -14,8 +35,11 @@ file(GLOB LOGGING_SRC "src/logging/*.c")
 file(GLOB UTIL_SRC "src/util/*.c")
 file(GLOB TRIPD_SRC "src/tripd/*.c")
 
+# flags
 add_compile_options(-Wall -Wextra -Wno-pedantic -Wno-sign-compare -Wno-unused-parameter -Wno-unused-variable -coverage)
 add_link_options(-coverage)
+
+add_compile_definitions(TRIPD_VERSION="${GITVERSIONDETECT_VERSION}")
 
 # components
 
@@ -91,4 +115,23 @@ if (DOXYGEN)
 else (DOXYGEN_FOUND)
     message("Doxygen needed for documentation")
 endif()
+
+
+# installation
+
+install(TARGETS tripd RUNTIME DESTINATION bin)
+install(FILES tripd.conf DESTINATION etc)
+
+
+# packaging
+
+set(CPACK_PACKAGE_NAME tripd)
+set(CPACK_PACKAGE_VERSION ${GITVERSIONDETECT_VERSION})
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "arf20 <arf20@arf20.com>")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6")
+set(CPACK_DEBIAN_PACKAGE_NAME "tripd")
+set(CPACK_DEBIAN_PACKAGE_SECTION "net")
+
+include(CPack)
 
