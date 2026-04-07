@@ -27,6 +27,7 @@
 #include <command/cli.h>
 
 #include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 
@@ -95,8 +96,10 @@ logging_log(loglevel_t level, const char *component, const char *fmt, ...)
 
     fprintf(g_logf, LINE_START "[%s %s %s] %s\n",
         timestr(), loglevel_strs[level], component, logbuff);
+    fflush(g_logf);
 
-    cli_print_prompt();
+    if (g_logf == stderr || g_logf == stdout)
+        cli_print_prompt();
 }
 
 
@@ -117,8 +120,10 @@ logging_log_debug(loglevel_t level, const char *component,
 
     fprintf(g_logf, LINE_START "[%s %s %s] %s:%s():%d: %s\n", timestr(),
         loglevel_strs[level], component, basename(file), func, line, logbuff);
+    fflush(g_logf);
 
-    cli_print_prompt();
+    if (g_logf == stderr || g_logf == stdout)
+        cli_print_prompt();
 }
 
 

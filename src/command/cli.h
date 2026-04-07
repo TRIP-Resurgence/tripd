@@ -31,7 +31,7 @@
 void cli_print_prompt();
 
 /** \brief Command loop */
-void cli_run(parser_t *parser);
+int cli_run(parser_t *parser);
 
 /** \brief Reset terminal */
 void cli_reset();

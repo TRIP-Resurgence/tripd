@@ -37,7 +37,8 @@
 #define _COMPONENT_ "cli"
 
 static parser_t *g_parser = NULL;
-struct termios oldt;
+static struct termios oldt;
+static int oldt_set = 0;
 
 #define BASE_PROMPT "tripd"
 
@@ -116,7 +117,7 @@ autocomplete(parser_t *parser, char *line, char **line_ptr)
     }
 }
 
-void
+int
 cli_run(parser_t *parser)
 {
     char line[4096], *line_ptr = line;
@@ -128,17 +129,24 @@ cli_run(parser_t *parser)
         ERROR("failed to get terminal attrs");
     newt = oldt;
     newt.c_lflag &= ~(ICANON | ECHO);
+    newt.c_cc[VMIN] = 1;
+    newt.c_cc[VTIME] = 0;
     if (tcsetattr(STDIN_FILENO, TCSANOW, &newt) < 0)
         ERROR("failed to set terminal attrs");
+    oldt_set = 1;
 
     cli_print_prompt();
 
     char c = 0;
     int esc = 0, csi = 0;
     while (1) {
-        if (read(STDIN_FILENO, &c, 1) < 1) {
+        ssize_t rc = read(STDIN_FILENO, &c, 1);
+        if (rc < 0) {
             ERROR("reading stdin: %s", strerror(errno));
-            break;
+            return -1;
+        } else if (rc < 1) {
+            INFO("console EOF");
+            return 0;
         }
 
         /* ignore Fe and CSI sequencies */
@@ -200,7 +208,7 @@ cli_run(parser_t *parser)
             *line_ptr++ = c;
             if (write(STDOUT_FILENO, &c, 1) < 1) {
                 ERROR("writing stdout: %s", strerror(errno));
-                break;
+                return -1;
             }
         }
     }
@@ -209,8 +217,9 @@ cli_run(parser_t *parser)
 void
 cli_reset()
 {
-    if (tcsetattr(STDIN_FILENO, TCSANOW, &oldt) < 0)
-        ERROR("failed to set terminal attrs");
+    if (oldt_set)
+        if (tcsetattr(STDIN_FILENO, TCSANOW, &oldt) < 0)
+            ERROR("failed to set terminal attrs");
     printf("\r");
 }
 
