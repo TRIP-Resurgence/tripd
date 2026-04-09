@@ -76,6 +76,7 @@ entry_destroy(entry_t *entry)
 {
     free(entry->prefix);
     free(entry->nexthop);
+    free(entry->itad_path);
     free(entry);
 }
 
@@ -228,8 +229,11 @@ table_select_into(table_t *t1, table_t *t2, uint32_t itad)
             continue;
         }
 
-        if (entry_compare(*match, t2->table[i], itad))
+        /* replace entry */
+        if (entry_compare(*match, t2->table[i], itad)) {
+            entry_destroy(*match);
             *match = entry_clone(t2->table[i]);
+        }
     }
 }
 
@@ -249,12 +253,12 @@ apply_policy(table_t *dst, const table_t *src, uint32_t local_itad,
     const routemap_t *policy)
 {
     for (size_t i = 0; i < src->size; i++) {
-        entry_t *e = entry_clone(src->table[i]);
-
         const routemap_statement_t *s =
             routemap_match(policy, src->table[i]->prefix);
         if (!s)
             continue;   /* default deny */
+        
+        entry_t *e = entry_clone(src->table[i]);
 
         for (size_t j = 0; j < s->actions_size; j++) {
             switch (s->actions[j].attribute) {
@@ -263,6 +267,7 @@ apply_policy(table_t *dst, const table_t *src, uint32_t local_itad,
                 e->local_pref = s->actions[j].value;
                 break;
             case ROUTEMAP_SET_NEXTHOP:
+                free(e->nexthop);
                 e->nexthop = strdup(s->actions[j].valstr2);
                 break;
             case ROUTEMAP_SET_ITADPATH_PREPEND:
