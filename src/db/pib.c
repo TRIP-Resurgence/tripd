@@ -52,7 +52,7 @@ pib_new()
 
     p->routemaps_capacity = INIT_VEC_CAPACITY;
     p->routemaps_size = 0;
-    p->routemaps = malloc(p->acls_capacity * sizeof(routemap_t));
+    p->routemaps = malloc(p->routemaps_capacity * sizeof(routemap_t));
 
     return p;
 }
@@ -107,10 +107,10 @@ pib_acl_new(pib_t *pib, const char *name)
 routemap_t *
 pib_routemap_new(pib_t *pib, const char *name, int deny)
 {
-    if (pib->routemaps_capacity < pib->acls_size + 1) {
+    if (pib->routemaps_capacity < pib->routemaps_size + 1) {
         pib->routemaps_capacity *= 2;
-        pib->routemaps = realloc(pib->acls,
-            pib->acls_capacity * sizeof(routemap_t));
+        pib->routemaps = realloc(pib->routemaps,
+            pib->routemaps_capacity * sizeof(routemap_t));
     }
 
     routemap_t *r = &pib->routemaps[pib->routemaps_size++];
@@ -231,7 +231,9 @@ acl_check(const acl_t *acl, const char *target)
 {
     for (size_t i = 0; i < acl->entries_size; i++) {
         const char *expr = acl->entries[i].expression;
-        if (ispfxdigit(expr[0]) && strncmp(expr, target, strlen(expr)) == 0) {
+        if (ispfxdigit(expr[0]) && strlen(expr) <= strlen(target)
+            && strncmp(expr, target, strlen(expr)) == 0)
+        {
             return !acl->entries[i].deny;
         } else if (pattern_check(expr, target)) {
             return !acl->entries[i].deny;
@@ -319,7 +321,7 @@ routemap_statement_new(routemap_t *routemap, uint32_t seq, int deny)
     if (routemap->capacity < routemap->size + 1) {
         routemap->capacity *= 2;
         routemap->statements = realloc(routemap->statements,
-            routemap->capacity * sizeof(acl_t*));
+            routemap->capacity * sizeof(routemap_statement_t));
     }
 
     /* ordered insert by seq */
@@ -327,7 +329,7 @@ routemap_statement_new(routemap_t *routemap, uint32_t seq, int deny)
     for (; i < routemap->size && routemap->statements[i].seq < seq; i++);
 
     memmove(&routemap->statements[i + 1], &routemap->statements[i],
-        sizeof(routemap_statement_t));
+        (routemap->size - i) * sizeof(routemap_statement_t));
     routemap->size++;
 
 
