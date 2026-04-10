@@ -55,7 +55,7 @@ typedef enum {
 typedef struct {
     int                 af;
     acl_t             **acls;
-    size_t              size, capacity;
+    size_t              size, capacity; /**< acls */
 } routemap_matcher_t;
 
 /** \brief Route map Action */
@@ -79,7 +79,7 @@ typedef struct {
 typedef struct {
     char                   *name;
     routemap_statement_t   *statements;
-    size_t                  size, capacity;
+    size_t                  size, capacity; /**< statements */
 } routemap_t;
 
 

@@ -37,6 +37,13 @@
 
 #define INIT_VEC_CAPACITY   16
 
+/** \brief Ensure vector has at least 1 free slot for new element */
+#define VEC_ENSURE_CAPACITY(vec, size, capacity, type) \
+    if ((capacity) < (size) + 1) { \
+        (capacity) *= 2; \
+        (vec) = realloc((vec), (capacity) * sizeof(type)); \
+    }
+
 static pib_t g_pib = { 0 };
 
 pib_t *
@@ -88,10 +95,7 @@ pib_destroy(pib_t *pib)
 acl_t *
 pib_acl_new(pib_t *pib, const char *name)
 {
-    if (pib->acls_capacity < pib->acls_size + 1) {
-        pib->acls_capacity *= 2;
-        pib->acls = realloc(pib->acls, pib->acls_capacity * sizeof(acl_t));
-    }
+    VEC_ENSURE_CAPACITY(pib->acls, pib->acls_size, pib->acls_capacity, acl_t);
 
     acl_t *a = &pib->acls[pib->acls_size++];
 
@@ -107,11 +111,8 @@ pib_acl_new(pib_t *pib, const char *name)
 routemap_t *
 pib_routemap_new(pib_t *pib, const char *name, int deny)
 {
-    if (pib->routemaps_capacity < pib->routemaps_size + 1) {
-        pib->routemaps_capacity *= 2;
-        pib->routemaps = realloc(pib->routemaps,
-            pib->routemaps_capacity * sizeof(routemap_t));
-    }
+    VEC_ENSURE_CAPACITY(pib->routemaps, pib->routemaps_size,
+        pib->routemaps_capacity, routemap_t);
 
     routemap_t *r = &pib->routemaps[pib->routemaps_size++];
 
@@ -146,11 +147,8 @@ pib_routemap_find(const pib_t *pib, const char *name)
 void
 acl_insert(acl_t *acl, int deny, const char *expression)
 {
-    if (acl->entries_capacity < acl->entries_size + 1) {
-        acl->entries_capacity *= 2;
-        acl->entries = realloc(acl->entries,
-            acl->entries_capacity * sizeof(acl_entry_t));
-    }
+    VEC_ENSURE_CAPACITY(acl->entries, acl->entries_size,
+        acl->entries_capacity, acl_entry_t);
 
     acl_entry_t *e = &acl->entries[acl->entries_size++];
 
@@ -175,6 +173,14 @@ ispfxdigit(char c)
 
 /**
  * \brief Check target against asterisk pattern
+ *
+ * Starts with character '_'
+ * 
+ * 0-9: A number matchis this number.
+ * X: The letter X or x represents a single digit from 0 to 9.
+ * Z: The letter Z or z represents any digit from 1 to 9.
+ * N: The letter N or n matches any digit from 2-9.
+ * .: The '.' character matches one or more characters.
  *
  * \return 1 on match 0 on no match
  */
@@ -222,6 +228,27 @@ pattern_check(const char *pat, const char *target)
 }
 
 /**
+ * \brief Match target against ACL expression
+ *
+ * Does not check correctness of ACL expression
+ *
+ * \return 1 on matched, 0 otherwise
+ */
+int
+acl_entry_match(const char *expr, const char *target)
+{
+    return
+        /* is prefix */
+        (ispfxdigit(expr[0])
+            /* target is under prefix (prefix shorter than target
+             * and prefix digits match) */
+            && (strlen(expr) <= strlen(target))
+            && (strncmp(expr, target, strlen(expr)) == 0)) ||
+        /* or must be pattern, check */
+        (pattern_check(expr, target));
+}
+
+/**
  * \brief Check target against ACL
  *
  * \return 1 on permit, 0 on deny
@@ -231,26 +258,17 @@ acl_check(const acl_t *acl, const char *target)
 {
     for (size_t i = 0; i < acl->entries_size; i++) {
         const char *expr = acl->entries[i].expression;
-        if (ispfxdigit(expr[0]) && strlen(expr) <= strlen(target)
-            && strncmp(expr, target, strlen(expr)) == 0)
-        {
+        if (acl_entry_match(expr, target))
             return !acl->entries[i].deny;
-        } else if (pattern_check(expr, target)) {
-            return !acl->entries[i].deny;
-        }
     }
-
     return 0; /* default deny */
 }
 
 routemap_matcher_t *
 routemap_statement_matcher_new(routemap_statement_t *statement, int af)
 {
-    if (statement->matchers_capacity < statement->matchers_size + 1) {
-        statement->matchers_capacity *= 2;
-        statement->matchers = realloc(statement->matchers,
-            statement->matchers_capacity * sizeof(routemap_matcher_t));
-    }
+    VEC_ENSURE_CAPACITY(statement->matchers, statement->matchers_size,
+        statement->matchers_capacity, routemap_matcher_t);
 
     routemap_matcher_t *m = &statement->matchers[statement->matchers_size++];
 
@@ -266,14 +284,11 @@ void
 routemap_statement_insert_action(routemap_statement_t *statement,
     const routemap_action_t *action)
 {
-    if (statement->actions_capacity < statement->actions_size + 1) {
-        statement->actions_capacity *= 2;
-        statement->actions = realloc(statement->actions,
-            statement->actions_capacity * sizeof(routemap_action_t));
-    }
+    VEC_ENSURE_CAPACITY(statement->actions, statement->actions_size,
+        statement->actions_capacity, routemap_action_t);
 
-    routemap_action_t *s = &statement->actions[statement->actions_size++];
-    memcpy(s, action, sizeof(routemap_action_t));
+    routemap_action_t *stmt = &statement->actions[statement->actions_size++];
+    memcpy(stmt, action, sizeof(routemap_action_t));
 }
 
 void
@@ -288,11 +303,8 @@ routemap_statement_action_deinit(routemap_action_t *action)
 void
 routemap_matcher_insert(routemap_matcher_t *matcher, const acl_t *acl)
 {
-    if (matcher->capacity < matcher->size + 1) {
-        matcher->capacity *= 2;
-        matcher->acls = realloc(matcher->acls,
-            matcher->capacity * sizeof(acl_t*));
-    }
+    VEC_ENSURE_CAPACITY(matcher->acls, matcher->size,
+        matcher->capacity, acl_t*);
 
     matcher->acls[matcher->size++] = (acl_t *)acl;
 }
@@ -318,11 +330,8 @@ routemap_statement_action_find(const routemap_statement_t *statement,
 routemap_statement_t *
 routemap_statement_new(routemap_t *routemap, uint32_t seq, int deny)
 {
-    if (routemap->capacity < routemap->size + 1) {
-        routemap->capacity *= 2;
-        routemap->statements = realloc(routemap->statements,
-            routemap->capacity * sizeof(routemap_statement_t));
-    }
+    VEC_ENSURE_CAPACITY(routemap->statements, routemap->size,
+        routemap->capacity, routemap_statement_t);
 
     /* ordered insert by seq */
     size_t i = 0;

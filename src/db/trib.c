@@ -35,6 +35,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define INIT_TABLE_CAPACITY 256
+#define INIT_ADJ_TRIBS_CAPACITY 32
+
 static trib_t g_trib = { 0 };
 
 
@@ -60,7 +63,9 @@ entry_t *
 entry_clone(const entry_t *entry)
 {
     entry_t *ne = malloc(sizeof(entry_t));
-    memcpy(ne, entry, sizeof(entry_t));
+    /* shallow copy */
+    *ne = *entry;
+    /* deep copy */
     if (entry->itad_path_size) {
         ne->itad_path = malloc(sizeof(uint32_t) * entry->itad_path_size);
         memcpy(ne->itad_path, entry->itad_path, sizeof(uint32_t)
@@ -83,7 +88,7 @@ entry_destroy(entry_t *entry)
 static void
 table_init(table_t *t)
 {
-    t->capacity = 256;
+    t->capacity = INIT_TABLE_CAPACITY;
     t->size = 0;
     t->table = malloc(t->capacity * sizeof(entry_t*));
 }
@@ -117,7 +122,7 @@ trib_new(uint32_t local_itad)
     table_init(&t->ext_trib);
     table_init(&t->loc_trib);
 
-    t->adj_tribs_capacity = 256;
+    t->adj_tribs_capacity = INIT_ADJ_TRIBS_CAPACITY;
     t->adj_tribs_size = 0;
     t->adj_tribs_in = malloc(t->adj_tribs_capacity * sizeof(table_t));
     t->adj_tribs_out = malloc(t->adj_tribs_capacity * sizeof(table_t));
@@ -161,7 +166,7 @@ trib_table_insert(table_t *table, entry_t *entry)
     if (table->capacity < table->size + 1) {
         table->capacity *= 2;
         table->table = realloc(table->table,
-            table->capacity * sizeof(entry_t));
+            table->capacity * sizeof(entry_t*));
     }
 
     table->table[table->size++] = entry;
@@ -178,7 +183,7 @@ trib_table_insert(table_t *table, entry_t *entry)
  * 6. Oldest route
  * 7. Highest LS ID
  *
- * \return e1 < e2
+ * \return 1 if e2 preferred over e1, 0 otherwise
  */
 static int
 entry_compare(const entry_t *e1, const entry_t *e2, uint32_t itad)
@@ -292,13 +297,12 @@ trib_update(trib_t *trib)
     trib->loc_trib.size = 0;
     
     /* Phase 2a: local routes and external Ext-TRIBs-in to Ext-TRIB */
-    table_t scratch;
+    table_t scratch; /* temporary working table */
     table_init(&scratch);
 
     table_select_into(&trib->ext_trib, &trib->local_routes, trib->local_itad);
     for (size_t i = 0; i < trib->adj_tribs_size; i++) {
         if (trib->adj_tribs_in[i].peer_itad != trib->local_itad) {
-            scratch.size = 0;
             /* apply input policy if applicable */
             if (trib->adj_tribs_in[i].routemap) {
                 scratch.size = 0;
