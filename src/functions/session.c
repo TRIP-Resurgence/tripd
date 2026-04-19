@@ -232,7 +232,7 @@ update_session(const session_t *s)
 void
 session_shutdown(session_t *session)
 {
-    /* TODO send CEASE NOTIFICATION */
+    send_notification(session->fd, NOTIF_CODE_CEASE, 0);
     DEBUG("shutting down session %s", session_str(session));
     shutdown(session->fd, SHUT_RDWR); /* recv loop does close() */
     session_change_state(session, STATE_IDLE);
