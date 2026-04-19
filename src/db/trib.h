@@ -67,6 +67,8 @@ typedef struct {
     size_t      itad_path_size;
 
     int         withdrawn;      /**< Mark as withdrawn */
+    
+    int         sent;           /**< Route has been UPDATE'd to peer */
 } entry_t;
 
 /** \brief Route Table */

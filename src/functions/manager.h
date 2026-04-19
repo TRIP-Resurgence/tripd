@@ -41,6 +41,7 @@ typedef struct {
     int         run;                /**< run threads = 1 */
     pthread_t   listen_thread;
     pthread_t   maintenance_thread;
+    pthread_t   update_thread;
     int         fd;
 
     /* Local */
@@ -90,6 +91,9 @@ peer_t *manager_peer_find(manager_t *manager, const struct sockaddr_in6 *addr);
 
 /** \brief Run accept loop in thread */
 void manager_run(manager_t *manager);
+
+/** \brief Schedule UPDATEs */
+void manager_schedule_update(manager_t *manager);
 
 /** \brief Stop accept loop */
 void manager_stop(manager_t *manager);

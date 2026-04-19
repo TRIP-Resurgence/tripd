@@ -579,7 +579,7 @@ maintenance_loop(void *arg)
             if (now - s->last_write_time > s->keepalive) {
                 int n = new_msg_keepalive(buff, sizeof(buff));
 
-                DEBUG("sending KEEPALIVE");
+                DEBUG("sending KEEPALIVE to %s", sockaddr6_str(&s->peer->addr));
                 SOCK_TRY_SEND(send(s->fd, buff, n, 0), session_shutdown(s));
                 s->last_write_time = now;
             }
@@ -599,10 +599,18 @@ maintenance_loop(void *arg)
         usleep(100000);
     }
 
+    return NULL;
+}
+
+static void *
+update_loop(void *arg)
+{
+    manager_t *m = arg;
+
+
 
     return NULL;
 }
-    
 
 
 manager_t *
@@ -766,6 +774,13 @@ manager_run(manager_t *manager)
     pthread_create(&manager->listen_thread, NULL, &listen_loop, manager);
     pthread_create(&manager->maintenance_thread, NULL, &maintenance_loop,
         manager);
+    pthread_create(&manager->update_thread, NULL, &update_loop, manager);
+}
+
+void
+manager_schedule_update(manager_t *manager)
+{
+    /* TODO: signal update thread */
 }
 
 void
@@ -775,6 +790,7 @@ manager_stop(manager_t *manager)
     shutdown(manager->fd, SHUT_RDWR);
     pthread_join(manager->listen_thread, NULL);
     pthread_join(manager->maintenance_thread, NULL);
+    pthread_join(manager->update_thread, NULL);
 }
 
 void

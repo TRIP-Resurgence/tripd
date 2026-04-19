@@ -472,7 +472,8 @@ cmd_config_route(parser_t *parser, int no, char *args)
         e->metric = UINT32_MAX;
         e->itad_path = NULL;
         e->itad_path_size = 0;
-        e->withdrawn= 0;
+        e->withdrawn = 0;
+        e->sent = 0;
 
         trib_table_insert(&parser->manager->trib->local_routes, e);
     } else if (strncmp(args, "del ", 4) == 0) {
@@ -483,6 +484,8 @@ cmd_config_route(parser_t *parser, int no, char *args)
     }
 
     trib_update(parser->manager->trib);
+
+    manager_schedule_update(parser->manager);
 
     return 0;
 }
