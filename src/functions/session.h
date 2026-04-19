@@ -95,6 +95,12 @@ const char *id_str(uint32_t id);
 /** \brief Session loop */
 void *session_loop(void *arg);
 
+/** \brief Update session
+ *
+ * Send UPDATEs to peer according to new entries in Adj-TRIB-Out
+ */
+void update_session(const session_t *s);
+
 /** \brief Shutdown socket, terminate connection and thread */
 void session_shutdown(session_t *session);
 

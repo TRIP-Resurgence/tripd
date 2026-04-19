@@ -60,7 +60,6 @@ typedef struct {
 
     /* attributes */
     char       *nexthop;        /**< Next hop server */
-
     uint32_t    local_pref;     /**< Degree of Preference */
     uint32_t    metric;         /**< MultiExitDisc */
     uint32_t   *itad_path;      /**< RoutedPath */
@@ -115,14 +114,6 @@ typedef struct {
     table_t     local_routes;
 } trib_t;
 
-
-/** \brief New entry
- *
- * Not marked withdrawned
- */
-entry_t *entry_new(uint16_t af, uint16_t app_proto, const char *prefix,
-    const char *nexthop, uint32_t seq, time_t time, uint32_t local_pref,
-    uint32_t metric);
 
 /** \brief Destroy entry */
 void entry_destroy(entry_t *entry);

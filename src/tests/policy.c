@@ -12,7 +12,7 @@ main()
     table_init(&dst);
 
     entry_t e = {
-        AF_E164, APP_PROTO_SIP, NULL, ENTRY_TYPE_TRIP, 0, 0, 0, 0, 0, NULL, 100, 100, NULL, 0, 0
+        AF_E164, APP_PROTO_SIP, NULL, ENTRY_TYPE_TRIP, 0, 0, 0, 0, 0, NULL, 100, 100, NULL, 0, 0, 0
     };
 
     e.prefix = "1234";

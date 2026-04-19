@@ -42,24 +42,6 @@ static trib_t g_trib = { 0 };
 
 
 entry_t *
-entry_new(uint16_t af, uint16_t app_proto, const char *prefix,
-    const char *nexthop, uint32_t seq, time_t time, uint32_t local_pref,
-    uint32_t metric)
-{
-    entry_t *e = malloc(sizeof(entry_t));
-    e->af = af;
-    e->app_proto = app_proto;
-    e->prefix = strdup(prefix);
-    e->nexthop = strdup(nexthop);
-    e->seq = seq;
-    e->time = time;
-    e->local_pref = local_pref;
-    e->metric = metric;
-    e->withdrawn = 0;
-    return e;
-}
-
-entry_t *
 entry_clone(const entry_t *entry)
 {
     entry_t *ne = malloc(sizeof(entry_t));

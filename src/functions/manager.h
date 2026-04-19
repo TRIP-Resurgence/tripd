@@ -42,6 +42,9 @@ typedef struct {
     pthread_t   listen_thread;
     pthread_t   maintenance_thread;
     pthread_t   update_thread;
+    pthread_mutex_t update_mut;
+    pthread_cond_t update_cond;
+
     int         fd;
 
     /* Local */

@@ -607,7 +607,15 @@ update_loop(void *arg)
 {
     manager_t *m = arg;
 
+    while (1) {
+        pthread_mutex_lock(&m->update_mut);
+        pthread_cond_wait(&m->update_cond, &m->update_mut);
 
+        for (size_t i = 0; i < m->sessions_size; i++)
+            update_session(m->sessions[i]);
+
+        pthread_mutex_unlock(&m->update_mut);
+    }
 
     return NULL;
 }
@@ -628,6 +636,8 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->run = 0;
     m->listen_thread = 0;
     m->maintenance_thread = 0;
+    m->update_mut = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    m->update_cond = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
     m->fd = 0;
 
     m->itad = 0;
@@ -780,7 +790,10 @@ manager_run(manager_t *manager)
 void
 manager_schedule_update(manager_t *manager)
 {
-    /* TODO: signal update thread */
+    /* wake up updater thread */
+    pthread_mutex_lock(&manager->update_mut);
+    pthread_cond_signal(&manager->update_cond);
+    pthread_mutex_unlock(&manager->update_mut);
 }
 
 void
