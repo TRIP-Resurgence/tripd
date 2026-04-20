@@ -26,6 +26,7 @@
 
 #include "session.h"
 
+#include "db/trib.h"
 #include "manager.h"
 #include "protocol/protocol.h"
 
@@ -206,27 +207,25 @@ void
 update_session(const session_t *s)
 {
     char buff[MAX_MSG_SIZE];
+    entry_t **new_ents = NULL;
 
-    /* should be enough */
-    size_t new_ents_size = 0, new_ents_capacity = 256;
-    entry_t **new_ents = malloc(sizeof(entry_t*) * new_ents_capacity);
+    /* entries that havent been sent UPDATE'd */
+    size_t new_ents_count = get_new_entries(s->adj_trib_out, &new_ents);
 
-    /* get new entries */
-    for (size_t i = 0; i < s->adj_trib_out->size; i++) {
-        if (s->adj_trib_in->table[i]->sent)
-            continue;
-
-        if (new_ents_size + 1 > new_ents_capacity) {
-            new_ents_capacity *= 2;
-            new_ents = realloc(new_ents, sizeof(entry_t*) * new_ents_capacity);
-        }
-
-        new_ents[new_ents_capacity] = s->adj_trib_in->table[i];
+    /* group entries by attributes */
+    entry_group_t *groups = NULL;
+    size_t groups_count = group_entries_by_attrs(new_ents, new_ents_count,
+        &groups);
+    
+    for (size_t i = 0; i < groups_count; i++) {
+        /* TODO: serialize attributes */
+        //new_msg_update(buff, MAX_MSG_SIZE, attrs, size);
+        //
+        free(groups[i].entries);
     }
 
-    /* TODO: group entries by attributes */
-    
-    //new_msg_update(buff, MAX_MSG_SIZE, attrs, size);
+    free(groups);
+    free(*new_ents);
 }
 
 void

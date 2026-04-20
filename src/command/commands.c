@@ -236,7 +236,7 @@ cmd_show(parser_t *parser, int no, char *args)
                     "DPETC"[t->loc_trib.table[i]->af - 1],
                     t->loc_trib.table[i]->prefix,
                     app_proto_str(t->loc_trib.table[i]->app_proto),
-                    t->loc_trib.table[i]->nexthop);
+                    t->loc_trib.table[i]->attrs.nexthop);
         } else {
         }
     } else if (strcmp(subcmd, "acl") == 0) {
@@ -463,15 +463,15 @@ cmd_config_route(parser_t *parser, int no, char *args)
         }
         e->prefix = strdup(pfx);
         e->type = ENTRY_TYPE_STATIC;
-        e->nexthop = strdup(srv);
+        e->attrs.nexthop = strdup(srv);
         e->learn_itad = parser->manager->itad;
         e->learn_lsid = 0;
         e->seq = 0;
         e->time = time(NULL);
-        e->local_pref = UINT32_MAX;
-        e->metric = UINT32_MAX;
-        e->itad_path = NULL;
-        e->itad_path_size = 0;
+        e->attrs.local_pref = UINT32_MAX;
+        e->attrs.metric = UINT32_MAX;
+        e->attrs.itad_path = NULL;
+        e->attrs.itad_path_size = 0;
         e->withdrawn = 0;
         e->sent = 0;
 

@@ -33,6 +33,14 @@
 #include <time.h>
 
 
+typedef struct {
+    char       *nexthop;        /**< Next hop server */
+    uint32_t    local_pref;     /**< Degree of Preference */
+    uint32_t    metric;         /**< MultiExitDisc */
+    uint32_t   *itad_path;      /**< RoutedPath */
+    size_t      itad_path_size;
+} entry_attrs_t;
+
 typedef enum {
     ENTRY_TYPE_TRIP,
     ENTRY_TYPE_CONNECTED,
@@ -58,12 +66,7 @@ typedef struct {
     uint32_t    seq;            /**< Sequence number */
     time_t      time;           /**< Learn time */
 
-    /* attributes */
-    char       *nexthop;        /**< Next hop server */
-    uint32_t    local_pref;     /**< Degree of Preference */
-    uint32_t    metric;         /**< MultiExitDisc */
-    uint32_t   *itad_path;      /**< RoutedPath */
-    size_t      itad_path_size;
+    entry_attrs_t attrs;        /**< Attributes */
 
     int         withdrawn;      /**< Mark as withdrawn */
     
@@ -77,6 +80,13 @@ typedef struct {
     size_t      size, capacity;
     routemap_t *routemap;       /**< Insertion routemap */
 } table_t;
+
+
+typedef struct {
+    entry_attrs_t attrs;        /**< Common attributes of group */
+    entry_t   **entries;        /**< Array of references to entries on a table*/
+    size_t      size, capacity;
+} entry_group_t;
 
 /** \brief Telephony Routing Information Base
  *
@@ -137,6 +147,26 @@ void trib_table_insert(table_t *table, entry_t *route);
  * Updates Ext-TRIB, Loc-TRIB and Ext-TRIBs-out
  */
 void trib_update(trib_t *trib);
+
+/** \brief Return array of new entry references to new
+ *
+ * Allocates array of references and assigns it to new_ents_out
+ *
+ * \param table Table with new entries
+ * \param new_ents_out Where to put entry references
+ * \return Number of new entries
+ */
+size_t get_new_entries(table_t *table, entry_t ***new_ents_out);
+
+/** \brief Group array of entry references by attributes
+ * 
+ * \param entries Input array
+ * \param entries_size Input array size
+ * \param groups_out Output entry reference groups
+ * \return Number of groups
+ */
+size_t group_entries_by_attrs(entry_t **entries, size_t entries_size,
+    entry_group_t **groups_out);
 
 #endif /* _TRIB_H */
 

@@ -48,13 +48,13 @@ entry_clone(const entry_t *entry)
     /* shallow copy */
     *ne = *entry;
     /* deep copy */
-    if (entry->itad_path_size) {
-        ne->itad_path = malloc(sizeof(uint32_t) * entry->itad_path_size);
-        memcpy(ne->itad_path, entry->itad_path, sizeof(uint32_t)
-            * entry->itad_path_size);
+    if (entry->attrs.itad_path_size) {
+        ne->attrs.itad_path = malloc(sizeof(uint32_t) * entry->attrs.itad_path_size);
+        memcpy(ne->attrs.itad_path, entry->attrs.itad_path, sizeof(uint32_t)
+            * entry->attrs.itad_path_size);
     }
     ne->prefix = strdup(entry->prefix);
-    ne->nexthop = strdup(entry->nexthop);
+    ne->attrs.nexthop = strdup(entry->attrs.nexthop);
     return ne;
 }
 
@@ -62,8 +62,8 @@ void
 entry_destroy(entry_t *entry)
 {
     free(entry->prefix);
-    free(entry->nexthop);
-    free(entry->itad_path);
+    free(entry->attrs.nexthop);
+    free(entry->attrs.itad_path);
     free(entry);
 }
 
@@ -170,14 +170,14 @@ trib_table_insert(table_t *table, entry_t *entry)
 static int
 entry_compare(const entry_t *e1, const entry_t *e2, uint32_t itad)
 {
-    if (e1->local_pref != e2->local_pref)
-        return e1->local_pref < e2->local_pref;
+    if (e1->attrs.local_pref != e2->attrs.local_pref)
+        return e1->attrs.local_pref < e2->attrs.local_pref;
     if (e1->type != e2->type)
         return e1->type < e2->type;
-    if (e1->itad_path_size != e2->itad_path_size)
-        return e1->itad_path_size < e2->itad_path_size;
-    if (e1->metric != e2->metric)
-        return e1->metric < e2->metric;
+    if (e1->attrs.itad_path_size != e2->attrs.itad_path_size)
+        return e1->attrs.itad_path_size < e2->attrs.itad_path_size;
+    if (e1->attrs.metric != e2->attrs.metric)
+        return e1->attrs.metric < e2->attrs.metric;
     if ((e1->learn_itad == itad) != (e2->learn_itad == itad))
         return e2->learn_itad == itad;
     if (e1->time != e2->time)
@@ -251,18 +251,18 @@ apply_policy(table_t *dst, const table_t *src, uint32_t local_itad,
             switch (s->actions[j].attribute) {
             case ROUTEMAP_SET_LOCALPREF:
             case ROUTEMAP_SET_METRIC:
-                e->local_pref = s->actions[j].value;
+                e->attrs.local_pref = s->actions[j].value;
                 break;
             case ROUTEMAP_SET_NEXTHOP:
-                free(e->nexthop);
-                e->nexthop = strdup(s->actions[j].valstr2);
+                free(e->attrs.nexthop);
+                e->attrs.nexthop = strdup(s->actions[j].valstr2);
                 break;
             case ROUTEMAP_SET_ITADPATH_PREPEND:
-                e->itad_path_size = s->actions[j].value + e->itad_path_size;
-                e->itad_path = realloc(e->itad_path,
-                    e->itad_path_size * sizeof(uint32_t));
+                e->attrs.itad_path_size = s->actions[j].value + e->attrs.itad_path_size;
+                e->attrs.itad_path = realloc(e->attrs.itad_path,
+                    e->attrs.itad_path_size * sizeof(uint32_t));
                 for (size_t k = 0; k < s->actions[j].value; k++)
-                    e->itad_path[k] = local_itad;
+                    e->attrs.itad_path[k] = local_itad;
                 break;
             }
         }
@@ -318,5 +318,90 @@ trib_update(trib_t *trib)
     }
 
     trib_table_deinit(&scratch);
+}
+
+
+size_t
+get_new_entries(table_t *table, entry_t ***new_ents_out)
+{
+    size_t new_ents_size = 0, new_ents_capacity = INIT_TABLE_CAPACITY;
+    entry_t **new_ents = malloc(sizeof(entry_t*) * new_ents_capacity);
+
+    for (size_t i = 0; i < table->size; i++) {
+        if (table->table[i]->sent)
+            continue;
+
+        if (new_ents_size + 1 > new_ents_capacity) {
+            new_ents_capacity *= 2;
+            new_ents = realloc(new_ents, sizeof(entry_t*) * new_ents_capacity);
+        }
+
+        new_ents[new_ents_capacity] = table->table[i];
+    }
+
+    *new_ents_out = new_ents;
+    return new_ents_size;
+}
+
+/** \brief Deep compare entry attributes */
+static int
+attrs_equals(const entry_attrs_t *a1, const entry_attrs_t *a2)
+{
+    return
+        (strcmp(a1->nexthop, a2->nexthop) == 0) &&
+        (a1->local_pref == a2->local_pref) &&
+        (a1->metric == a2->metric) &&
+        (a1->itad_path_size == a2->itad_path_size &&
+            memcmp(a1->itad_path, a2->itad_path,
+                sizeof(uint32_t) * a1->itad_path_size));
+}
+
+static entry_group_t *
+is_entry_in_group(const entry_t *e, entry_group_t *groups,
+    size_t groups_size)
+{
+    for (size_t i = 0; i < groups_size; i++)
+        if (attrs_equals(&e->attrs, &groups[i].attrs))
+            return &groups[i];
+    return NULL;
+}
+
+size_t
+group_entries_by_attrs(entry_t **entries, size_t entry_size,
+    entry_group_t **groups_out)
+{
+
+    size_t groups_size = 0, groups_capacity = entry_size;
+    entry_group_t *groups = malloc(sizeof(entry_group_t) * groups_capacity);
+
+    for (size_t i = 0; i < entry_size; i++) {
+        entry_group_t *ingroup = is_entry_in_group(entries[i], groups,
+            groups_size);
+
+        if (ingroup) {
+            if (ingroup->size + 1 > ingroup->capacity) {
+                ingroup->capacity *= 2;
+                ingroup->entries = realloc(ingroup->entries,
+                    sizeof(entry_t*) * ingroup->capacity);
+            }
+
+            ingroup->entries[ingroup->size] = entries[i];
+        } else {
+            if (groups_size + 1 > groups_capacity) {
+                groups_capacity *= 2;
+                groups = realloc(groups, sizeof(entry_group_t) * groups_capacity);
+            }
+
+            groups[groups_size].capacity = INIT_TABLE_CAPACITY;
+            groups[groups_size].size = 1;
+            groups[groups_size].attrs = entries[i]->attrs;
+            groups[groups_size].entries[0] = entries[i];
+            groups_size++;
+        }
+    }
+
+
+    *groups_out = groups;
+    return groups_size;
 }
 
