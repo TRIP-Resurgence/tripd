@@ -202,7 +202,7 @@ sock_error:
     return NULL;
 }
 
-static void
+static ssize_t
 serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group,
     uint32_t local_id, uint32_t local_itad)
 {
@@ -250,12 +250,37 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
     
     /* NextHopServer */
     if (!ATTR_IS_USED_NEXTHOP(group->attrs.use)) {
-        ERROR("tried to advertise a reachableroutes without nexthopserver");
-        return;
+        ERROR("tried to advertise reachableroutes without nexthopserver");
+        return -1;
     }
 
     new_attr_nexthopserver(attr_bufs[attrs_count++], MAX_MSG_SIZE,
         group->attrs.nextitad, group->attrs.nexthop);
+
+    /* AdvertisementPath */
+    if (ATTR_IS_USED_ADVERTPATH(group->attrs.use)) {
+        itadpath_t path = {
+            ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath_size
+        };
+        memcpy(&path.itadpath_segs, group->attrs.routedpath,
+            sizeof(uint32_t) * group->attrs.routedpath_size);
+        new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path);
+    }
+
+    /* RoutedPath */
+    if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use)) {
+        itadpath_t path = {
+            ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath_size
+        };
+        memcpy(&path.itadpath_segs, group->attrs.routedpath,
+            sizeof(uint32_t) * group->attrs.routedpath_size);
+        new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path);
+    }
+
+    /* AtomicAggregate */
+    if (group->attrs.atomicaggregate) {
+        new_attr_atomicaggregate(attr_bufs[attrs_count++], MAX_MSG_SIZE);
+    }
         
     /* LocalPreference
      * intra-domain only */
@@ -269,22 +294,18 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
         new_attr_multiexitdisc(attr_bufs[attrs_count++], MAX_MSG_SIZE,
             group->attrs.metric);
 
-    /* RoutedPath */
-    if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use)) {
-        itadpath_t path = {
-            ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath_size
-        };
-        memcpy(&path.itadpath_segs, group->attrs.routedpath,
-            sizeof(uint32_t) * group->attrs.routedpath_size);
-        new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path);
-    }
+    /* Communities */
+    if (ATTR_IS_USED_COMMUNITIES(group->attrs.use))
+        new_attr_communities(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            group->attrs.communities, group->attrs.communities_size);
 
-    /* TODO: attributes ._. */
-
+    /* ConvertedRoute propagate */
+    if (group->attrs.convertedroute)
+        new_attr_convertedroute(attr_bufs[attrs_count++], MAX_MSG_SIZE);
 
 finish:
     /* serialize serialized attributes into UPDATE */
-    new_msg_update(buff, MAX_MSG_SIZE,
+    return new_msg_update(buff, MAX_MSG_SIZE,
         (const msg_update_attr_t**)attr_bufs, attrs_count);
 }
 
@@ -304,14 +325,18 @@ update_session(const session_t *s, uint32_t local_id, uint32_t local_itad)
     for (size_t i = 0; i < groups_count; i++) {
         char msg_buff[MAX_MSG_SIZE];
 
-        serialize_group(msg_buff, MAX_MSG_SIZE, s, &groups[i],
+        ssize_t upd_size = serialize_group(msg_buff, MAX_MSG_SIZE, s, &groups[i],
             local_id, local_itad);
 
-        /* TODO: send */
+        if (upd_size < 0)
+            continue;
 
-        free(groups[i].entries);
+        SOCK_TRY_SEND(send(s->fd, msg_buff, upd_size, 0), goto sock_error);
     }
 
+sock_error:
+    for (size_t i = 0; i < groups_count; i++)
+        free(groups[i].entries);
     free(groups);
     free(*new_ents);
 }
