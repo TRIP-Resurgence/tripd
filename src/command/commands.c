@@ -463,16 +463,23 @@ cmd_config_route(parser_t *parser, int no, char *args)
         }
         e->prefix = strdup(pfx);
         e->type = ENTRY_TYPE_STATIC;
-        e->attrs.nexthop = strdup(srv);
         e->learn_itad = parser->manager->itad;
         e->learn_lsid = 0;
-        e->seq = 0;
+        e->seq = INITIAL_SEQUENCE_NUMBER;
         e->time = time(NULL);
+        e->attrs.use = ATTR_USED_NEXTHOP | ATTR_USED_ADVERTPATH
+            | ATTR_USED_ROUTEDPATH;
+        e->attrs.withdrawn = 0;
+        e->attrs.nextitad = parser->manager->itad;
+        e->attrs.nexthop = strdup(srv);
         e->attrs.local_pref = UINT32_MAX;
         e->attrs.metric = UINT32_MAX;
-        e->attrs.itad_path = NULL;
-        e->attrs.itad_path_size = 0;
-        e->withdrawn = 0;
+        e->attrs.advertpath = malloc(sizeof(uint32_t));
+        e->attrs.advertpath[0] = parser->manager->itad; /*originated advertpath*/
+        e->attrs.advertpath_size = 1;
+        e->attrs.routedpath = malloc(sizeof(uint32_t));
+        e->attrs.routedpath[0] = parser->manager->itad; /*originated routedpath*/
+        e->attrs.routedpath_size = 1;
         e->sent = 0;
 
         trib_table_insert(&parser->manager->trib->local_routes, e);

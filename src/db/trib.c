@@ -27,6 +27,7 @@
 
 #include "trib.h"
 #include "db/pib.h"
+#include "protocol/protocol.h"
 
 #define _COMPONENT_ "db"
 
@@ -48,13 +49,26 @@ entry_clone(const entry_t *entry)
     /* shallow copy */
     *ne = *entry;
     /* deep copy */
-    if (entry->attrs.itad_path_size) {
-        ne->attrs.itad_path = malloc(sizeof(uint32_t) * entry->attrs.itad_path_size);
-        memcpy(ne->attrs.itad_path, entry->attrs.itad_path, sizeof(uint32_t)
-            * entry->attrs.itad_path_size);
-    }
     ne->prefix = strdup(entry->prefix);
     ne->attrs.nexthop = strdup(entry->attrs.nexthop);
+    if (ATTR_IS_USED_ADVERTPATH(entry->attrs.use)) {
+        ne->attrs.advertpath = malloc(sizeof(uint32_t)
+            * entry->attrs.advertpath_size);
+        memcpy(ne->attrs.advertpath, entry->attrs.advertpath, sizeof(uint32_t)
+            * entry->attrs.advertpath_size);
+    }
+    if (ATTR_IS_USED_ROUTEDPATH(entry->attrs.use)) {
+        ne->attrs.routedpath = malloc(sizeof(uint32_t)
+            * entry->attrs.routedpath_size);
+        memcpy(ne->attrs.routedpath, entry->attrs.routedpath, sizeof(uint32_t)
+            * entry->attrs.routedpath_size);
+    }
+    if (ATTR_IS_USED_COMMUNITIES(entry->attrs.use)) {
+        ne->attrs.communities = malloc(sizeof(uint32_t)
+            * entry->attrs.communities_size);
+        memcpy(ne->attrs.communities, entry->attrs.communities,
+            sizeof(community_t) * entry->attrs.communities_size);
+    }
     return ne;
 }
 
@@ -63,7 +77,8 @@ entry_destroy(entry_t *entry)
 {
     free(entry->prefix);
     free(entry->attrs.nexthop);
-    free(entry->attrs.itad_path);
+    free(entry->attrs.advertpath);
+    free(entry->attrs.routedpath);
     free(entry);
 }
 
@@ -174,8 +189,8 @@ entry_compare(const entry_t *e1, const entry_t *e2, uint32_t itad)
         return e1->attrs.local_pref < e2->attrs.local_pref;
     if (e1->type != e2->type)
         return e1->type < e2->type;
-    if (e1->attrs.itad_path_size != e2->attrs.itad_path_size)
-        return e1->attrs.itad_path_size < e2->attrs.itad_path_size;
+    if (e1->attrs.routedpath_size != e2->attrs.routedpath_size)
+        return e1->attrs.routedpath_size < e2->attrs.routedpath_size;
     if (e1->attrs.metric != e2->attrs.metric)
         return e1->attrs.metric < e2->attrs.metric;
     if ((e1->learn_itad == itad) != (e2->learn_itad == itad))
@@ -258,11 +273,12 @@ apply_policy(table_t *dst, const table_t *src, uint32_t local_itad,
                 e->attrs.nexthop = strdup(s->actions[j].valstr2);
                 break;
             case ROUTEMAP_SET_ITADPATH_PREPEND:
-                e->attrs.itad_path_size = s->actions[j].value + e->attrs.itad_path_size;
-                e->attrs.itad_path = realloc(e->attrs.itad_path,
-                    e->attrs.itad_path_size * sizeof(uint32_t));
+                e->attrs.routedpath_size = s->actions[j].value
+                    + e->attrs.routedpath_size;
+                e->attrs.routedpath = realloc(e->attrs.routedpath,
+                    e->attrs.routedpath_size * sizeof(uint32_t));
                 for (size_t k = 0; k < s->actions[j].value; k++)
-                    e->attrs.itad_path[k] = local_itad;
+                    e->attrs.routedpath[k] = local_itad;
                 break;
             }
         }
@@ -347,13 +363,35 @@ get_new_entries(table_t *table, entry_t ***new_ents_out)
 static int
 attrs_equals(const entry_attrs_t *a1, const entry_attrs_t *a2)
 {
+    /* group all withdrawn together */
+    if (a1->withdrawn && a2->withdrawn)
+        return 1;
+    if (a1->withdrawn || a2->withdrawn)
+        return 0;
+
+    if (!ATTR_IS_USED_NEXTHOP(a1->use) || !ATTR_IS_USED_NEXTHOP(a2->use)) {
+        ERROR("reachable route compared without nexthop");
+        return 0;
+    }
+
     return
         (strcmp(a1->nexthop, a2->nexthop) == 0) &&
-        (a1->local_pref == a2->local_pref) &&
-        (a1->metric == a2->metric) &&
-        (a1->itad_path_size == a2->itad_path_size &&
-            memcmp(a1->itad_path, a2->itad_path,
-                sizeof(uint32_t) * a1->itad_path_size));
+        ((!ATTR_IS_USED_ADVERTPATH(a1->use) || !ATTR_IS_USED_ADVERTPATH(a2->use)) ||
+            (a1->advertpath_size == a2->advertpath_size &&
+                memcmp(a1->advertpath, a2->advertpath,
+                    sizeof(uint32_t) * a1->advertpath_size))) &&
+        ((!ATTR_IS_USED_ROUTEDPATH(a1->use) || !ATTR_IS_USED_ROUTEDPATH(a2->use)) ||
+            (a1->routedpath_size == a2->routedpath_size &&
+                memcmp(a1->routedpath, a2->routedpath,
+                    sizeof(uint32_t) * a1->routedpath_size))) &&
+        ((!ATTR_IS_USED_LOCALPREF(a1->use) || !ATTR_IS_USED_LOCALPREF(a2->use)) ||
+            (a1->local_pref == a2->local_pref)) &&
+        ((!ATTR_IS_USED_METRIC(a1->use) || !ATTR_IS_USED_METRIC(a2->use)) ||
+            (a1->metric == a2->metric)) &&
+        ((!ATTR_IS_USED_COMMUNITIES(a1->use) || !ATTR_IS_USED_COMMUNITIES(a2->use)) ||
+            (a1->communities_size == a2->communities_size &&
+                memcmp(a1->communities, a2->communities,
+                    sizeof(uint32_t) * a1->communities_size)));
 }
 
 static entry_group_t *

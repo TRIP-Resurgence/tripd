@@ -543,6 +543,7 @@ listen_loop(void *arg)
         /* hand off connection to handshake handler on a new thread */
         session_t *s = malloc(sizeof(session_t));
         memset(s, 0, sizeof(session_t));
+        s->state = STATE_IDLE;
         s->peer = peer;
         s->fd = request_fd;
         s->initiated = 0;
@@ -612,7 +613,7 @@ update_loop(void *arg)
         pthread_cond_wait(&m->update_cond, &m->update_mut);
 
         for (size_t i = 0; i < m->sessions_size; i++)
-            update_session(m->sessions[i]);
+            update_session(m->sessions[i], m->id, m->itad);
 
         pthread_mutex_unlock(&m->update_mut);
     }

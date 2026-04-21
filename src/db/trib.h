@@ -32,13 +32,37 @@
 #include <stddef.h>
 #include <time.h>
 
+#define ATTR_USED_NEXTHOP               0b1
+#define ATTR_USED_ROUTEDPATH            0b10
+#define ATTR_USED_ADVERTPATH            0b100
+#define ATTR_USED_LOCALPREF             0b1000
+#define ATTR_USED_METRIC                0b10000
+#define ATTR_USED_COMMUNITIES           0b100000
 
+#define ATTR_IS_USED_NEXTHOP(x)         (((x) >> 0) & 1)
+#define ATTR_IS_USED_ROUTEDPATH(x)      (((x) >> 1) & 1)
+#define ATTR_IS_USED_ADVERTPATH(x)      (((x) >> 2) & 1)
+#define ATTR_IS_USED_LOCALPREF(x)       (((x) >> 3) & 1)
+#define ATTR_IS_USED_METRIC(x)          (((x) >> 4) & 1)
+#define ATTR_IS_USED_COMMUNITIES(x)     (((x) >> 5) & 1)
+
+
+/** \brief Groupable attributes that are related to a route */
 typedef struct {
+    uint32_t    use;            /**< Bitfield flags specified attributes */
+    int         withdrawn;      /**< WithdrawnRoutes or ReachableRoutes */
+    uint32_t    nextitad;       /**< ITAD of next hop */
     char       *nexthop;        /**< Next hop server */
+    uint32_t   *advertpath;     /**< AdvertisementPath */
+    size_t      advertpath_size;
+    uint32_t   *routedpath;     /**< RoutedPath */
+    size_t      routedpath_size;
+    int         atomicaggregate;/**< AtomicAggregate */
     uint32_t    local_pref;     /**< Degree of Preference */
     uint32_t    metric;         /**< MultiExitDisc */
-    uint32_t   *itad_path;      /**< RoutedPath */
-    size_t      itad_path_size;
+    community_t*communities;    /**< Communities */
+    size_t      communities_size;
+    int         convertedroute; /**< ConvertedRoute, used when =1 */
 } entry_attrs_t;
 
 typedef enum {
@@ -63,12 +87,10 @@ typedef struct {
                                     Ext-TRIB and Loc-TRIB */
     uint32_t    learn_lsid;     /**< Peer LS ID */
 
-    uint32_t    seq;            /**< Sequence number */
+    int32_t     seq;            /**< Sequence number */
     time_t      time;           /**< Learn time */
 
     entry_attrs_t attrs;        /**< Attributes */
-
-    int         withdrawn;      /**< Mark as withdrawn */
     
     int         sent;           /**< Route has been UPDATE'd to peer */
 } entry_t;

@@ -72,6 +72,9 @@ typedef struct {
     time_t                  last_read_time;     /**< Time of last read */
     time_t                  last_write_time;    /**< Time of last write */
 
+    time_t                  last_orig_time;     /**< Last origination time */
+    time_t                  last_advert_time;   /**< Last advertisement time */
+
     /* capabilities */
     capinfo_transmode_t     transmode;        /**< Peer transmode */
     capinfo_routetype_t    *routetypes;       /**< Supported route types */
@@ -99,7 +102,7 @@ void *session_loop(void *arg);
  *
  * Send UPDATEs to peer according to new entries in Adj-TRIB-Out
  */
-void update_session(const session_t *s);
+void update_session(const session_t *s, uint32_t local_id, uint32_t local_itad);
 
 /** \brief Shutdown socket, terminate connection and thread */
 void session_shutdown(session_t *session);

@@ -202,11 +202,95 @@ sock_error:
     return NULL;
 }
 
+static void
+serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group,
+    uint32_t local_id, uint32_t local_itad)
+{
+    char attr_bufs[MAX_MSG_SIZE][10]; /* max 10 num of attrs per UPDATE */
+    size_t attrs_count = 0;
+
+    /* create array of routes from array of entry references */
+    route_t routes[4096];
+    for (size_t j = 0; j < group->size; j++) {
+        routes[j].route_af = group->entries[j]->af;
+        routes[j].route_app_proto = group->entries[j]->app_proto;
+        memcpy(&routes[j].route_addr, group->entries[j]->prefix,
+            strlen(group->entries[j]->prefix));
+    }
+
+    /* figure out max seq number on entries */
+    int32_t seq = INITIAL_SEQUENCE_NUMBER;
+    for (size_t j = 0; j < group->size; j++)
+        if (group->entries[j]->seq > seq)
+            seq = group->entries[j]->seq;
+    seq += 1; /* next sequence number */
+    /* set last used sequence number */
+    for (size_t j = 0; j < group->size; j++)
+        group->entries[j]->seq = seq;
+
+    /* if WithdrawnRoutes, only that one attribute needed (?) */
+    if (group->attrs.withdrawn) {
+        new_attr_withdrawnroutes(attr_bufs[attrs_count], MAX_MSG_SIZE,
+            /* internal or external peer
+             * always link-state encapsulate for internal flooding */
+            s->peer->itad == local_itad,
+            local_id, seq, routes, group->size);
+        attrs_count++;
+
+        goto finish;
+    }
+
+    /* for ReacheableRoutes */
+    new_attr_reachableroutes(attr_bufs[attrs_count], MAX_MSG_SIZE,
+        /* internal or external peer
+         * always link-state encapsulate for internal flooding */
+        s->peer->itad == local_itad,
+        local_id, seq, routes, group->size);
+    attrs_count++;
+    
+    /* NextHopServer */
+    if (!ATTR_IS_USED_NEXTHOP(group->attrs.use)) {
+        ERROR("tried to advertise a reachableroutes without nexthopserver");
+        return;
+    }
+
+    new_attr_nexthopserver(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+        group->attrs.nextitad, group->attrs.nexthop);
+        
+    /* LocalPreference
+     * intra-domain only */
+    if (ATTR_IS_USED_LOCALPREF(group->attrs.use) && s->peer->itad == local_itad)
+        new_attr_localpref(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            group->attrs.local_pref);
+
+    /* MultiExitDiscriminator
+     * extra-domain only */
+    if (ATTR_IS_USED_METRIC(group->attrs.use) && s->peer->itad != local_itad)
+        new_attr_multiexitdisc(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            group->attrs.metric);
+
+    /* RoutedPath */
+    if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use)) {
+        itadpath_t path = {
+            ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath_size
+        };
+        memcpy(&path.itadpath_segs, group->attrs.routedpath,
+            sizeof(uint32_t) * group->attrs.routedpath_size);
+        new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path);
+    }
+
+    /* TODO: attributes ._. */
+
+
+finish:
+    /* serialize serialized attributes into UPDATE */
+    new_msg_update(buff, MAX_MSG_SIZE,
+        (const msg_update_attr_t**)attr_bufs, attrs_count);
+}
 
 void
-update_session(const session_t *s)
+update_session(const session_t *s, uint32_t local_id, uint32_t local_itad)
 {
-    char buff[MAX_MSG_SIZE];
     entry_t **new_ents = NULL;
 
     /* entries that havent been sent UPDATE'd */
@@ -218,9 +302,13 @@ update_session(const session_t *s)
         &groups);
     
     for (size_t i = 0; i < groups_count; i++) {
-        /* TODO: serialize attributes */
-        //new_msg_update(buff, MAX_MSG_SIZE, attrs, size);
-        //
+        char msg_buff[MAX_MSG_SIZE];
+
+        serialize_group(msg_buff, MAX_MSG_SIZE, s, &groups[i],
+            local_id, local_itad);
+
+        /* TODO: send */
+
         free(groups[i].entries);
     }
 

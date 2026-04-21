@@ -25,13 +25,13 @@ generate_entry(entry_t *e, int comb)
     e->app_proto = APP_PROTO_SIP;
     e->prefix = "10";
     e->attrs.nexthop = "tel.arf20.com";
-    e->attrs.itad_path = NULL;
-    e->withdrawn = 0;
+    e->attrs.routedpath = NULL;
+    e->attrs.withdrawn = 0;
 
     /* comparable */
     e->attrs.local_pref = (int[]){ 100, 200 }[(comb >> 6) & 1];
     e->type = (int[]){ ENTRY_TYPE_TRIP, ENTRY_TYPE_STATIC }[(comb >> 5) & 1];
-    e->attrs.itad_path_size = (int[]){ 3, 5 }[(comb >> 4) & 1];
+    e->attrs.routedpath_size = (int[]){ 3, 5 }[(comb >> 4) & 1];
     e->attrs.metric = (int[]){ 100, 200 }[(comb >> 3) & 1];
     e->learn_itad = (int[]){ 20, 10 }[(comb >> 2) & 1];
     e->time = (int[]){ 200, 100 }[(comb >> 1) & 1];
@@ -42,7 +42,7 @@ void
 print_entry(entry_t *e)
 {
     printf("%d  %c    %ld    %d %d   %ld %d",
-        e->attrs.local_pref, "SCT"[e->type], e->attrs.itad_path_size, e->attrs.metric, e->learn_itad, e->time, e->learn_lsid);
+        e->attrs.local_pref, "SCT"[e->type], e->attrs.routedpath_size, e->attrs.metric, e->learn_itad, e->time, e->learn_lsid);
 }
 
 int

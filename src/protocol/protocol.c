@@ -345,7 +345,7 @@ new_msg_update(void *buff, size_t len,
 runtime_error_t
 new_attr_withdrawnroutes(void *buff, size_t len,
     int lsencap, uint32_t id, uint32_t seq,
-    const route_t **routes, size_t routes_size)
+    const route_t *routes, size_t routes_size)
 {
     if (!buff)
         return ERROR_BUFF;
@@ -354,7 +354,7 @@ new_attr_withdrawnroutes(void *buff, size_t len,
         sizeof(msg_update_attr_t);
 
     for (size_t i = 0; i < routes_size; i++)
-        attr_size += sizeof(route_t) + routes[i]->route_len;
+        attr_size += sizeof(route_t) + routes[i].route_len;
 
     if (len < attr_size)
         return ERROR_BUFFLEN;
@@ -376,8 +376,8 @@ new_attr_withdrawnroutes(void *buff, size_t len,
     }
 
     for (size_t i = 0; i < routes_size; i++) {
-        size_t route_size = sizeof(route_t) + routes[i]->route_len;
-        memcpy(end, routes[i], route_size);
+        size_t route_size = sizeof(route_t) + routes[i].route_len;
+        memcpy(end, &routes[i], route_size);
         end += route_size;
     }
 
@@ -387,7 +387,7 @@ new_attr_withdrawnroutes(void *buff, size_t len,
 runtime_error_t
 new_attr_reachableroutes(void *buff, size_t len,
     int lsencap, uint32_t id, uint32_t seq,
-    const route_t **routes, size_t routes_size)
+    const route_t *routes, size_t routes_size)
 {
     if (!buff)
         return ERROR_BUFF;
@@ -396,7 +396,7 @@ new_attr_reachableroutes(void *buff, size_t len,
         sizeof(msg_update_attr_t);
 
     for (size_t i = 0; i < routes_size; i++)
-        attr_size += sizeof(route_t) + routes[i]->route_len;
+        attr_size += sizeof(route_t) + routes[i].route_len;
 
     if (len < attr_size)
         return ERROR_BUFFLEN;
@@ -419,8 +419,8 @@ new_attr_reachableroutes(void *buff, size_t len,
     }
 
     for (size_t i = 0; i < routes_size; i++) {
-        size_t route_size = sizeof(route_t) + routes[i]->route_len;
-        memcpy(end, routes[i], route_size);
+        size_t route_size = sizeof(route_t) + routes[i].route_len;
+        memcpy(end, &routes[i], route_size);
         end += route_size;
     }
 
