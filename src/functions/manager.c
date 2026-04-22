@@ -608,9 +608,12 @@ update_loop(void *arg)
 {
     manager_t *m = arg;
 
-    while (1) {
+    while (m->run) {
         pthread_mutex_lock(&m->update_mut);
         pthread_cond_wait(&m->update_cond, &m->update_mut);
+
+        if (!m->run)
+            return NULL;
 
         for (size_t i = 0; i < m->sessions_size; i++)
             update_session(m->sessions[i], m->id, m->itad);
@@ -804,6 +807,10 @@ manager_stop(manager_t *manager)
     shutdown(manager->fd, SHUT_RDWR);
     pthread_join(manager->listen_thread, NULL);
     pthread_join(manager->maintenance_thread, NULL);
+
+    pthread_mutex_lock(&manager->update_mut);
+    pthread_cond_signal(&manager->update_cond);
+    pthread_mutex_unlock(&manager->update_mut);
     pthread_join(manager->update_thread, NULL);
 }
 
