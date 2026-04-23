@@ -453,6 +453,8 @@ peer_handshake(void *arg)
                 goto sock_error
             );
 
+            s->last_write_time = time(NULL);
+
             session_change_state(s, STATE_OPENCONFIRM);
         } break;
         case MSG_TYPE_NOTIFICATION: {
@@ -472,8 +474,11 @@ peer_handshake(void *arg)
         case MSG_TYPE_KEEPALIVE: {
             if (s->state == STATE_OPENCONFIRM)
                 session_change_state(s, STATE_ESTABLISHED);
-            time_t now = time(NULL);
-            s->last_read_time = now;
+            s->last_read_time = time(NULL);
+
+            /* Update peer's Adj-TRIB-Out and send UPDATEs */
+            trib_update_adj_out(m->trib, s->adj_trib_out);
+            session_update(s, m->id, m->itad);
 
             /* Hand newly established session off to session_loop */
             session_loop(arg);
@@ -616,7 +621,7 @@ update_loop(void *arg)
             return NULL;
 
         for (size_t i = 0; i < m->sessions_size; i++)
-            update_session(m->sessions[i], m->id, m->itad);
+            session_update(m->sessions[i], m->id, m->itad);
 
         pthread_mutex_unlock(&m->update_mut);
     }

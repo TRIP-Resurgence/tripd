@@ -92,8 +92,7 @@ send_notification(int fd, int code, int subcode)
     char buff[MAX_MSG_SIZE];
 
     PROTO_TRY(
-        new_msg_notif(buff, MAX_MSG_SIZE,
-            NOTIF_CODE_ERROR_MSG, subcode, 0, NULL),
+        new_msg_notif(buff, MAX_MSG_SIZE, code, subcode, 0, NULL),
         res, goto sock_error
     );
 
@@ -206,8 +205,11 @@ static ssize_t
 serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group,
     uint32_t local_id, uint32_t local_itad)
 {
-    char attr_bufs[MAX_MSG_SIZE][10]; /* max 10 num of attrs per UPDATE */
+    char *attr_bufs[10]; /* max 10 num of attrs per UPDATE */
+    for (size_t i = 0; i < 10; i++)
+        attr_bufs[i] = malloc(MAX_MSG_SIZE);
     size_t attrs_count = 0;
+    int r = 0;
 
     /* create array of routes from array of entry references */
     route_t routes[4096];
@@ -305,12 +307,17 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
 
 finish:
     /* serialize serialized attributes into UPDATE */
-    return new_msg_update(buff, MAX_MSG_SIZE,
+    r = new_msg_update(buff, MAX_MSG_SIZE,
         (const msg_update_attr_t**)attr_bufs, attrs_count);
+
+    for (size_t i = 0; i < 10; i++)
+         free(attr_bufs[i]);
+
+    return r;
 }
 
 void
-update_session(const session_t *s, uint32_t local_id, uint32_t local_itad)
+session_update(const session_t *s, uint32_t local_id, uint32_t local_itad)
 {
     entry_t **new_ents = NULL;
 

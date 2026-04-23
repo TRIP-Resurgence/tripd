@@ -102,7 +102,7 @@ void *session_loop(void *arg);
  *
  * Send UPDATEs to peer according to new entries in Adj-TRIB-Out
  */
-void update_session(const session_t *s, uint32_t local_id, uint32_t local_itad);
+void session_update(const session_t *s, uint32_t local_id, uint32_t local_itad);
 
 /** \brief Shutdown socket, terminate connection and thread */
 void session_shutdown(session_t *session);

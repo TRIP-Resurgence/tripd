@@ -49,6 +49,7 @@ entry_clone(const entry_t *entry)
     /* shallow copy */
     *ne = *entry;
     /* deep copy */
+    ne->attrs = entry->attrs;
     ne->prefix = strdup(entry->prefix);
     ne->attrs.nexthop = strdup(entry->attrs.nexthop);
     if (ATTR_IS_USED_ADVERTPATH(entry->attrs.use)) {
@@ -56,19 +57,19 @@ entry_clone(const entry_t *entry)
             * entry->attrs.advertpath_size);
         memcpy(ne->attrs.advertpath, entry->attrs.advertpath, sizeof(uint32_t)
             * entry->attrs.advertpath_size);
-    }
+    } else ne->attrs.advertpath = NULL;
     if (ATTR_IS_USED_ROUTEDPATH(entry->attrs.use)) {
         ne->attrs.routedpath = malloc(sizeof(uint32_t)
             * entry->attrs.routedpath_size);
         memcpy(ne->attrs.routedpath, entry->attrs.routedpath, sizeof(uint32_t)
             * entry->attrs.routedpath_size);
-    }
+    } else ne->attrs.routedpath = NULL;
     if (ATTR_IS_USED_COMMUNITIES(entry->attrs.use)) {
         ne->attrs.communities = malloc(sizeof(uint32_t)
             * entry->attrs.communities_size);
         memcpy(ne->attrs.communities, entry->attrs.communities,
             sizeof(community_t) * entry->attrs.communities_size);
-    }
+    } else ne->attrs.communities = NULL;
     return ne;
 }
 
@@ -289,7 +290,19 @@ apply_policy(table_t *dst, const table_t *src, uint32_t local_itad,
 
 
 void
-trib_update(trib_t *trib)
+trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
+{
+    adj_trib_out->size = 0;
+    /* apply output policy if applicable */
+    if (adj_trib_out->routemap)
+        apply_policy(adj_trib_out, &trib->optimized_loc_trib, trib->local_itad,
+            adj_trib_out->routemap);
+    else
+        table_copy(adj_trib_out, &trib->optimized_loc_trib);
+}
+
+void
+trib_update_full(trib_t *trib)
 {
     trib->ext_trib.size = 0;
     trib->loc_trib.size = 0;
@@ -321,17 +334,11 @@ trib_update(trib_t *trib)
                 trib->local_itad);
 
     /* Phase 3: Loc-TRIB to Ext-TRIBs-Out */
-    optimize_table(&scratch, &trib->loc_trib); /* optimize table */
+    /* optimize table */
+    optimize_table(&trib->optimized_loc_trib, &trib->loc_trib);
 
-    for (size_t i = 0; i < trib->adj_tribs_size; i++) {
-        trib->adj_tribs_out[i].size = 0;
-        /* apply output policy if applicable */
-        if (trib->adj_tribs_out[i].routemap)
-            apply_policy(&trib->adj_tribs_out[i], &scratch, trib->local_itad,
-                trib->adj_tribs_out[i].routemap);
-        else
-            table_copy(&trib->adj_tribs_out[i], &scratch);
-    }
+    for (size_t i = 0; i < trib->adj_tribs_size; i++)
+        trib_update_adj_out(trib, &trib->adj_tribs_out[i]);
 
     trib_table_deinit(&scratch);
 }
@@ -352,7 +359,7 @@ get_new_entries(table_t *table, entry_t ***new_ents_out)
             new_ents = realloc(new_ents, sizeof(entry_t*) * new_ents_capacity);
         }
 
-        new_ents[new_ents_capacity] = table->table[i];
+        new_ents[new_ents_size++] = table->table[i];
     }
 
     *new_ents_out = new_ents;
@@ -404,6 +411,27 @@ is_entry_in_group(const entry_t *e, entry_group_t *groups,
     return NULL;
 }
 
+static void
+group_init(entry_group_t *g, const entry_attrs_t *attrs)
+{
+    g->capacity = INIT_TABLE_CAPACITY;
+    g->size = 0;
+    g->entries = malloc(sizeof(entry_t*) * g->capacity);
+    g->attrs = *attrs;
+}
+
+static void
+group_insert(entry_group_t *g, entry_t *e)
+{
+    if (g->size + 1 > g->capacity) {
+        g->capacity *= 2;
+        g->entries = realloc(g->entries,
+            sizeof(entry_t*) * g->capacity);
+    }
+
+    g->entries[g->size++] = e;
+}
+
 size_t
 group_entries_by_attrs(entry_t **entries, size_t entry_size,
     entry_group_t **groups_out)
@@ -416,26 +444,17 @@ group_entries_by_attrs(entry_t **entries, size_t entry_size,
         entry_group_t *ingroup = is_entry_in_group(entries[i], groups,
             groups_size);
 
-        if (ingroup) {
-            if (ingroup->size + 1 > ingroup->capacity) {
-                ingroup->capacity *= 2;
-                ingroup->entries = realloc(ingroup->entries,
-                    sizeof(entry_t*) * ingroup->capacity);
-            }
-
-            ingroup->entries[ingroup->size] = entries[i];
-        } else {
+        if (!ingroup) {
             if (groups_size + 1 > groups_capacity) {
                 groups_capacity *= 2;
                 groups = realloc(groups, sizeof(entry_group_t) * groups_capacity);
             }
 
-            groups[groups_size].capacity = INIT_TABLE_CAPACITY;
-            groups[groups_size].size = 1;
-            groups[groups_size].attrs = entries[i]->attrs;
-            groups[groups_size].entries[0] = entries[i];
-            groups_size++;
+            ingroup = &groups[groups_size++];
+            group_init(ingroup, &entries[i]->attrs);
         }
+
+        group_insert(ingroup, entries[i]);
     }
 
 

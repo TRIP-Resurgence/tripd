@@ -33,15 +33,15 @@
 #include <time.h>
 
 #define ATTR_USED_NEXTHOP               0b1
-#define ATTR_USED_ROUTEDPATH            0b10
-#define ATTR_USED_ADVERTPATH            0b100
+#define ATTR_USED_ADVERTPATH            0b10
+#define ATTR_USED_ROUTEDPATH            0b100
 #define ATTR_USED_LOCALPREF             0b1000
 #define ATTR_USED_METRIC                0b10000
 #define ATTR_USED_COMMUNITIES           0b100000
 
 #define ATTR_IS_USED_NEXTHOP(x)         (((x) >> 0) & 1)
-#define ATTR_IS_USED_ROUTEDPATH(x)      (((x) >> 1) & 1)
-#define ATTR_IS_USED_ADVERTPATH(x)      (((x) >> 2) & 1)
+#define ATTR_IS_USED_ADVERTPATH(x)      (((x) >> 1) & 1)
+#define ATTR_IS_USED_ROUTEDPATH(x)      (((x) >> 2) & 1)
 #define ATTR_IS_USED_LOCALPREF(x)       (((x) >> 3) & 1)
 #define ATTR_IS_USED_METRIC(x)          (((x) >> 4) & 1)
 #define ATTR_IS_USED_COMMUNITIES(x)     (((x) >> 5) & 1)
@@ -136,7 +136,7 @@ typedef struct {
 typedef struct {
     uint32_t    local_itad;   /**< local LS ITAD */
 
-    table_t     loc_trib;
+    table_t     loc_trib, optimized_loc_trib;
 
     table_t    *adj_tribs_in, *adj_tribs_out;
     size_t      adj_tribs_capacity, adj_tribs_size;
@@ -163,12 +163,19 @@ void trib_destroy(trib_t *trib);
 /** \brief Add route to table */
 void trib_table_insert(table_t *table, entry_t *route);
 
+/** \brief Update an Adj-TRIB-Out
+ *
+ * For use when a new peer connets and we have to UPDATE it without
+ * triggering a full update
+ */
+void trib_update_adj_out(trib_t *trib, table_t *adj_trib_out);
+
 /** \brief Execute route selection
  *
  * Takes Ext-TRIBs-in and locala routes
- * Updates Ext-TRIB, Loc-TRIB and Ext-TRIBs-out
+ * Updates Ext-TRIB, Loc-TRIB, optimized Loc-TRIB and Ext-TRIBs-out
  */
-void trib_update(trib_t *trib);
+void trib_update_full(trib_t *trib);
 
 /** \brief Return array of new entry references to new
  *

@@ -472,14 +472,18 @@ cmd_config_route(parser_t *parser, int no, char *args)
         e->attrs.withdrawn = 0;
         e->attrs.nextitad = parser->manager->itad;
         e->attrs.nexthop = strdup(srv);
-        e->attrs.local_pref = UINT32_MAX;
-        e->attrs.metric = UINT32_MAX;
         e->attrs.advertpath = malloc(sizeof(uint32_t));
         e->attrs.advertpath[0] = parser->manager->itad; /*originated advertpath*/
         e->attrs.advertpath_size = 1;
         e->attrs.routedpath = malloc(sizeof(uint32_t));
         e->attrs.routedpath[0] = parser->manager->itad; /*originated routedpath*/
         e->attrs.routedpath_size = 1;
+        e->attrs.atomicaggregate = 0;
+        e->attrs.local_pref = 0;
+        e->attrs.metric = 0;
+        e->attrs.communities = NULL;
+        e->attrs.communities_size = 0;
+        e->attrs.convertedroute = 0;
         e->sent = 0;
 
         trib_table_insert(&parser->manager->trib->local_routes, e);
@@ -490,7 +494,7 @@ cmd_config_route(parser_t *parser, int no, char *args)
         return -1;
     }
 
-    trib_update(parser->manager->trib);
+    trib_update_full(parser->manager->trib);
 
     manager_schedule_update(parser->manager);
 
@@ -887,9 +891,9 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
             return -1;
         }
 
-        if (strcmp(direction, "in"))
+        if (strcmp(direction, "in") == 0)
             peer->routemap_in = routemap;
-        else if (strcmp(direction, "out"))
+        else if (strcmp(direction, "out") == 0)
             peer->routemap_out = routemap;
         else {
             fprintf(parser->outf, "peer: unrecognized direction\n");
