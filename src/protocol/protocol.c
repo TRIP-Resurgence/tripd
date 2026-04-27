@@ -461,7 +461,8 @@ new_attr_nexthopserver(void *buff, size_t len,
     attr_val->nexthopserver_serverlen = server_len;
     memcpy(attr_val->nexthopserver_server, server, server_len);
 
-    return sizeof(msg_update_attr_t) + attr->attr_len;
+    return sizeof(msg_update_attr_t) + sizeof(attr_nexthopserver_t) +
+        attr->attr_len;
 }
 
 /* does not check path */

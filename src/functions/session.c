@@ -238,23 +238,27 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
 
     /* if WithdrawnRoutes, only that one attribute needed (?) */
     if (group->attrs.withdrawn) {
-        new_attr_withdrawnroutes(attr_bufs[attrs_count], MAX_MSG_SIZE,
+        if (new_attr_withdrawnroutes(attr_bufs[attrs_count++], MAX_MSG_SIZE,
             /* internal or external peer
              * always link-state encapsulate for internal flooding */
             s->peer->itad == local_itad,
-            local_id, seq, routes, group->size);
-        attrs_count++;
+            local_id, seq, routes, group->size) < 0)
+        {
+            return -1;
+        }
 
         goto finish;
     }
 
     /* for ReacheableRoutes */
-    new_attr_reachableroutes(attr_bufs[attrs_count], MAX_MSG_SIZE,
+    if (new_attr_reachableroutes(attr_bufs[attrs_count++], MAX_MSG_SIZE,
         /* internal or external peer
          * always link-state encapsulate for internal flooding */
         s->peer->itad == local_itad,
-        local_id, seq, routes, group->size);
-    attrs_count++;
+        local_id, seq, routes, group->size) < 0)
+    {
+        return -1;
+    }
     
     /* NextHopServer */
     if (!ATTR_IS_USED_NEXTHOP(group->attrs.use)) {
@@ -262,8 +266,11 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
         return -1;
     }
 
-    new_attr_nexthopserver(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-        group->attrs.nextitad, group->attrs.nexthop);
+    if (new_attr_nexthopserver(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+        group->attrs.nextitad, group->attrs.nexthop) < 0)
+    {
+        return -1;
+    }
 
     /* AdvertisementPath */
     if (ATTR_IS_USED_ADVERTPATH(group->attrs.use)) {
@@ -272,7 +279,8 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
         };
         memcpy(&path.itadpath_segs, group->attrs.routedpath,
             sizeof(uint32_t) * group->attrs.routedpath_size);
-        new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path);
+        if (new_attr_advertisementpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path) < 0)
+            return -1;
     }
 
     /* RoutedPath */
@@ -282,34 +290,39 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
         };
         memcpy(&path.itadpath_segs, group->attrs.routedpath,
             sizeof(uint32_t) * group->attrs.routedpath_size);
-        new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path);
+        if (new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path) < 0)
+            return -1;
     }
 
     /* AtomicAggregate */
-    if (group->attrs.atomicaggregate) {
-        new_attr_atomicaggregate(attr_bufs[attrs_count++], MAX_MSG_SIZE);
-    }
+    if (group->attrs.atomicaggregate)
+        if (new_attr_atomicaggregate(attr_bufs[attrs_count++], MAX_MSG_SIZE) < 0)
+            return -1;
         
     /* LocalPreference
      * intra-domain only */
     if (ATTR_IS_USED_LOCALPREF(group->attrs.use) && s->peer->itad == local_itad)
-        new_attr_localpref(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-            group->attrs.local_pref);
+        if (new_attr_localpref(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            group->attrs.local_pref) < 0)
+                return -1;
 
     /* MultiExitDiscriminator
      * extra-domain only */
     if (ATTR_IS_USED_METRIC(group->attrs.use) && s->peer->itad != local_itad)
-        new_attr_multiexitdisc(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-            group->attrs.metric);
+        if (new_attr_multiexitdisc(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            group->attrs.metric) < 0)
+                return -1;
 
     /* Communities */
     if (ATTR_IS_USED_COMMUNITIES(group->attrs.use))
-        new_attr_communities(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-            group->attrs.communities, group->attrs.communities_size);
+        if (new_attr_communities(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            group->attrs.communities, group->attrs.communities_size) < 0)
+                return -1;
 
     /* ConvertedRoute propagate */
     if (group->attrs.convertedroute)
-        new_attr_convertedroute(attr_bufs[attrs_count++], MAX_MSG_SIZE);
+        if (new_attr_convertedroute(attr_bufs[attrs_count++], MAX_MSG_SIZE) < 0)
+            return -1;
 
 finish:
     /* serialize serialized attributes into UPDATE */
@@ -357,7 +370,7 @@ sock_error:
 void
 session_shutdown(session_t *session)
 {
-    if (session->state == STATE_ACTIVE)
+    if (session->state == STATE_ESTABLISHED)
         send_notification(session->fd, NOTIF_CODE_CEASE, 0);
     DEBUG("shutting down session %s", session_str(session));
     shutdown(session->fd, SHUT_RDWR); /* recv loop does close() */

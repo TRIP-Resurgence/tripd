@@ -75,6 +75,8 @@ cmd_end(parser_t *parser, int no, char *args)
     parser->state.ctx = CTX_ROOT;
     if (parser->state.ctx == CTX_ROOT)
         parser->state.enabled = 0;
+    if (parser->state.ctx == CTX_TRIP)
+        trib_update_full(parser->manager->trib);
     return 0;
 }
 
@@ -85,7 +87,10 @@ cmd_exit(parser_t *parser, int no, char *args)
     case CTX_ROOT: parser->state.enabled = 0; break;
     case CTX_CONFIG: parser->state.ctx = CTX_ROOT; break;
     case CTX_ROUTEMAP: parser->state.ctx = CTX_CONFIG; break;
-    case CTX_TRIP: parser->state.ctx = CTX_CONFIG; break;
+    case CTX_TRIP:
+        parser->state.ctx = CTX_CONFIG;
+        trib_update_full(parser->manager->trib);
+        break;
     default: return -1;
     }
     return 0;
@@ -634,6 +639,7 @@ cmd_config_trip(parser_t *parser, int no, char *args)
 
     parser->state.ctx = CTX_TRIP;
     parser->manager->itad = itad;
+    parser->manager->trib->local_itad = itad;
 
     return 0;
 }

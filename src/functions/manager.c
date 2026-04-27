@@ -133,7 +133,6 @@ send_notification_res(int fd, int res)
 static void
 manager_session_add(manager_t *m, session_t *s)
 {
-    printf("session add\n");
     if (m->sessions_size + 1 > m->sessions_capacity) {
         m->sessions = realloc(m->sessions,
             2 * sizeof(session_t) * m->sessions_capacity);
@@ -147,7 +146,6 @@ manager_session_add(manager_t *m, session_t *s)
 static void
 manager_session_remove(manager_t *m, session_t *s)
 {
-    printf("session remove\n");
     int s_idx = -1;
     for (int i = 0; i < m->sessions_size; i++)
         if (m->sessions[i] == s)
@@ -244,7 +242,6 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                 return -1;
             } else {
                 /* cease, close and destroy old session, remove from vector */
-                send_notification(coll_s->fd, NOTIF_CODE_CEASE, 0);
                 session_shutdown(coll_s);
                 manager_session_remove(m, coll_s);
             }
@@ -512,6 +509,7 @@ proto_error:
 
 sock_error:
     if (s->mark_stop_init) {
+        send_notification(s->fd, NOTIF_CODE_CEASE, 0);
         close(s->fd);
         pthread_mutex_lock(&m->sessions_mutex);
         manager_session_remove(m, s);
@@ -855,9 +853,9 @@ manager_shutdown(manager_t *manager)
     for (size_t i = 0; i < manager->sessions_size; i++) {
         if (!manager->sessions[i])
             continue;
-        manager->sessions[i]->mark_stop_init = 1;
         /* this indirectly causes session thread to call
          * manager_session_remove() and kill itself */
+        manager->sessions[i]->mark_stop_init = 1;
         session_shutdown(manager->sessions[i]);
         pthread_join(manager->sessions[i]->thread, NULL);
     }

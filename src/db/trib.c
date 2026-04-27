@@ -151,13 +151,11 @@ trib_adj_pair_add(trib_t *trib, table_t *in, table_t *out)
 
     table_init(in);
     table_init(out);
-    printf("adj_pair_new\n");
 }
 
 void
 trib_adj_pair_remove(trib_t *trib, table_t *in, table_t *out)
 {
-    printf("adj_pair_destroy\n");
     for (size_t i = 0; i < trib->adj_tribs_size; i++) {
         if (trib->adj_tribs_in[i] == in && trib->adj_tribs_out[i] == out) {
             trib_table_deinit(in);
@@ -338,6 +336,10 @@ trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
 void
 trib_update_full(trib_t *trib)
 {
+    /* routes may have been defined before TRIP instance */
+    for (size_t i = 0; i < trib->local_routes.size; i++)
+        trib->local_routes.table[i]->attrs.nextitad = trib->local_itad;
+
     trib_table_clear(&trib->ext_trib);
     trib_table_clear(&trib->loc_trib);
     trib_table_clear(&trib->optimized_loc_trib);
