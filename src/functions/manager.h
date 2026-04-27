@@ -28,6 +28,7 @@
 #ifndef _MANAGER_H
 #define _MANAGER_H
 
+#include <pthread.h>
 #include <netinet/in.h>
 
 #include "session.h"
@@ -62,6 +63,7 @@ typedef struct {
     /* Session instances */
     session_t **sessions;
     size_t      sessions_size, sessions_capacity;
+    pthread_mutex_t sessions_mutex;
 
     /* Timers peer default  */
     uint16_t    hold;

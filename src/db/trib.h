@@ -138,7 +138,7 @@ typedef struct {
 
     table_t     loc_trib, optimized_loc_trib;
 
-    table_t    *adj_tribs_in, *adj_tribs_out;
+    table_t   **adj_tribs_in, **adj_tribs_out; /**< Owned by session */
     size_t      adj_tribs_capacity, adj_tribs_size;
     
     table_t     ext_trib;
@@ -150,6 +150,7 @@ typedef struct {
 /** \brief Destroy entry */
 void entry_destroy(entry_t *entry);
 
+
 /** \brief Deinitialize table */
 void trib_table_deinit(table_t *t);
 
@@ -157,11 +158,15 @@ void trib_table_deinit(table_t *t);
 trib_t *trib_new(uint32_t local_itad);
 /** \brief Add and init pair of tables in Adj-TRIBs-* vector */
 void trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out);
+void trib_adj_pair_destroy(trib_t *trib, table_t *in, table_t *out);
 /** \brief Deinit TRIB structure */
 void trib_destroy(trib_t *trib);
 
 /** \brief Add route to table */
 void trib_table_insert(table_t *table, entry_t *route);
+
+/** \brief Destroy all entries and clear table */
+void trib_table_clear(table_t *table);
 
 /** \brief Update an Adj-TRIB-Out
  *

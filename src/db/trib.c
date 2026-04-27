@@ -78,8 +78,12 @@ entry_destroy(entry_t *entry)
 {
     free(entry->prefix);
     free(entry->attrs.nexthop);
-    free(entry->attrs.advertpath);
-    free(entry->attrs.routedpath);
+    if (ATTR_IS_USED_ADVERTPATH(entry->attrs.use))
+        free(entry->attrs.advertpath);
+    if (ATTR_IS_USED_ROUTEDPATH(entry->attrs.use))
+        free(entry->attrs.routedpath);
+    if (ATTR_IS_USED_COMMUNITIES(entry->attrs.use))
+        free(entry->attrs.communities);
     free(entry);
 }
 
@@ -89,6 +93,7 @@ table_init(table_t *t)
     t->capacity = INIT_TABLE_CAPACITY;
     t->size = 0;
     t->table = malloc(t->capacity * sizeof(entry_t*));
+    t->routemap = NULL;
 }
 
 static void
@@ -119,6 +124,7 @@ trib_new(uint32_t local_itad)
     table_init(&t->local_routes);
     table_init(&t->ext_trib);
     table_init(&t->loc_trib);
+    table_init(&t->optimized_loc_trib);
 
     t->adj_tribs_capacity = INIT_ADJ_TRIBS_CAPACITY;
     t->adj_tribs_size = 0;
@@ -145,6 +151,25 @@ trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out)
 
     table_init(*in);
     table_init(*out);
+    printf("adj_pair_new\n");
+}
+
+void
+trib_adj_pair_destroy(trib_t *trib, table_t *in, table_t *out)
+{
+    printf("adj_pair_destroy\n");
+    for (size_t i = 0; i < trib->adj_tribs_size; i++) {
+        if (&trib->adj_tribs_in[i] == in && &trib->adj_tribs_out[i] == out) {
+            trib_table_deinit(in);
+            trib_table_deinit(out);
+            memmove(&trib->adj_tribs_in[i], &trib->adj_tribs_in[i+1],
+                sizeof(table_t) * (trib->adj_tribs_size - i));
+            memmove(&trib->adj_tribs_out[i], &trib->adj_tribs_out[i+1],
+                sizeof(table_t) * (trib->adj_tribs_size - i));
+            trib->adj_tribs_size--;
+            return;
+        }
+    }
 }
 
 void
@@ -153,6 +178,7 @@ trib_destroy(trib_t *trib)
     trib_table_deinit(&trib->local_routes);
     trib_table_deinit(&trib->ext_trib);
     trib_table_deinit(&trib->loc_trib);
+    trib_table_deinit(&trib->optimized_loc_trib);
     free(trib->adj_tribs_in);
     free(trib->adj_tribs_out);
 }
@@ -168,6 +194,14 @@ trib_table_insert(table_t *table, entry_t *entry)
     }
 
     table->table[table->size++] = entry;
+}
+
+void
+trib_table_clear(table_t *table)
+{
+    for (size_t i = 0; i < table->size; i++)
+        entry_destroy(table->table[i]);
+    table->size = 0;
 }
 
 
@@ -292,7 +326,7 @@ apply_policy(table_t *dst, const table_t *src, uint32_t local_itad,
 void
 trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
 {
-    adj_trib_out->size = 0;
+    trib_table_clear(adj_trib_out);
     /* apply output policy if applicable */
     if (adj_trib_out->routemap)
         apply_policy(adj_trib_out, &trib->optimized_loc_trib, trib->local_itad,
@@ -304,8 +338,9 @@ trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
 void
 trib_update_full(trib_t *trib)
 {
-    trib->ext_trib.size = 0;
-    trib->loc_trib.size = 0;
+    trib_table_clear(&trib->ext_trib);
+    trib_table_clear(&trib->loc_trib);
+    trib_table_clear(&trib->optimized_loc_trib);
     
     /* Phase 2a: local routes and external Ext-TRIBs-in to Ext-TRIB */
     table_t scratch; /* temporary working table */
@@ -316,7 +351,7 @@ trib_update_full(trib_t *trib)
         if (trib->adj_tribs_in[i].peer_itad != trib->local_itad) {
             /* apply input policy if applicable */
             if (trib->adj_tribs_in[i].routemap) {
-                scratch.size = 0;
+                trib_table_clear(&scratch);
                 apply_policy(&scratch, &trib->adj_tribs_in[i], trib->local_itad,
                     trib->adj_tribs_in[i].routemap);
                 table_select_into(&trib->ext_trib, &scratch, trib->local_itad);
@@ -337,8 +372,10 @@ trib_update_full(trib_t *trib)
     /* optimize table */
     optimize_table(&trib->optimized_loc_trib, &trib->loc_trib);
 
-    for (size_t i = 0; i < trib->adj_tribs_size; i++)
+    for (size_t i = 0; i < trib->adj_tribs_size; i++) {
+        trib_table_clear(&trib->adj_tribs_out[i]);
         trib_update_adj_out(trib, &trib->adj_tribs_out[i]);
+    }
 
     trib_table_deinit(&scratch);
 }

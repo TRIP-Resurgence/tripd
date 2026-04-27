@@ -168,6 +168,11 @@ session_loop(void *arg)
         case MSG_TYPE_UPDATE: {
             s->last_read_time = time(NULL);
             /* TODO: update */
+            /* flush for now */
+            if (recv(s->fd, recv_wnd, msg->msg_len, 0) < 0) {
+                ERROR("shit");
+                goto sock_error;
+            }
         } break;
         case MSG_TYPE_NOTIFICATION: {
             SOCK_TRY_RECV(s->fd, recv_wnd, msg_notif_t, goto sock_error);
@@ -195,8 +200,6 @@ proto_error:
     send_notification_res(s->fd, res);
 
 sock_error:
-    if (!s->mark_stop_init)
-        session_change_state(s, STATE_IDLE);
     close(s->fd);
     return NULL;
 }
@@ -205,9 +208,11 @@ static ssize_t
 serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group,
     uint32_t local_id, uint32_t local_itad)
 {
-    char *attr_bufs[10]; /* max 10 num of attrs per UPDATE */
-    for (size_t i = 0; i < 10; i++)
+    msg_update_attr_t *attr_bufs[10]; /* max 10 num of attrs per UPDATE */
+    for (size_t i = 0; i < 10; i++) {
         attr_bufs[i] = malloc(MAX_MSG_SIZE);
+        memset(attr_bufs[i], 0, MAX_MSG_SIZE);
+    }
     size_t attrs_count = 0;
     int r = 0;
 
@@ -216,6 +221,7 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
     for (size_t j = 0; j < group->size; j++) {
         routes[j].route_af = group->entries[j]->af;
         routes[j].route_app_proto = group->entries[j]->app_proto;
+        routes[j].route_len = strlen(group->entries[j]->prefix);
         memcpy(&routes[j].route_addr, group->entries[j]->prefix,
             strlen(group->entries[j]->prefix));
     }
@@ -345,13 +351,14 @@ sock_error:
     for (size_t i = 0; i < groups_count; i++)
         free(groups[i].entries);
     free(groups);
-    free(*new_ents);
+    free(new_ents);
 }
 
 void
 session_shutdown(session_t *session)
 {
-    send_notification(session->fd, NOTIF_CODE_CEASE, 0);
+    if (session->state == STATE_ACTIVE)
+        send_notification(session->fd, NOTIF_CODE_CEASE, 0);
     DEBUG("shutting down session %s", session_str(session));
     shutdown(session->fd, SHUT_RDWR); /* recv loop does close() */
     session_change_state(session, STATE_IDLE);
@@ -362,8 +369,6 @@ session_destroy(session_t *session)
 {
     if (session->routetypes)
         free(session->routetypes);
-    trib_table_deinit(session->adj_trib_in);
-    trib_table_deinit(session->adj_trib_out);
     free(session);
 }
 

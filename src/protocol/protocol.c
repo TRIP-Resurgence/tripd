@@ -113,7 +113,10 @@ const char **notif_code_subcodes_strs[] = {
     NULL,
     notif_subcode_msg_strs,
     notif_subcode_open_strs,
-    notif_subcode_update_strs
+    notif_subcode_update_strs,
+    NULL,
+    NULL,
+    NULL
 };
 
 
@@ -329,13 +332,14 @@ new_msg_update(void *buff, size_t len,
     for (size_t i = 0; i < attrs_size; i++) {
         const msg_update_attr_t *attr = attrs[i];
         size_t attrsize = IS_ATTR_FLAG_LSENCAP(attr->attr_flags) ?
-            sizeof(msg_update_attr_lsencap_t) + attr->attr_len :
-            sizeof(msg_update_attr_t) + attr->attr_len;
+            (sizeof(msg_update_attr_lsencap_t) + attr->attr_len) :
+            (sizeof(msg_update_attr_t) + attr->attr_len);
 
         if (len < end - buff + attrsize)
             return ERROR_BUFFLEN;
 
         memcpy(end, attr, attrsize);
+        msg->msg_len += attrsize;
         end += attrsize;
     }
 
@@ -362,16 +366,18 @@ new_attr_withdrawnroutes(void *buff, size_t len,
     void *end = buff;
 
     msg_update_attr_t *attr = end;
-    attr->attr_flags = ATTR_FLAG_WELL_KNOWN | ATTR_FLAG_LSENCAP;
+    attr->attr_flags = ATTR_FLAG_WELL_KNOWN;
     attr->attr_type = ATTR_TYPE_WITHDRAWNROUTES;
-    attr->attr_len = attr_size - sizeof(msg_update_attr_t);
 
     if (lsencap) {
+        attr->attr_flags = ATTR_FLAG_WELL_KNOWN | ATTR_FLAG_LSENCAP;
+        attr->attr_len = attr_size - sizeof(msg_update_attr_lsencap_t);
         msg_update_attr_lsencap_t *attr_lsencap = end;
         attr_lsencap->attr_id = id;
         attr_lsencap->attr_seq = seq;
         end += sizeof(msg_update_attr_lsencap_t);
     } else {
+        attr->attr_len = attr_size - sizeof(msg_update_attr_t);
         end += sizeof(msg_update_attr_t);
     }
 
@@ -402,18 +408,17 @@ new_attr_reachableroutes(void *buff, size_t len,
         return ERROR_BUFFLEN;
 
     void *end = buff;
+    msg_update_attr_t *attr = end;
+    attr->attr_flags = ATTR_FLAG_WELL_KNOWN;
+    attr->attr_type = ATTR_TYPE_REACHABLEROUTES;
     if (lsencap) {
-        msg_update_attr_lsencap_t *attr = end;
-        attr->attr_flags = ATTR_FLAG_WELL_KNOWN;
-        attr->attr_type = ATTR_TYPE_REACHABLEROUTES;
+        attr->attr_flags = ATTR_FLAG_WELL_KNOWN | ATTR_FLAG_LSENCAP;
         attr->attr_len = attr_size - sizeof(msg_update_attr_lsencap_t);
-        attr->attr_id = id;
-        attr->attr_seq = seq;
+        msg_update_attr_lsencap_t *attr_lsencap = end;
+        attr_lsencap->attr_id = id;
+        attr_lsencap->attr_seq = seq;
         end += sizeof(msg_update_attr_lsencap_t);
     } else {
-        msg_update_attr_t *attr = end;
-        attr->attr_flags = ATTR_FLAG_WELL_KNOWN | ATTR_FLAG_LSENCAP;
-        attr->attr_type = ATTR_TYPE_REACHABLEROUTES;
         attr->attr_len = attr_size - sizeof(msg_update_attr_t);
         end += sizeof(msg_update_attr_t);
     }

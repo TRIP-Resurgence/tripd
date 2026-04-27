@@ -58,6 +58,8 @@ locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
     p->itad = itad;
     p->hold = hold;
     p->transmode = transmode;
+    p->routemap_in = NULL;
+    p->routemap_out = NULL;
     
     return p;
 }

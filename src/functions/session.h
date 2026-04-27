@@ -55,7 +55,8 @@ typedef struct {
     pthread_t               thread;     /**< Session thread ID */
     session_state_t         state;      /**< Session state */
     int                     initiated;  /**< Initiated by local -> nonzero */
-    int                     mark_stop_init; /**< Tell initiating thread to quit*/
+    int                     mark_stop_init; /**< Tell initiating thread to
+                                            destroy its session and quit */
 
     int                     fd;         /**< Session socket */
 

@@ -47,7 +47,6 @@
 #include <errno.h>
 #include <sys/param.h>
 
-#include <pthread.h>
 
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -134,6 +133,7 @@ send_notification_res(int fd, int res)
 static void
 manager_session_add(manager_t *m, session_t *s)
 {
+    printf("session add\n");
     if (m->sessions_size + 1 > m->sessions_capacity) {
         m->sessions = realloc(m->sessions,
             2 * sizeof(session_t) * m->sessions_capacity);
@@ -147,14 +147,16 @@ manager_session_add(manager_t *m, session_t *s)
 static void
 manager_session_remove(manager_t *m, session_t *s)
 {
+    printf("session remove\n");
     int s_idx = -1;
     for (int i = 0; i < m->sessions_size; i++)
         if (m->sessions[i] == s)
             s_idx = i;
 
+    trib_adj_pair_destroy(m->trib, s->adj_trib_in, s->adj_trib_out);
     session_destroy(s);
     memcpy(&m->sessions[s_idx], &m->sessions[s_idx + 1],
-        sizeof(session_t*) * (m->sessions_size - s_idx));
+        sizeof(session_t*) * (m->sessions_size - s_idx - 1));
     m->sessions_size--;
 }
 
@@ -233,8 +235,8 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     session_t *coll_s = manager_session_lookup_itad_id(m, open->open_itad,
         open->open_id);
     if (coll_s) {
-        WARNING("collision detected with peer (%d,%d)", open->open_itad,
-            open->open_id);
+        WARNING("collision detected with peer (%d, %s)", open->open_itad,
+            inaddr_str(open->open_id));
         if (coll_s->state == STATE_OPENCONFIRM) {
             WARNING("collision resolved: kept higher ID or ITAD");
             if (manager_collision_sessions_compare(m, s, coll_s)) {
@@ -258,6 +260,7 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     if (init_s && (init_s->initiated == 1) && (init_s != s)) {
         INFO("closing old initiating session");
         init_s->mark_stop_init = 1;
+        pthread_join(init_s->thread, NULL);
     }
 
 
@@ -266,8 +269,11 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     s->keepalive = s->hold / 3;
 
     /* now add session to manager */
-    if (!s->initiated)
+    if (!s->initiated) {
+        pthread_mutex_lock(&m->sessions_mutex);
         manager_session_add(m, s);
+        pthread_mutex_unlock(&m->sessions_mutex);
+    }
 
     size_t opts_toread = open->open_opts_len;
     const void *opt_cur = open->open_opts;
@@ -469,7 +475,9 @@ peer_handshake(void *arg)
             DEBUG("error code: %s, error subcode: %s",
                 notif_code_strs[notif->notif_error_code],
                 notif_code_subcodes_strs[notif->notif_error_code]
-                    [notif->notif_error_subcode]);
+                    ? notif_code_subcodes_strs[notif->notif_error_code]
+                        [notif->notif_error_subcode]
+                    : "-");
         } break;
         case MSG_TYPE_KEEPALIVE: {
             if (s->state == STATE_OPENCONFIRM)
@@ -480,18 +488,17 @@ peer_handshake(void *arg)
             trib_update_adj_out(m->trib, s->adj_trib_out);
             session_update(s, m->id, m->itad);
 
-            /* Hand newly established session off to session_loop */
+            /* Hand newly established session off to session_loop
+             * if this function returns, the session has died */
             session_loop(arg);
 
-            if (s->mark_stop_init) {
-                close(s->fd);
-                free(arg);
-                return NULL;
-            }
+            if (s->mark_stop_init)
+                goto sock_error;
 
             /* If peer disconnects going back to idle, start connect loop */
             s->initiated = 1;
-            connect_loop(arg);
+            if ((ssize_t)connect_loop(arg) < 0)
+                return NULL;
         } break;
         default:
             ERROR("unexpected %s message");
@@ -504,8 +511,14 @@ proto_error:
     send_notification_res(s->fd, res);
 
 sock_error:
-    if (s->mark_stop_init)
+    if (s->mark_stop_init) {
+        close(s->fd);
+        pthread_mutex_lock(&m->sessions_mutex);
+        manager_session_remove(m, s);
+        pthread_mutex_unlock(&m->sessions_mutex);
+        free(arg);
         return NULL;
+    }
     close(s->fd);
     session_change_state(s, STATE_IDLE);
     return NULL;
@@ -660,6 +673,7 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->sessions_capacity = 16;
     m->sessions = malloc(m->sessions_capacity * sizeof(session_t*));
     memset(m->sessions, 0, m->sessions_capacity * sizeof(session_t*));
+    m->sessions_mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
     m->connect_retry = TIMER_CONNECT_RETRY;
     m->hold = TIMER_HOLD_TIME;
@@ -676,19 +690,19 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     if (m->fd < 0) {
         ERROR("could not create listen socket: %s", strerror(errno));
-        return NULL;
+        goto error;
     }
 
     if (bind(m->fd, (const struct sockaddr*)listen_addr,
         sizeof(struct sockaddr_in6)) < 0)
     {
         ERROR("could not bind() listen socket: %s", strerror(errno));
-        return NULL;
+        goto error;
     }
 
     if (listen(m->fd, SOMAXCONN) < 0) {
         ERROR("could not listen() listen socket: %s", strerror(errno));
-        return NULL;
+        goto error;
     }
 
     DEBUG("started session manager, listening at [%s]:%d",
@@ -696,6 +710,13 @@ manager_new(const struct sockaddr_in6 *listen_addr)
         ntohs(listen_addr->sin6_port));
 
     return m;
+
+error:
+    locator_destroy(m->locator);
+    trib_destroy(m->trib);
+    pib_destroy(m->pib);
+    free(m->sessions);
+    return NULL;
 }
 
 
@@ -718,9 +739,12 @@ connect_loop(void *arg)
 
     while (1) {
         if (s->mark_stop_init) {
+            close(s->fd);
+            pthread_mutex_lock(&m->sessions_mutex);
             manager_session_remove(m, s);
+            pthread_mutex_unlock(&m->sessions_mutex);
             free(arg);
-            return NULL;
+            return (void*)-1L;
         }
 
         session_change_state(s, STATE_CONNECT);
@@ -771,7 +795,9 @@ manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     s->adj_trib_out->routemap = peer->routemap_out;
 
     /* add session to manager session vector */
+    pthread_mutex_lock(&manager->sessions_mutex);
     manager_session_add(manager, s);
+    pthread_mutex_unlock(&manager->sessions_mutex);
 
     void **connect_data = malloc(2 * sizeof(void*));
     connect_data[0] = manager;
@@ -824,26 +850,18 @@ manager_shutdown(manager_t *manager)
 {
     DEBUG("beginning shutdown");
 
+    manager_stop(manager);
+
     for (size_t i = 0; i < manager->sessions_size; i++) {
         if (!manager->sessions[i])
             continue;
-        session_shutdown(manager->sessions[i]);
         manager->sessions[i]->mark_stop_init = 1;
-    }
-    
-    for (size_t i = 0; i < manager->sessions_size; i++) {
-        if (!manager->sessions[i])
-            continue;
+        /* this indirectly causes session thread to call
+         * manager_session_remove() and kill itself */
+        session_shutdown(manager->sessions[i]);
         pthread_join(manager->sessions[i]->thread, NULL);
     }
 
-    for (size_t i = 0; i < manager->sessions_size; i++) {
-        if (!manager->sessions[i])
-            continue;
-        session_destroy(manager->sessions[i]);
-    }
-
-    manager_stop(manager);
 
     DEBUG("shutdown complete");
 }
