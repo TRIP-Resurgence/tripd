@@ -328,7 +328,7 @@ session_update(const session_t *s, uint32_t local_id, uint32_t local_itad)
     entry_t **new_ents = NULL;
 
     /* entries that havent been sent UPDATE'd */
-    size_t new_ents_count = get_new_entries(s->adj_trib_out, &new_ents);
+    size_t new_ents_count = get_new_entries(&s->adj_trib_out, &new_ents);
 
     /* group entries by attributes */
     entry_group_t *groups = NULL;

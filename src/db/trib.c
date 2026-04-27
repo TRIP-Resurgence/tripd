@@ -135,7 +135,7 @@ trib_new(uint32_t local_itad)
 }
 
 void
-trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out)
+trib_adj_pair_add(trib_t *trib, table_t *in, table_t *out)
 {
     if (trib->adj_tribs_capacity < trib->adj_tribs_size + 1) {
         trib->adj_tribs_capacity *= 2;
@@ -145,27 +145,27 @@ trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out)
             trib->adj_tribs_capacity * sizeof(table_t));
     }
 
-    *in = &trib->adj_tribs_in[trib->adj_tribs_size];
-    *out = &trib->adj_tribs_out[trib->adj_tribs_size];
+    trib->adj_tribs_in[trib->adj_tribs_size] = in;
+    trib->adj_tribs_out[trib->adj_tribs_size] = out;
     trib->adj_tribs_size++;
 
-    table_init(*in);
-    table_init(*out);
+    table_init(in);
+    table_init(out);
     printf("adj_pair_new\n");
 }
 
 void
-trib_adj_pair_destroy(trib_t *trib, table_t *in, table_t *out)
+trib_adj_pair_remove(trib_t *trib, table_t *in, table_t *out)
 {
     printf("adj_pair_destroy\n");
     for (size_t i = 0; i < trib->adj_tribs_size; i++) {
-        if (&trib->adj_tribs_in[i] == in && &trib->adj_tribs_out[i] == out) {
+        if (trib->adj_tribs_in[i] == in && trib->adj_tribs_out[i] == out) {
             trib_table_deinit(in);
             trib_table_deinit(out);
             memmove(&trib->adj_tribs_in[i], &trib->adj_tribs_in[i+1],
-                sizeof(table_t) * (trib->adj_tribs_size - i));
+                sizeof(table_t*) * (trib->adj_tribs_size - i));
             memmove(&trib->adj_tribs_out[i], &trib->adj_tribs_out[i+1],
-                sizeof(table_t) * (trib->adj_tribs_size - i));
+                sizeof(table_t*) * (trib->adj_tribs_size - i));
             trib->adj_tribs_size--;
             return;
         }
@@ -348,15 +348,15 @@ trib_update_full(trib_t *trib)
 
     table_select_into(&trib->ext_trib, &trib->local_routes, trib->local_itad);
     for (size_t i = 0; i < trib->adj_tribs_size; i++) {
-        if (trib->adj_tribs_in[i].peer_itad != trib->local_itad) {
+        if (trib->adj_tribs_in[i]->peer_itad != trib->local_itad) {
             /* apply input policy if applicable */
-            if (trib->adj_tribs_in[i].routemap) {
+            if (trib->adj_tribs_in[i]->routemap) {
                 trib_table_clear(&scratch);
-                apply_policy(&scratch, &trib->adj_tribs_in[i], trib->local_itad,
-                    trib->adj_tribs_in[i].routemap);
+                apply_policy(&scratch, trib->adj_tribs_in[i], trib->local_itad,
+                    trib->adj_tribs_in[i]->routemap);
                 table_select_into(&trib->ext_trib, &scratch, trib->local_itad);
             } else
-                table_select_into(&trib->ext_trib, &trib->adj_tribs_in[i],
+                table_select_into(&trib->ext_trib, trib->adj_tribs_in[i],
                     trib->local_itad);
         }
     }
@@ -364,8 +364,8 @@ trib_update_full(trib_t *trib)
     /* Phase 2b: Ext-TRIB and internal Ext-TRIBs-in to Loc-TRIB */
     table_select_into(&trib->loc_trib, &trib->ext_trib, trib->local_itad);
     for (size_t i = 0; i < trib->adj_tribs_size; i++)
-        if (trib->adj_tribs_in[i].peer_itad == trib->local_itad)
-            table_select_into(&trib->loc_trib, &trib->adj_tribs_in[i],
+        if (trib->adj_tribs_in[i]->peer_itad == trib->local_itad)
+            table_select_into(&trib->loc_trib, trib->adj_tribs_in[i],
                 trib->local_itad);
 
     /* Phase 3: Loc-TRIB to Ext-TRIBs-Out */
@@ -373,8 +373,8 @@ trib_update_full(trib_t *trib)
     optimize_table(&trib->optimized_loc_trib, &trib->loc_trib);
 
     for (size_t i = 0; i < trib->adj_tribs_size; i++) {
-        trib_table_clear(&trib->adj_tribs_out[i]);
-        trib_update_adj_out(trib, &trib->adj_tribs_out[i]);
+        trib_table_clear(trib->adj_tribs_out[i]);
+        trib_update_adj_out(trib, trib->adj_tribs_out[i]);
     }
 
     trib_table_deinit(&scratch);
@@ -382,7 +382,7 @@ trib_update_full(trib_t *trib)
 
 
 size_t
-get_new_entries(table_t *table, entry_t ***new_ents_out)
+get_new_entries(const table_t *table, entry_t ***new_ents_out)
 {
     size_t new_ents_size = 0, new_ents_capacity = INIT_TABLE_CAPACITY;
     entry_t **new_ents = malloc(sizeof(entry_t*) * new_ents_capacity);

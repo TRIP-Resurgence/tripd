@@ -153,7 +153,7 @@ manager_session_remove(manager_t *m, session_t *s)
         if (m->sessions[i] == s)
             s_idx = i;
 
-    trib_adj_pair_destroy(m->trib, s->adj_trib_in, s->adj_trib_out);
+    trib_adj_pair_remove(m->trib, &s->adj_trib_in, &s->adj_trib_out);
     session_destroy(s);
     memcpy(&m->sessions[s_idx], &m->sessions[s_idx + 1],
         sizeof(session_t*) * (m->sessions_size - s_idx - 1));
@@ -485,7 +485,7 @@ peer_handshake(void *arg)
             s->last_read_time = time(NULL);
 
             /* Update peer's Adj-TRIB-Out and send UPDATEs */
-            trib_update_adj_out(m->trib, s->adj_trib_out);
+            trib_update_adj_out(m->trib, &s->adj_trib_out);
             session_update(s, m->id, m->itad);
 
             /* Hand newly established session off to session_loop
@@ -565,9 +565,9 @@ listen_loop(void *arg)
         s->peer = peer;
         s->fd = request_fd;
         s->initiated = 0;
-        trib_adj_pair_new(m->trib, &s->adj_trib_in, &s->adj_trib_out);
-        s->adj_trib_in->routemap = peer->routemap_in;
-        s->adj_trib_out->routemap = peer->routemap_out;
+        trib_adj_pair_add(m->trib, &s->adj_trib_in, &s->adj_trib_out);
+        s->adj_trib_in.routemap = peer->routemap_in;
+        s->adj_trib_out.routemap = peer->routemap_out;
 
         void **handshake_data = malloc(2 * sizeof(void*));
         handshake_data[0] = m;
@@ -790,9 +790,9 @@ manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     s->peer = peer;
     s->state = STATE_IDLE;
     s->initiated = 1;
-    trib_adj_pair_new(manager->trib, &s->adj_trib_in, &s->adj_trib_out);
-    s->adj_trib_in->routemap = peer->routemap_in;
-    s->adj_trib_out->routemap = peer->routemap_out;
+    trib_adj_pair_add(manager->trib, &s->adj_trib_in, &s->adj_trib_out);
+    s->adj_trib_in.routemap = peer->routemap_in;
+    s->adj_trib_out.routemap = peer->routemap_out;
 
     /* add session to manager session vector */
     pthread_mutex_lock(&manager->sessions_mutex);

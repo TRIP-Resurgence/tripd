@@ -82,8 +82,8 @@ typedef struct {
     size_t                  routetypes_count; /**< Supported route types count*/
 
     /* adj tables */
-    table_t                *adj_trib_in;    /**< Adj-TRIB-in */
-    table_t                *adj_trib_out;   /**< Adj-TRIB-out */
+    table_t                 adj_trib_in;    /**< Adj-TRIB-in */
+    table_t                 adj_trib_out;   /**< Adj-TRIB-out */
 } session_t;
 
 

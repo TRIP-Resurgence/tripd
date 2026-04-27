@@ -156,9 +156,9 @@ void trib_table_deinit(table_t *t);
 
 /** \brief Initialize TRIB structure */
 trib_t *trib_new(uint32_t local_itad);
-/** \brief Add and init pair of tables in Adj-TRIBs-* vector */
-void trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out);
-void trib_adj_pair_destroy(trib_t *trib, table_t *in, table_t *out);
+/** \brief Add and init pair of tables owned by caller */
+void trib_adj_pair_add(trib_t *trib, table_t *in, table_t *out);
+void trib_adj_pair_remove(trib_t *trib, table_t *in, table_t *out);
 /** \brief Deinit TRIB structure */
 void trib_destroy(trib_t *trib);
 
@@ -190,7 +190,7 @@ void trib_update_full(trib_t *trib);
  * \param new_ents_out Where to put entry references
  * \return Number of new entries
  */
-size_t get_new_entries(table_t *table, entry_t ***new_ents_out);
+size_t get_new_entries(const table_t *table, entry_t ***new_ents_out);
 
 /** \brief Group array of entry references by attributes
  * 
