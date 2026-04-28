@@ -322,6 +322,20 @@ apply_policy(table_t *dst, const table_t *src, uint32_t local_itad,
 
 
 void
+trib_update_local(trib_t *trib)
+{
+    for (size_t i = 0; i < trib->local_routes.size; i++) {
+        entry_attrs_t *a = &trib->local_routes.table[i]->attrs;
+        if (ATTR_IS_USED_NEXTHOP(a->use))
+            a->nextitad = trib->local_itad;
+        if (ATTR_IS_USED_ADVERTPATH(a->use))
+            a->advertpath[0] = trib->local_itad;
+        if (ATTR_IS_USED_ROUTEDPATH(a->use))
+            a->routedpath[0] = trib->local_itad;
+    }
+}
+
+void
 trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
 {
     trib_table_clear(adj_trib_out);
@@ -336,10 +350,6 @@ trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
 void
 trib_update_full(trib_t *trib)
 {
-    /* routes may have been defined before TRIP instance */
-    for (size_t i = 0; i < trib->local_routes.size; i++)
-        trib->local_routes.table[i]->attrs.nextitad = trib->local_itad;
-
     trib_table_clear(&trib->ext_trib);
     trib_table_clear(&trib->loc_trib);
     trib_table_clear(&trib->optimized_loc_trib);

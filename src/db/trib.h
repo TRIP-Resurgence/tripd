@@ -168,6 +168,10 @@ void trib_table_insert(table_t *table, entry_t *route);
 /** \brief Destroy all entries and clear table */
 void trib_table_clear(table_t *table);
 
+
+/** \brief Update local routes when ITAD is defined */
+void trib_update_local(trib_t *trib);
+
 /** \brief Update an Adj-TRIB-Out
  *
  * For use when a new peer connets and we have to UPDATE it without
