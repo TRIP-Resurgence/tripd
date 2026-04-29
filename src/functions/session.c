@@ -31,6 +31,7 @@
 #include "protocol/protocol.h"
 
 #include <logging/logging.h>
+#include <stddef.h>
 #include <util/util.h>
 
 #include <string.h>
@@ -44,7 +45,6 @@
 #include <arpa/inet.h>
 
 #define _COMPONENT_ "session"
-
 
 const char *session_state_strs[] = {
     "idle",
@@ -205,25 +205,45 @@ sock_error:
 }
 
 static ssize_t
+serialize_routes(void *buff, size_t len, entry_group_t *group)
+{
+    void *ptr = buff;
+
+    for (size_t i = 0; i < group->size; i++) {
+        if (ptr - buff > len)
+            return -1;
+
+        route_t *r = ptr;
+        r->route_af = group->entries[i]->af;
+        r->route_app_proto = group->entries[i]->app_proto;
+        r->route_len = strlen(group->entries[i]->prefix);
+        memcpy(&r->route_addr, group->entries[i]->prefix, r->route_len);
+        ptr += sizeof(route_t) + r->route_len;
+    }
+
+    return ptr - buff;
+}
+
+
+static ssize_t
 serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group,
     uint32_t local_id, uint32_t local_itad)
 {
+    char buff_array[10][MAX_MSG_SIZE];
     msg_update_attr_t *attr_bufs[10]; /* max 10 num of attrs per UPDATE */
     for (size_t i = 0; i < 10; i++) {
-        attr_bufs[i] = malloc(MAX_MSG_SIZE);
+        attr_bufs[i] = (void*)buff_array[i];
         memset(attr_bufs[i], 0, MAX_MSG_SIZE);
     }
     size_t attrs_count = 0;
     int r = 0;
 
     /* create array of routes from array of entry references */
-    route_t routes[4096];
-    for (size_t j = 0; j < group->size; j++) {
-        routes[j].route_af = group->entries[j]->af;
-        routes[j].route_app_proto = group->entries[j]->app_proto;
-        routes[j].route_len = strlen(group->entries[j]->prefix);
-        memcpy(&routes[j].route_addr, group->entries[j]->prefix,
-            strlen(group->entries[j]->prefix));
+    char routes[MAX_MSG_SIZE];
+    ssize_t routes_size = serialize_routes(routes, MAX_MSG_SIZE, group);
+    if (routes_size < 0) {
+        ERROR("too many routes to send");
+        return -1;
     }
 
     /* figure out max seq number on entries */
@@ -232,45 +252,45 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
         if (group->entries[j]->seq > seq)
             seq = group->entries[j]->seq;
     seq += 1; /* next sequence number */
-    /* set last used sequence number */
+    /* set last used sequence number TODO: move after send */
     for (size_t j = 0; j < group->size; j++)
         group->entries[j]->seq = seq;
 
     /* if WithdrawnRoutes, only that one attribute needed (?) */
     if (group->attrs.withdrawn) {
-        if (new_attr_withdrawnroutes(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-            /* internal or external peer
-             * always link-state encapsulate for internal flooding */
-            s->peer->itad == local_itad,
-            local_id, seq, routes, group->size) < 0)
-        {
-            return -1;
-        }
+        PROTO_TRY(
+            new_attr_withdrawnroutes(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                /* internal or external peer
+                 * always link-state encapsulate for internal flooding */
+                s->peer->itad == local_itad,
+                local_id, seq, routes, routes_size),
+            r, goto proto_error
+        );
 
         goto finish;
     }
 
     /* for ReacheableRoutes */
-    if (new_attr_reachableroutes(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-        /* internal or external peer
-         * always link-state encapsulate for internal flooding */
-        s->peer->itad == local_itad,
-        local_id, seq, routes, group->size) < 0)
-    {
-        return -1;
-    }
-    
+    PROTO_TRY(
+        new_attr_reachableroutes(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            /* internal or external peer
+             * always link-state encapsulate for internal flooding */
+            s->peer->itad == local_itad,
+            local_id, seq, routes, routes_size),
+        r, goto proto_error
+    );
+
     /* NextHopServer */
     if (!ATTR_IS_USED_NEXTHOP(group->attrs.use)) {
         ERROR("tried to advertise reachableroutes without nexthopserver");
         return -1;
     }
 
-    if (new_attr_nexthopserver(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-        group->attrs.nextitad, group->attrs.nexthop) < 0)
-    {
-        return -1;
-    }
+    PROTO_TRY(
+        new_attr_nexthopserver(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            group->attrs.nextitad, group->attrs.nexthop),
+        r, goto proto_error
+    );
 
     /* AdvertisementPath */
     if (ATTR_IS_USED_ADVERTPATH(group->attrs.use)) {
@@ -279,8 +299,12 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
         };
         memcpy(&path.itadpath_segs, group->attrs.routedpath,
             sizeof(uint32_t) * group->attrs.routedpath_size);
-        if (new_attr_advertisementpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path) < 0)
-            return -1;
+
+        PROTO_TRY(
+            new_attr_advertisementpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                &path),
+            r, goto proto_error
+        );
     }
 
     /* RoutedPath */
@@ -290,49 +314,67 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
         };
         memcpy(&path.itadpath_segs, group->attrs.routedpath,
             sizeof(uint32_t) * group->attrs.routedpath_size);
-        if (new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path) < 0)
-            return -1;
+
+        PROTO_TRY(
+            new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path),
+            r, goto proto_error
+        );
     }
 
     /* AtomicAggregate */
-    if (group->attrs.atomicaggregate)
-        if (new_attr_atomicaggregate(attr_bufs[attrs_count++], MAX_MSG_SIZE) < 0)
-            return -1;
+    if (group->attrs.atomicaggregate) {
+        PROTO_TRY(
+            new_attr_atomicaggregate(attr_bufs[attrs_count++], MAX_MSG_SIZE),
+            r, goto proto_error
+        );
+    }
         
     /* LocalPreference
      * intra-domain only */
-    if (ATTR_IS_USED_LOCALPREF(group->attrs.use) && s->peer->itad == local_itad)
-        if (new_attr_localpref(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-            group->attrs.local_pref) < 0)
-                return -1;
+    if (ATTR_IS_USED_LOCALPREF(group->attrs.use) && s->peer->itad == local_itad) {
+        PROTO_TRY(
+            new_attr_localpref(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                group->attrs.local_pref),
+            r, goto proto_error
+        );
+    }
 
     /* MultiExitDiscriminator
      * extra-domain only */
-    if (ATTR_IS_USED_METRIC(group->attrs.use) && s->peer->itad != local_itad)
-        if (new_attr_multiexitdisc(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-            group->attrs.metric) < 0)
-                return -1;
+    if (ATTR_IS_USED_METRIC(group->attrs.use) && s->peer->itad != local_itad) {
+        PROTO_TRY(
+            new_attr_multiexitdisc(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                group->attrs.metric),
+            r, goto proto_error
+        );
+    }
 
     /* Communities */
-    if (ATTR_IS_USED_COMMUNITIES(group->attrs.use))
-        if (new_attr_communities(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-            group->attrs.communities, group->attrs.communities_size) < 0)
-                return -1;
+    if (ATTR_IS_USED_COMMUNITIES(group->attrs.use)) {
+        PROTO_TRY(
+            new_attr_communities(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                group->attrs.communities, group->attrs.communities_size),
+            r, goto proto_error
+        );
+    }
 
     /* ConvertedRoute propagate */
-    if (group->attrs.convertedroute)
-        if (new_attr_convertedroute(attr_bufs[attrs_count++], MAX_MSG_SIZE) < 0)
-            return -1;
+    if (group->attrs.convertedroute) {
+        PROTO_TRY(
+            new_attr_convertedroute(attr_bufs[attrs_count++], MAX_MSG_SIZE),
+            r, goto proto_error
+        );
+    }
 
 finish:
     /* serialize serialized attributes into UPDATE */
     r = new_msg_update(buff, MAX_MSG_SIZE,
         (const msg_update_attr_t**)attr_bufs, attrs_count);
 
-    for (size_t i = 0; i < 10; i++)
-         free(attr_bufs[i]);
-
     return r;
+
+proto_error:
+    return -1;
 }
 
 void
