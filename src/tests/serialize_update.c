@@ -88,6 +88,50 @@ main()
     routedpatha->attr_type = ATTR_TYPE_ROUTEDPATH;
     routedpatha->attr_len = sizeof(attr_routedpath_t) + (sizeof(uint32_t) * routedpath->itadpath_len);
 
+    msg_update_attr_t *atomicaggregatea = (void*)rbuffs[bidx++];
+    atomicaggregatea->attr_flags = ATTR_FLAG_WELL_KNOWN;
+    atomicaggregatea->attr_type = ATTR_TYPE_ATOMICAGGREGATE;
+    atomicaggregatea->attr_len = 0;
+
+    msg_update_attr_t *localprefa = (void*)rbuffs[bidx++];
+    attr_localpref_t *localpref = (void*)&localprefa->attr_val;
+    *localpref = 69420;
+    localprefa->attr_flags = ATTR_FLAG_WELL_KNOWN;
+    localprefa->attr_type = ATTR_TYPE_LOCALPREFERENCE;
+    localprefa->attr_len = sizeof(attr_localpref_t);
+
+    msg_update_attr_t *multiexitdisca = (void*)rbuffs[bidx++];
+    attr_multiexitdisc_t *multiexitdisc = (void*)&multiexitdisca->attr_val;
+    *multiexitdisc = 42069;
+    multiexitdisca->attr_flags = ATTR_FLAG_WELL_KNOWN;
+    multiexitdisca->attr_type = ATTR_TYPE_MULTIEXITDISC;
+    multiexitdisca->attr_len = sizeof(attr_multiexitdisc_t);
+
+    msg_update_attr_t *communitiesa = (void*)rbuffs[bidx++];
+    attr_communities_t *communities = (void*)&communitiesa->attr_val;
+    (*communities)[0].community_itad = 69;
+    (*communities)[0].community_id = 420;
+    (*communities)[1].community_itad = 420;
+    (*communities)[1].community_id = 69;
+    communitiesa->attr_flags = ATTR_FLAG_TRANSITIVE;
+    communitiesa->attr_type = ATTR_TYPE_COMMUNITIES;
+    communitiesa->attr_len = 2 * sizeof(community_t);
+
+    msg_update_attr_lsencap_t *itadtopologya = (void*)rbuffs[bidx++];
+    attr_itadtopology_t *itadtopology = (void*)&itadtopologya->attr_val;
+    (*itadtopology)[0] = 69420;
+    (*itadtopology)[1] = 42069;
+    itadtopologya->attr_flags = ATTR_FLAG_WELL_KNOWN | ATTR_FLAG_LSENCAP;
+    itadtopologya->attr_type = ATTR_TYPE_ITADTOPOLOGY;
+    itadtopologya->attr_len = 2 * sizeof(uint32_t);
+    itadtopologya->attr_id = 0x0a000000;
+    itadtopologya->attr_seq = 1234;
+
+    msg_update_attr_t *convertedroutea = (void*)rbuffs[bidx++];
+    convertedroutea->attr_flags = ATTR_FLAG_WELL_KNOWN;
+    convertedroutea->attr_type = ATTR_TYPE_CONVERTEDROUTE;
+    convertedroutea->attr_len = 0;
+
     /* UPDATE serialization */
     bidx = 1;
     int r = 0;
@@ -143,6 +187,56 @@ main()
     r = new_attr_routedpath(tbuffs[bidx], 4096, path);
     if (r < 0) {
         printf("error: routedpath\n");
+        return 1;
+    }
+    sizes[bidx++] = r;
+
+    r = new_attr_atomicaggregate(tbuffs[bidx], 4096);
+    if (r < 0) {
+        printf("error: atomicaggregate\n");
+        return 1;
+    }
+    sizes[bidx++] = r;
+
+    r = new_attr_localpref(tbuffs[bidx], 4096, 69420);
+    if (r < 0) {
+        printf("error: localpreference\n");
+        return 1;
+    }
+    sizes[bidx++] = r;
+
+    r = new_attr_multiexitdisc(tbuffs[bidx], 4096, 42069);
+    if (r < 0) {
+        printf("error: multiexitdiscriminator\n");
+        return 1;
+    }
+    sizes[bidx++] = r;
+
+    community_t communities_[] = {
+        { 69, 420 },
+        { 420, 69 }
+    };
+    r = new_attr_communities(tbuffs[bidx], 4096, communities_, 2);
+    if (r < 0) {
+        printf("error: multiexitdiscriminator\n");
+        return 1;
+    }
+    sizes[bidx++] = r;
+
+    uint32_t itadtopology_[] = {
+        69420,
+        42069
+    };
+    r = new_attr_itadtopology(tbuffs[bidx], 4096, 0x0a000000, 1234, itadtopology_, 2);
+    if (r < 0) {
+        printf("error: multiexitdiscriminator\n");
+        return 1;
+    }
+    sizes[bidx++] = r;
+
+    r = new_attr_convertedroute(tbuffs[bidx], 4096);
+    if (r < 0) {
+        printf("error: multiexitdiscriminator\n");
         return 1;
     }
     sizes[bidx++] = r;
