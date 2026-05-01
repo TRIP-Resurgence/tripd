@@ -478,16 +478,14 @@ cmd_config_route(parser_t *parser, int no, char *args)
         e->seq = INITIAL_SEQUENCE_NUMBER;
         e->time = time(NULL);
         e->attrs.use = ATTR_USED_NEXTHOP | ATTR_USED_ADVERTPATH
-            | ATTR_USED_ROUTEDPATH;
+            | ATTR_USED_ROUTEDPATH; /* tripd always originates with paths */
         e->attrs.withdrawn = 0;
         e->attrs.nextitad = parser->manager->itad;
         e->attrs.nexthop = strdup(srv);
-        e->attrs.advertpath = malloc(sizeof(uint32_t));
-        e->attrs.advertpath[0] = parser->manager->itad; /*originated advertpath*/
-        e->attrs.advertpath_size = 1;
-        e->attrs.routedpath = malloc(sizeof(uint32_t));
-        e->attrs.routedpath[0] = parser->manager->itad; /*originated routedpath*/
-        e->attrs.routedpath_size = 1;
+        e->attrs.advertpath = NULL; /* will be realloc()'ed and appended */
+        e->attrs.advertpath_size = 0;
+        e->attrs.routedpath = NULL; /* will be realloc()'ed and appended */
+        e->attrs.routedpath_size = 0;
         e->attrs.atomicaggregate = 0;
         e->attrs.local_pref = 0;
         e->attrs.metric = 0;
@@ -498,7 +496,7 @@ cmd_config_route(parser_t *parser, int no, char *args)
 
         trib_table_insert(&parser->manager->trib->local_routes, e);
     } else if (strncmp(args, "del ", 4) == 0) {
-
+        /* TODO: this */
     } else {
         printf("route: unrecognized argument\n");
         return -1;

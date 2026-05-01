@@ -326,13 +326,10 @@ trib_update_local(trib_t *trib)
 {
     for (size_t i = 0; i < trib->local_routes.size; i++) {
         entry_attrs_t *a = &trib->local_routes.table[i]->attrs;
-        if (ATTR_IS_USED_NEXTHOP(a->use))
-            a->nextitad = trib->local_itad;
-        if (ATTR_IS_USED_ADVERTPATH(a->use))
-            a->advertpath[0] = trib->local_itad;
-        if (ATTR_IS_USED_ROUTEDPATH(a->use))
-            a->routedpath[0] = trib->local_itad;
+        a->nextitad = trib->local_itad;
     }
+
+    trib_update_full(trib);
 }
 
 void
@@ -345,6 +342,37 @@ trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
             adj_trib_out->routemap);
     else
         table_copy(adj_trib_out, &trib->optimized_loc_trib);
+
+    /* append this ITAD to outgoing routes's path
+     * if this LS originates the route this appends to an empty path */
+    for (size_t i = 0; i < adj_trib_out->size; i++) {
+        entry_t *e = adj_trib_out->table[i];
+
+        /* always send paths, even if incomplete */
+        e->attrs.use |= ATTR_USED_ADVERTPATH | ATTR_USED_ROUTEDPATH;
+
+        if (ATTR_IS_USED_ADVERTPATH(e->attrs.use)) {
+            e->attrs.advertpath_size++;
+            e->attrs.advertpath = realloc(e->attrs.advertpath,
+                sizeof(uint32_t) * e->attrs.advertpath_size);
+            memmove(&e->attrs.advertpath[1], &e->attrs.advertpath[0],
+                e->attrs.advertpath_size - 1);
+            e->attrs.advertpath[0] = trib->local_itad;
+        }
+
+        /* append to routed path only if we change the routing
+         * i.e. we changed the next hop to this ITAD */
+        if (ATTR_IS_USED_ROUTEDPATH(e->attrs.use)
+            && e->attrs.nextitad == trib->local_itad)
+        {
+            e->attrs.routedpath_size++;
+            e->attrs.routedpath = realloc(e->attrs.routedpath,
+                sizeof(uint32_t) * e->attrs.routedpath_size);
+            memmove(&e->attrs.routedpath[1], &e->attrs.routedpath[0],
+                e->attrs.routedpath_size - 1);
+            e->attrs.routedpath[0] = trib->local_itad;
+        }
+    }
 }
 
 void
