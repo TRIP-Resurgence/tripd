@@ -195,6 +195,9 @@ typedef struct __attribute__((packed)) {
     uint8_t     attr_val[];
 } msg_update_attr_lsencap_t;
 
+#define INITIAL_SEQUENCE_NUMBER 0x80000001  /* -N + 1 */
+#define MAX_SEQUENCE_NUMBER     0x7fffffff  /* N - 1*/
+
 
 /* attributes */
 
@@ -513,13 +516,15 @@ runtime_error_t new_msg_notif(void *buff, size_t len, uint8_t error_code,
 
 /* UPDATE attribute serializers */
 
-/** \brief Serialize WithdrawnRoutes attribute */
+/** \brief Serialize WithdrawnRoutes attribute
+ * routes_size is size of routes in bytes */
 runtime_error_t new_attr_withdrawnroutes(void *buff, size_t len, int lsencap,
-    uint32_t id, uint32_t seq, const route_t **routes, size_t routes_size);
+    uint32_t id, uint32_t seq, const void *routes, size_t routes_size);
 
-/** \brief Serialize ReachableRoutes attribute */
+/** \brief Serialize ReachableRoutes attribute
+ * routes_size is size of routes in bytes */
 runtime_error_t new_attr_reachableroutes(void *buff, size_t len, int lsencap,
-    uint32_t id, uint32_t seq, const route_t **routes, size_t routes_size);
+    uint32_t id, uint32_t seq, const void *routes, size_t routes_size);
 
 /** \brief Serialize NextHopServer attribute */
 runtime_error_t new_attr_nexthopserver(void *buff, size_t len,

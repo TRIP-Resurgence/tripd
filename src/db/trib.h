@@ -32,6 +32,38 @@
 #include <stddef.h>
 #include <time.h>
 
+#define ATTR_USED_NEXTHOP               0b1
+#define ATTR_USED_ADVERTPATH            0b10
+#define ATTR_USED_ROUTEDPATH            0b100
+#define ATTR_USED_LOCALPREF             0b1000
+#define ATTR_USED_METRIC                0b10000
+#define ATTR_USED_COMMUNITIES           0b100000
+
+#define ATTR_IS_USED_NEXTHOP(x)         (((x) >> 0) & 1)
+#define ATTR_IS_USED_ADVERTPATH(x)      (((x) >> 1) & 1)
+#define ATTR_IS_USED_ROUTEDPATH(x)      (((x) >> 2) & 1)
+#define ATTR_IS_USED_LOCALPREF(x)       (((x) >> 3) & 1)
+#define ATTR_IS_USED_METRIC(x)          (((x) >> 4) & 1)
+#define ATTR_IS_USED_COMMUNITIES(x)     (((x) >> 5) & 1)
+
+
+/** \brief Groupable attributes that are related to a route */
+typedef struct {
+    uint32_t    use;            /**< Bitfield flags specified attributes */
+    int         withdrawn;      /**< WithdrawnRoutes or ReachableRoutes */
+    uint32_t    nextitad;       /**< ITAD of next hop */
+    char       *nexthop;        /**< Next hop server */
+    uint32_t   *advertpath;     /**< AdvertisementPath */
+    size_t      advertpath_size;
+    uint32_t   *routedpath;     /**< RoutedPath */
+    size_t      routedpath_size;
+    int         atomicaggregate;/**< AtomicAggregate */
+    uint32_t    local_pref;     /**< Degree of Preference */
+    uint32_t    metric;         /**< MultiExitDisc */
+    community_t*communities;    /**< Communities */
+    size_t      communities_size;
+    int         convertedroute; /**< ConvertedRoute, used when =1 */
+} entry_attrs_t;
 
 typedef enum {
     ENTRY_TYPE_TRIP,
@@ -55,18 +87,12 @@ typedef struct {
                                     Ext-TRIB and Loc-TRIB */
     uint32_t    learn_lsid;     /**< Peer LS ID */
 
-    uint32_t    seq;            /**< Sequence number */
+    int32_t     seq;            /**< Sequence number */
     time_t      time;           /**< Learn time */
 
-    /* attributes */
-    char       *nexthop;        /**< Next hop server */
-
-    uint32_t    local_pref;     /**< Degree of Preference */
-    uint32_t    metric;         /**< MultiExitDisc */
-    uint32_t   *itad_path;      /**< RoutedPath */
-    size_t      itad_path_size;
-
-    int         withdrawn;      /**< Mark as withdrawn */
+    entry_attrs_t attrs;        /**< Attributes */
+    
+    int         sent;           /**< Route has been UPDATE'd to peer */
 } entry_t;
 
 /** \brief Route Table */
@@ -76,6 +102,13 @@ typedef struct {
     size_t      size, capacity;
     routemap_t *routemap;       /**< Insertion routemap */
 } table_t;
+
+
+typedef struct {
+    entry_attrs_t attrs;        /**< Common attributes of group */
+    entry_t   **entries;        /**< Array of references to entries on a table*/
+    size_t      size, capacity;
+} entry_group_t;
 
 /** \brief Telephony Routing Information Base
  *
@@ -103,9 +136,9 @@ typedef struct {
 typedef struct {
     uint32_t    local_itad;   /**< local LS ITAD */
 
-    table_t     loc_trib;
+    table_t     loc_trib, optimized_loc_trib;
 
-    table_t    *adj_tribs_in, *adj_tribs_out;
+    table_t   **adj_tribs_in, **adj_tribs_out; /**< Owned by session */
     size_t      adj_tribs_capacity, adj_tribs_size;
     
     table_t     ext_trib;
@@ -114,36 +147,64 @@ typedef struct {
 } trib_t;
 
 
-/** \brief New entry
- *
- * Not marked withdrawned
- */
-entry_t *entry_new(uint16_t af, uint16_t app_proto, const char *prefix,
-    const char *nexthop, uint32_t seq, time_t time, uint32_t local_pref,
-    uint32_t metric);
-
 /** \brief Destroy entry */
 void entry_destroy(entry_t *entry);
+
 
 /** \brief Deinitialize table */
 void trib_table_deinit(table_t *t);
 
 /** \brief Initialize TRIB structure */
 trib_t *trib_new(uint32_t local_itad);
-/** \brief Add and init pair of tables in Adj-TRIBs-* vector */
-void trib_adj_pair_new(trib_t *trib, table_t **in, table_t **out);
+/** \brief Add and init pair of tables owned by caller */
+void trib_adj_pair_add(trib_t *trib, table_t *in, table_t *out);
+void trib_adj_pair_remove(trib_t *trib, table_t *in, table_t *out);
 /** \brief Deinit TRIB structure */
 void trib_destroy(trib_t *trib);
 
 /** \brief Add route to table */
 void trib_table_insert(table_t *table, entry_t *route);
 
+/** \brief Destroy all entries and clear table */
+void trib_table_clear(table_t *table);
+
+
+/** \brief Update local routes when ITAD is defined */
+void trib_update_local(trib_t *trib);
+
+/** \brief Update an Adj-TRIB-Out
+ *
+ * For use when a new peer connets and we have to UPDATE it without
+ * triggering a full update
+ */
+void trib_update_adj_out(trib_t *trib, table_t *adj_trib_out);
+
 /** \brief Execute route selection
  *
  * Takes Ext-TRIBs-in and locala routes
- * Updates Ext-TRIB, Loc-TRIB and Ext-TRIBs-out
+ * Updates Ext-TRIB, Loc-TRIB, optimized Loc-TRIB and Ext-TRIBs-out
  */
-void trib_update(trib_t *trib);
+void trib_update_full(trib_t *trib);
+
+/** \brief Return array of new entry references to new
+ *
+ * Allocates array of references and assigns it to new_ents_out
+ *
+ * \param table Table with new entries
+ * \param new_ents_out Where to put entry references
+ * \return Number of new entries
+ */
+size_t get_new_entries(const table_t *table, entry_t ***new_ents_out);
+
+/** \brief Group array of entry references by attributes
+ * 
+ * \param entries Input array
+ * \param entries_size Input array size
+ * \param groups_out Output entry reference groups
+ * \return Number of groups
+ */
+size_t group_entries_by_attrs(entry_t **entries, size_t entries_size,
+    entry_group_t **groups_out);
 
 #endif /* _TRIB_H */
 

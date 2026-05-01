@@ -55,7 +55,8 @@ typedef struct {
     pthread_t               thread;     /**< Session thread ID */
     session_state_t         state;      /**< Session state */
     int                     initiated;  /**< Initiated by local -> nonzero */
-    int                     mark_stop_init; /**< Tell initiating thread to quit*/
+    int                     mark_stop_init; /**< Tell initiating thread to
+                                            destroy its session and quit */
 
     int                     fd;         /**< Session socket */
 
@@ -72,14 +73,17 @@ typedef struct {
     time_t                  last_read_time;     /**< Time of last read */
     time_t                  last_write_time;    /**< Time of last write */
 
+    time_t                  last_orig_time;     /**< Last origination time */
+    time_t                  last_advert_time;   /**< Last advertisement time */
+
     /* capabilities */
     capinfo_transmode_t     transmode;        /**< Peer transmode */
     capinfo_routetype_t    *routetypes;       /**< Supported route types */
     size_t                  routetypes_count; /**< Supported route types count*/
 
     /* adj tables */
-    table_t                *adj_trib_in;    /**< Adj-TRIB-in */
-    table_t                *adj_trib_out;   /**< Adj-TRIB-out */
+    table_t                 adj_trib_in;    /**< Adj-TRIB-in */
+    table_t                 adj_trib_out;   /**< Adj-TRIB-out */
 } session_t;
 
 
@@ -94,6 +98,12 @@ const char *id_str(uint32_t id);
 
 /** \brief Session loop */
 void *session_loop(void *arg);
+
+/** \brief Update session
+ *
+ * Send UPDATEs to peer according to new entries in Adj-TRIB-Out
+ */
+void session_update(const session_t *s, uint32_t local_id, uint32_t local_itad);
 
 /** \brief Shutdown socket, terminate connection and thread */
 void session_shutdown(session_t *session);

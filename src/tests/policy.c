@@ -12,19 +12,21 @@ main()
     table_init(&dst);
 
     entry_t e = {
-        AF_E164, APP_PROTO_SIP, NULL, ENTRY_TYPE_TRIP, 0, 0, 0, 0, 0, NULL, 100, 100, NULL, 0, 0
+        AF_E164, APP_PROTO_SIP, NULL, ENTRY_TYPE_TRIP, 0, 0, 0, 0, 0, {
+            0, 0, 0, NULL, NULL, 0, NULL, 0, 0, 100, 100, NULL, 0, 0
+        }, 0
     };
 
     e.prefix = "1234";
-    e.nexthop = "sip.arf20.com";
-    e.itad_path = (uint32_t[3]){ 1, 2, 3 };
-    e.itad_path_size = 3;
+    e.attrs.nexthop = "sip.arf20.com";
+    e.attrs.routedpath = (uint32_t[3]){ 1, 2, 3 };
+    e.attrs.routedpath_size = 3;
     trib_table_insert(&src, entry_clone(&e));
 
     e.prefix = "4321";
-    e.nexthop = "sip.arf20.com";
-    e.itad_path = (uint32_t[3]){ 1, 3, 2 };
-    e.itad_path_size = 3;
+    e.attrs.nexthop = "sip.arf20.com";
+    e.attrs.routedpath = (uint32_t[3]){ 1, 3, 2 };
+    e.attrs.routedpath_size = 3;
     trib_table_insert(&src, entry_clone(&e));
 
 
@@ -50,8 +52,8 @@ main()
         return 1;
     }
 
-    if (dst.table[0]->local_pref != 200) {
-        printf("wrong set: %d != 100\n", dst.table[0]->local_pref);
+    if (dst.table[0]->attrs.local_pref != 200) {
+        printf("wrong set: %d != 100\n", dst.table[0]->attrs.local_pref);
         return 1;
     }
 

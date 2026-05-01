@@ -75,6 +75,12 @@ cmd_end(parser_t *parser, int no, char *args)
     parser->state.ctx = CTX_ROOT;
     if (parser->state.ctx == CTX_ROOT)
         parser->state.enabled = 0;
+
+    if (parser->state.ctx == CTX_TRIP) {
+        trib_update_local(parser->manager->trib);
+        trib_update_full(parser->manager->trib);
+    }
+
     return 0;
 }
 
@@ -85,7 +91,11 @@ cmd_exit(parser_t *parser, int no, char *args)
     case CTX_ROOT: parser->state.enabled = 0; break;
     case CTX_CONFIG: parser->state.ctx = CTX_ROOT; break;
     case CTX_ROUTEMAP: parser->state.ctx = CTX_CONFIG; break;
-    case CTX_TRIP: parser->state.ctx = CTX_CONFIG; break;
+    case CTX_TRIP:
+        parser->state.ctx = CTX_CONFIG;
+        trib_update_local(parser->manager->trib);
+        trib_update_full(parser->manager->trib);
+        break;
     default: return -1;
     }
     return 0;
@@ -236,7 +246,7 @@ cmd_show(parser_t *parser, int no, char *args)
                     "DPETC"[t->loc_trib.table[i]->af - 1],
                     t->loc_trib.table[i]->prefix,
                     app_proto_str(t->loc_trib.table[i]->app_proto),
-                    t->loc_trib.table[i]->nexthop);
+                    t->loc_trib.table[i]->attrs.nexthop);
         } else {
         }
     } else if (strcmp(subcmd, "acl") == 0) {
@@ -463,26 +473,38 @@ cmd_config_route(parser_t *parser, int no, char *args)
         }
         e->prefix = strdup(pfx);
         e->type = ENTRY_TYPE_STATIC;
-        e->nexthop = strdup(srv);
         e->learn_itad = parser->manager->itad;
         e->learn_lsid = 0;
-        e->seq = 0;
+        e->seq = INITIAL_SEQUENCE_NUMBER;
         e->time = time(NULL);
-        e->local_pref = UINT32_MAX;
-        e->metric = UINT32_MAX;
-        e->itad_path = NULL;
-        e->itad_path_size = 0;
-        e->withdrawn= 0;
+        e->attrs.use = ATTR_USED_NEXTHOP | ATTR_USED_ADVERTPATH
+            | ATTR_USED_ROUTEDPATH; /* tripd always originates with paths */
+        e->attrs.withdrawn = 0;
+        e->attrs.nextitad = parser->manager->itad;
+        e->attrs.nexthop = strdup(srv);
+        e->attrs.advertpath = NULL; /* will be realloc()'ed and appended */
+        e->attrs.advertpath_size = 0;
+        e->attrs.routedpath = NULL; /* will be realloc()'ed and appended */
+        e->attrs.routedpath_size = 0;
+        e->attrs.atomicaggregate = 0;
+        e->attrs.local_pref = 0;
+        e->attrs.metric = 0;
+        e->attrs.communities = NULL;
+        e->attrs.communities_size = 0;
+        e->attrs.convertedroute = 0;
+        e->sent = 0;
 
         trib_table_insert(&parser->manager->trib->local_routes, e);
     } else if (strncmp(args, "del ", 4) == 0) {
-
+        /* TODO: this */
     } else {
         printf("route: unrecognized argument\n");
         return -1;
     }
 
-    trib_update(parser->manager->trib);
+    trib_update_full(parser->manager->trib);
+
+    manager_schedule_update(parser->manager);
 
     return 0;
 }
@@ -620,6 +642,7 @@ cmd_config_trip(parser_t *parser, int no, char *args)
 
     parser->state.ctx = CTX_TRIP;
     parser->manager->itad = itad;
+    parser->manager->trib->local_itad = itad;
 
     return 0;
 }
@@ -877,9 +900,9 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
             return -1;
         }
 
-        if (strcmp(direction, "in"))
+        if (strcmp(direction, "in") == 0)
             peer->routemap_in = routemap;
-        else if (strcmp(direction, "out"))
+        else if (strcmp(direction, "out") == 0)
             peer->routemap_out = routemap;
         else {
             fprintf(parser->outf, "peer: unrecognized direction\n");

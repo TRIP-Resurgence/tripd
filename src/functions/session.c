@@ -26,10 +26,12 @@
 
 #include "session.h"
 
+#include "db/trib.h"
 #include "manager.h"
 #include "protocol/protocol.h"
 
 #include <logging/logging.h>
+#include <stddef.h>
 #include <util/util.h>
 
 #include <string.h>
@@ -43,7 +45,6 @@
 #include <arpa/inet.h>
 
 #define _COMPONENT_ "session"
-
 
 const char *session_state_strs[] = {
     "idle",
@@ -91,8 +92,7 @@ send_notification(int fd, int code, int subcode)
     char buff[MAX_MSG_SIZE];
 
     PROTO_TRY(
-        new_msg_notif(buff, MAX_MSG_SIZE,
-            NOTIF_CODE_ERROR_MSG, subcode, 0, NULL),
+        new_msg_notif(buff, MAX_MSG_SIZE, code, subcode, 0, NULL),
         res, goto sock_error
     );
 
@@ -168,6 +168,11 @@ session_loop(void *arg)
         case MSG_TYPE_UPDATE: {
             s->last_read_time = time(NULL);
             /* TODO: update */
+            /* flush for now */
+            if (recv(s->fd, recv_wnd, msg->msg_len, 0) < 0) {
+                ERROR("shit");
+                goto sock_error;
+            }
         } break;
         case MSG_TYPE_NOTIFICATION: {
             SOCK_TRY_RECV(s->fd, recv_wnd, msg_notif_t, goto sock_error);
@@ -195,16 +200,220 @@ proto_error:
     send_notification_res(s->fd, res);
 
 sock_error:
-    if (!s->mark_stop_init)
-        session_change_state(s, STATE_IDLE);
     close(s->fd);
     return NULL;
+}
+
+static ssize_t
+serialize_routes(void *buff, size_t len, entry_group_t *group)
+{
+    void *ptr = buff;
+
+    for (size_t i = 0; i < group->size; i++) {
+        if (ptr - buff > len)
+            return -1;
+
+        route_t *r = ptr;
+        r->route_af = group->entries[i]->af;
+        r->route_app_proto = group->entries[i]->app_proto;
+        r->route_len = strlen(group->entries[i]->prefix);
+        memcpy(&r->route_addr, group->entries[i]->prefix, r->route_len);
+        ptr += sizeof(route_t) + r->route_len;
+    }
+
+    return ptr - buff;
+}
+
+
+static ssize_t
+serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group,
+    uint32_t local_id, uint32_t local_itad)
+{
+    char buff_array[10][MAX_MSG_SIZE];
+    msg_update_attr_t *attr_bufs[10]; /* max 10 num of attrs per UPDATE */
+    for (size_t i = 0; i < 10; i++) {
+        attr_bufs[i] = (void*)buff_array[i];
+        memset(attr_bufs[i], 0, MAX_MSG_SIZE);
+    }
+    size_t attrs_count = 0;
+    int r = 0;
+
+    /* create array of routes from array of entry references */
+    char routes[MAX_MSG_SIZE];
+    ssize_t routes_size = serialize_routes(routes, MAX_MSG_SIZE, group);
+    if (routes_size < 0) {
+        ERROR("too many routes to send");
+        return -1;
+    }
+
+    /* figure out max seq number on entries */
+    int32_t seq = INITIAL_SEQUENCE_NUMBER;
+    for (size_t j = 0; j < group->size; j++)
+        if (group->entries[j]->seq > seq)
+            seq = group->entries[j]->seq;
+    seq += 1; /* next sequence number */
+    /* set last used sequence number TODO: move after send */
+    for (size_t j = 0; j < group->size; j++)
+        group->entries[j]->seq = seq;
+
+    /* if WithdrawnRoutes, only that one attribute needed (?) */
+    if (group->attrs.withdrawn) {
+        PROTO_TRY(
+            new_attr_withdrawnroutes(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                /* internal or external peer
+                 * always link-state encapsulate for internal flooding */
+                s->peer->itad == local_itad,
+                local_id, seq, routes, routes_size),
+            r, goto proto_error
+        );
+
+        goto finish;
+    }
+
+    /* for ReacheableRoutes */
+    PROTO_TRY(
+        new_attr_reachableroutes(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            /* internal or external peer
+             * always link-state encapsulate for internal flooding */
+            s->peer->itad == local_itad,
+            local_id, seq, routes, routes_size),
+        r, goto proto_error
+    );
+
+    /* NextHopServer */
+    if (!ATTR_IS_USED_NEXTHOP(group->attrs.use)) {
+        ERROR("tried to advertise reachableroutes without nexthopserver");
+        return -1;
+    }
+
+    PROTO_TRY(
+        new_attr_nexthopserver(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+            group->attrs.nextitad, group->attrs.nexthop),
+        r, goto proto_error
+    );
+
+    /* AdvertisementPath */
+    if (ATTR_IS_USED_ADVERTPATH(group->attrs.use)) {
+        itadpath_t path = {
+            ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath_size
+        };
+        memcpy(&path.itadpath_segs, group->attrs.routedpath,
+            sizeof(uint32_t) * group->attrs.routedpath_size);
+
+        PROTO_TRY(
+            new_attr_advertisementpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                &path),
+            r, goto proto_error
+        );
+    }
+
+    /* RoutedPath */
+    if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use)) {
+        itadpath_t path = {
+            ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath_size
+        };
+        memcpy(&path.itadpath_segs, group->attrs.routedpath,
+            sizeof(uint32_t) * group->attrs.routedpath_size);
+
+        PROTO_TRY(
+            new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path),
+            r, goto proto_error
+        );
+    }
+
+    /* AtomicAggregate */
+    if (group->attrs.atomicaggregate) {
+        PROTO_TRY(
+            new_attr_atomicaggregate(attr_bufs[attrs_count++], MAX_MSG_SIZE),
+            r, goto proto_error
+        );
+    }
+        
+    /* LocalPreference
+     * intra-domain only */
+    if (ATTR_IS_USED_LOCALPREF(group->attrs.use) && s->peer->itad == local_itad) {
+        PROTO_TRY(
+            new_attr_localpref(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                group->attrs.local_pref),
+            r, goto proto_error
+        );
+    }
+
+    /* MultiExitDiscriminator
+     * extra-domain only */
+    if (ATTR_IS_USED_METRIC(group->attrs.use) && s->peer->itad != local_itad) {
+        PROTO_TRY(
+            new_attr_multiexitdisc(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                group->attrs.metric),
+            r, goto proto_error
+        );
+    }
+
+    /* Communities */
+    if (ATTR_IS_USED_COMMUNITIES(group->attrs.use)) {
+        PROTO_TRY(
+            new_attr_communities(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                group->attrs.communities, group->attrs.communities_size),
+            r, goto proto_error
+        );
+    }
+
+    /* ConvertedRoute propagate */
+    if (group->attrs.convertedroute) {
+        PROTO_TRY(
+            new_attr_convertedroute(attr_bufs[attrs_count++], MAX_MSG_SIZE),
+            r, goto proto_error
+        );
+    }
+
+finish:
+    /* serialize serialized attributes into UPDATE */
+    r = new_msg_update(buff, MAX_MSG_SIZE,
+        (const msg_update_attr_t**)attr_bufs, attrs_count);
+
+    return r;
+
+proto_error:
+    return -1;
+}
+
+void
+session_update(const session_t *s, uint32_t local_id, uint32_t local_itad)
+{
+    entry_t **new_ents = NULL;
+
+    /* entries that havent been sent UPDATE'd */
+    size_t new_ents_count = get_new_entries(&s->adj_trib_out, &new_ents);
+
+    /* group entries by attributes */
+    entry_group_t *groups = NULL;
+    size_t groups_count = group_entries_by_attrs(new_ents, new_ents_count,
+        &groups);
+    
+    for (size_t i = 0; i < groups_count; i++) {
+        char msg_buff[MAX_MSG_SIZE];
+
+        ssize_t upd_size = serialize_group(msg_buff, MAX_MSG_SIZE, s, &groups[i],
+            local_id, local_itad);
+
+        if (upd_size < 0)
+            continue;
+
+        SOCK_TRY_SEND(send(s->fd, msg_buff, upd_size, 0), goto sock_error);
+    }
+
+sock_error:
+    for (size_t i = 0; i < groups_count; i++)
+        free(groups[i].entries);
+    free(groups);
+    free(new_ents);
 }
 
 void
 session_shutdown(session_t *session)
 {
-    /* TODO send CEASE NOTIFICATION */
+    if (session->state == STATE_ESTABLISHED)
+        send_notification(session->fd, NOTIF_CODE_CEASE, 0);
     DEBUG("shutting down session %s", session_str(session));
     shutdown(session->fd, SHUT_RDWR); /* recv loop does close() */
     session_change_state(session, STATE_IDLE);
@@ -215,8 +424,6 @@ session_destroy(session_t *session)
 {
     if (session->routetypes)
         free(session->routetypes);
-    trib_table_deinit(session->adj_trib_in);
-    trib_table_deinit(session->adj_trib_out);
     free(session);
 }
 

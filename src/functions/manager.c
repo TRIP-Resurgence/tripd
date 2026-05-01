@@ -47,7 +47,6 @@
 #include <errno.h>
 #include <sys/param.h>
 
-#include <pthread.h>
 
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -152,9 +151,10 @@ manager_session_remove(manager_t *m, session_t *s)
         if (m->sessions[i] == s)
             s_idx = i;
 
+    trib_adj_pair_remove(m->trib, &s->adj_trib_in, &s->adj_trib_out);
     session_destroy(s);
     memcpy(&m->sessions[s_idx], &m->sessions[s_idx + 1],
-        sizeof(session_t*) * (m->sessions_size - s_idx));
+        sizeof(session_t*) * (m->sessions_size - s_idx - 1));
     m->sessions_size--;
 }
 
@@ -233,8 +233,8 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     session_t *coll_s = manager_session_lookup_itad_id(m, open->open_itad,
         open->open_id);
     if (coll_s) {
-        WARNING("collision detected with peer (%d,%d)", open->open_itad,
-            open->open_id);
+        WARNING("collision detected with peer (%d, %s)", open->open_itad,
+            inaddr_str(open->open_id));
         if (coll_s->state == STATE_OPENCONFIRM) {
             WARNING("collision resolved: kept higher ID or ITAD");
             if (manager_collision_sessions_compare(m, s, coll_s)) {
@@ -242,7 +242,6 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                 return -1;
             } else {
                 /* cease, close and destroy old session, remove from vector */
-                send_notification(coll_s->fd, NOTIF_CODE_CEASE, 0);
                 session_shutdown(coll_s);
                 manager_session_remove(m, coll_s);
             }
@@ -258,6 +257,7 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     if (init_s && (init_s->initiated == 1) && (init_s != s)) {
         INFO("closing old initiating session");
         init_s->mark_stop_init = 1;
+        pthread_join(init_s->thread, NULL);
     }
 
 
@@ -266,8 +266,11 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     s->keepalive = s->hold / 3;
 
     /* now add session to manager */
-    if (!s->initiated)
+    if (!s->initiated) {
+        pthread_mutex_lock(&m->sessions_mutex);
         manager_session_add(m, s);
+        pthread_mutex_unlock(&m->sessions_mutex);
+    }
 
     size_t opts_toread = open->open_opts_len;
     const void *opt_cur = open->open_opts;
@@ -453,6 +456,8 @@ peer_handshake(void *arg)
                 goto sock_error
             );
 
+            s->last_write_time = time(NULL);
+
             session_change_state(s, STATE_OPENCONFIRM);
         } break;
         case MSG_TYPE_NOTIFICATION: {
@@ -467,26 +472,30 @@ peer_handshake(void *arg)
             DEBUG("error code: %s, error subcode: %s",
                 notif_code_strs[notif->notif_error_code],
                 notif_code_subcodes_strs[notif->notif_error_code]
-                    [notif->notif_error_subcode]);
+                    ? notif_code_subcodes_strs[notif->notif_error_code]
+                        [notif->notif_error_subcode]
+                    : "-");
         } break;
         case MSG_TYPE_KEEPALIVE: {
             if (s->state == STATE_OPENCONFIRM)
                 session_change_state(s, STATE_ESTABLISHED);
-            time_t now = time(NULL);
-            s->last_read_time = now;
+            s->last_read_time = time(NULL);
 
-            /* Hand newly established session off to session_loop */
+            /* Update peer's Adj-TRIB-Out and send UPDATEs */
+            trib_update_adj_out(m->trib, &s->adj_trib_out);
+            session_update(s, m->id, m->itad);
+
+            /* Hand newly established session off to session_loop
+             * if this function returns, the session has died */
             session_loop(arg);
 
-            if (s->mark_stop_init) {
-                close(s->fd);
-                free(arg);
-                return NULL;
-            }
+            if (s->mark_stop_init)
+                goto sock_error;
 
             /* If peer disconnects going back to idle, start connect loop */
             s->initiated = 1;
-            connect_loop(arg);
+            if ((ssize_t)connect_loop(arg) < 0)
+                return NULL;
         } break;
         default:
             ERROR("unexpected %s message");
@@ -499,8 +508,15 @@ proto_error:
     send_notification_res(s->fd, res);
 
 sock_error:
-    if (s->mark_stop_init)
+    if (s->mark_stop_init) {
+        send_notification(s->fd, NOTIF_CODE_CEASE, 0);
+        close(s->fd);
+        pthread_mutex_lock(&m->sessions_mutex);
+        manager_session_remove(m, s);
+        pthread_mutex_unlock(&m->sessions_mutex);
+        free(arg);
         return NULL;
+    }
     close(s->fd);
     session_change_state(s, STATE_IDLE);
     return NULL;
@@ -543,12 +559,13 @@ listen_loop(void *arg)
         /* hand off connection to handshake handler on a new thread */
         session_t *s = malloc(sizeof(session_t));
         memset(s, 0, sizeof(session_t));
+        s->state = STATE_IDLE;
         s->peer = peer;
         s->fd = request_fd;
         s->initiated = 0;
-        trib_adj_pair_new(m->trib, &s->adj_trib_in, &s->adj_trib_out);
-        s->adj_trib_in->routemap = peer->routemap_in;
-        s->adj_trib_out->routemap = peer->routemap_out;
+        trib_adj_pair_add(m->trib, &s->adj_trib_in, &s->adj_trib_out);
+        s->adj_trib_in.routemap = peer->routemap_in;
+        s->adj_trib_out.routemap = peer->routemap_out;
 
         void **handshake_data = malloc(2 * sizeof(void*));
         handshake_data[0] = m;
@@ -579,7 +596,7 @@ maintenance_loop(void *arg)
             if (now - s->last_write_time > s->keepalive) {
                 int n = new_msg_keepalive(buff, sizeof(buff));
 
-                DEBUG("sending KEEPALIVE");
+                DEBUG("sending KEEPALIVE to %s", sockaddr6_str(&s->peer->addr));
                 SOCK_TRY_SEND(send(s->fd, buff, n, 0), session_shutdown(s));
                 s->last_write_time = now;
             }
@@ -599,10 +616,29 @@ maintenance_loop(void *arg)
         usleep(100000);
     }
 
+    return NULL;
+}
+
+static void *
+update_loop(void *arg)
+{
+    manager_t *m = arg;
+
+    while (m->run) {
+        pthread_mutex_lock(&m->update_mut);
+        pthread_cond_wait(&m->update_cond, &m->update_mut);
+
+        if (!m->run)
+            return NULL;
+
+        for (size_t i = 0; i < m->sessions_size; i++)
+            session_update(m->sessions[i], m->id, m->itad);
+
+        pthread_mutex_unlock(&m->update_mut);
+    }
 
     return NULL;
 }
-    
 
 
 manager_t *
@@ -620,6 +656,8 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->run = 0;
     m->listen_thread = 0;
     m->maintenance_thread = 0;
+    m->update_mut = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+    m->update_cond = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
     m->fd = 0;
 
     m->itad = 0;
@@ -633,6 +671,7 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->sessions_capacity = 16;
     m->sessions = malloc(m->sessions_capacity * sizeof(session_t*));
     memset(m->sessions, 0, m->sessions_capacity * sizeof(session_t*));
+    m->sessions_mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
     m->connect_retry = TIMER_CONNECT_RETRY;
     m->hold = TIMER_HOLD_TIME;
@@ -649,19 +688,19 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     if (m->fd < 0) {
         ERROR("could not create listen socket: %s", strerror(errno));
-        return NULL;
+        goto error;
     }
 
     if (bind(m->fd, (const struct sockaddr*)listen_addr,
         sizeof(struct sockaddr_in6)) < 0)
     {
         ERROR("could not bind() listen socket: %s", strerror(errno));
-        return NULL;
+        goto error;
     }
 
     if (listen(m->fd, SOMAXCONN) < 0) {
         ERROR("could not listen() listen socket: %s", strerror(errno));
-        return NULL;
+        goto error;
     }
 
     DEBUG("started session manager, listening at [%s]:%d",
@@ -669,6 +708,13 @@ manager_new(const struct sockaddr_in6 *listen_addr)
         ntohs(listen_addr->sin6_port));
 
     return m;
+
+error:
+    locator_destroy(m->locator);
+    trib_destroy(m->trib);
+    pib_destroy(m->pib);
+    free(m->sessions);
+    return NULL;
 }
 
 
@@ -691,9 +737,12 @@ connect_loop(void *arg)
 
     while (1) {
         if (s->mark_stop_init) {
+            close(s->fd);
+            pthread_mutex_lock(&m->sessions_mutex);
             manager_session_remove(m, s);
+            pthread_mutex_unlock(&m->sessions_mutex);
             free(arg);
-            return NULL;
+            return (void*)-1L;
         }
 
         session_change_state(s, STATE_CONNECT);
@@ -739,12 +788,14 @@ manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     s->peer = peer;
     s->state = STATE_IDLE;
     s->initiated = 1;
-    trib_adj_pair_new(manager->trib, &s->adj_trib_in, &s->adj_trib_out);
-    s->adj_trib_in->routemap = peer->routemap_in;
-    s->adj_trib_out->routemap = peer->routemap_out;
+    trib_adj_pair_add(manager->trib, &s->adj_trib_in, &s->adj_trib_out);
+    s->adj_trib_in.routemap = peer->routemap_in;
+    s->adj_trib_out.routemap = peer->routemap_out;
 
     /* add session to manager session vector */
+    pthread_mutex_lock(&manager->sessions_mutex);
     manager_session_add(manager, s);
+    pthread_mutex_unlock(&manager->sessions_mutex);
 
     void **connect_data = malloc(2 * sizeof(void*));
     connect_data[0] = manager;
@@ -766,6 +817,16 @@ manager_run(manager_t *manager)
     pthread_create(&manager->listen_thread, NULL, &listen_loop, manager);
     pthread_create(&manager->maintenance_thread, NULL, &maintenance_loop,
         manager);
+    pthread_create(&manager->update_thread, NULL, &update_loop, manager);
+}
+
+void
+manager_schedule_update(manager_t *manager)
+{
+    /* wake up updater thread */
+    pthread_mutex_lock(&manager->update_mut);
+    pthread_cond_signal(&manager->update_cond);
+    pthread_mutex_unlock(&manager->update_mut);
 }
 
 void
@@ -775,6 +836,11 @@ manager_stop(manager_t *manager)
     shutdown(manager->fd, SHUT_RDWR);
     pthread_join(manager->listen_thread, NULL);
     pthread_join(manager->maintenance_thread, NULL);
+
+    pthread_mutex_lock(&manager->update_mut);
+    pthread_cond_signal(&manager->update_cond);
+    pthread_mutex_unlock(&manager->update_mut);
+    pthread_join(manager->update_thread, NULL);
 }
 
 void
@@ -782,26 +848,18 @@ manager_shutdown(manager_t *manager)
 {
     DEBUG("beginning shutdown");
 
+    manager_stop(manager);
+
     for (size_t i = 0; i < manager->sessions_size; i++) {
         if (!manager->sessions[i])
             continue;
-        session_shutdown(manager->sessions[i]);
+        /* this indirectly causes session thread to call
+         * manager_session_remove() and kill itself */
         manager->sessions[i]->mark_stop_init = 1;
-    }
-    
-    for (size_t i = 0; i < manager->sessions_size; i++) {
-        if (!manager->sessions[i])
-            continue;
+        session_shutdown(manager->sessions[i]);
         pthread_join(manager->sessions[i]->thread, NULL);
     }
 
-    for (size_t i = 0; i < manager->sessions_size; i++) {
-        if (!manager->sessions[i])
-            continue;
-        session_destroy(manager->sessions[i]);
-    }
-
-    manager_stop(manager);
 
     DEBUG("shutdown complete");
 }

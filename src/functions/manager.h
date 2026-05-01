@@ -28,6 +28,7 @@
 #ifndef _MANAGER_H
 #define _MANAGER_H
 
+#include <pthread.h>
 #include <netinet/in.h>
 
 #include "session.h"
@@ -41,6 +42,10 @@ typedef struct {
     int         run;                /**< run threads = 1 */
     pthread_t   listen_thread;
     pthread_t   maintenance_thread;
+    pthread_t   update_thread;
+    pthread_mutex_t update_mut;
+    pthread_cond_t update_cond;
+
     int         fd;
 
     /* Local */
@@ -58,6 +63,7 @@ typedef struct {
     /* Session instances */
     session_t **sessions;
     size_t      sessions_size, sessions_capacity;
+    pthread_mutex_t sessions_mutex;
 
     /* Timers peer default  */
     uint16_t    hold;
@@ -90,6 +96,9 @@ peer_t *manager_peer_find(manager_t *manager, const struct sockaddr_in6 *addr);
 
 /** \brief Run accept loop in thread */
 void manager_run(manager_t *manager);
+
+/** \brief Schedule UPDATEs */
+void manager_schedule_update(manager_t *manager);
 
 /** \brief Stop accept loop */
 void manager_stop(manager_t *manager);
