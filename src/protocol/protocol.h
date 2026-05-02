@@ -177,6 +177,9 @@ enum attr_type {
     ATTR_TYPE_CARRIER
 };
 
+/** \brief Attribute strings */
+extern const char *attr_strs[];
+
 /** \brief UPDATE attribute */
 typedef struct __attribute__((packed)) {
     uint8_t     attr_flags;

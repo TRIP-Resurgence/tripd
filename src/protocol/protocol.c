@@ -63,6 +63,32 @@ const char *capinfo_transmode_strs[] = {
     "receive-only"
 };
 
+const char *attr_strs[] = {
+    "nil",
+    "WithdrawnRoutes",
+    "ReachableRoutes",
+    "NextHopServer",
+    "AdvertisementPath",
+    "RoutedPath",
+    "AtomicAggregate",
+    "LocalPreference",
+    "MultiExitDisc",
+    "Communities",
+    "ITADTopology",
+    "ConvertedRoute",
+    /** RFC5115 */
+    "ResourcePriority",
+    /** RFC5140 */
+    "TotalCircuitCapacity",
+    "AvailableCircuits",
+    "CallSuccess",
+    "E164Prefix",
+    "PentaDecPrefix",
+    "DecimalPrefix",
+    "TrunkGroup",
+    "Carrier"
+};
+
 const char *af_strs[] = {
     "nil",
     "decimal",
@@ -887,13 +913,13 @@ parse_msg_update_attr(void *buff, size_t len, msg_update_attr_t **attr_out)
     attr->attr_len = ntohs(attr->attr_len);
 
     if (attr->attr_type < ATTR_TYPE_WITHDRAWNROUTES ||
-        attr->attr_type < ATTR_TYPE_CARRIER)
+        attr->attr_type > ATTR_TYPE_CARRIER)
     {
         return ERROR_ATTR_TYPE;
     }
 
     if ((attr->attr_type < ATTR_TYPE_WITHDRAWNROUTES ||
-        attr->attr_type < ATTR_TYPE_CARRIER) &&
+        attr->attr_type > ATTR_TYPE_CARRIER) &&
         !IS_ATTR_FLAG_WELL_KNOWN(attr->attr_flags))
     {
         return ERROR_ATTR_FLAG_WELL_KNOWN;

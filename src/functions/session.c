@@ -167,12 +167,52 @@ session_loop(void *arg)
         } break;
         case MSG_TYPE_UPDATE: {
             s->last_read_time = time(NULL);
-            /* TODO: update */
-            /* flush for now */
-            if (recv(s->fd, recv_wnd, msg->msg_len, 0) < 0) {
-                ERROR("shit");
-                goto sock_error;
+
+            size_t toread = msg->msg_len;
+            while (toread) {
+                res = recv(s->fd, recv_wnd, msg->msg_len, 0);
+                if (res < 0) {
+                    ERROR("recv(): %s", strerror(errno));
+                    goto sock_error;
+                } else if (res == 0) {
+                    DEBUG("connection closed by peer");
+                    goto sock_error;
+                }
+
+                recv_wnd += res;
+                toread -= res;
             }
+
+            size_t toparse = msg->msg_len;
+            void *attr_ptr = (void*)&msg->msg_val;
+            while (toparse) {
+                msg_update_attr_t *attr = NULL;
+                void *attr_val = NULL;
+                if (IS_ATTR_FLAG_LSENCAP(*(uint8_t*)attr_ptr)) {
+                    msg_update_attr_lsencap_t *attr_lsencap = NULL;
+                    PROTO_TRY(
+                        parse_msg_update_attr_lsencap(attr_ptr, msg->msg_len,
+                            &attr_lsencap),
+                        res, goto proto_error
+                    );
+
+                    attr = (msg_update_attr_t*)attr_lsencap;
+                    toparse -= sizeof(msg_update_attr_lsencap_t) + attr->attr_len;
+                } else {
+                    PROTO_TRY(
+                        parse_msg_update_attr(attr_ptr, msg->msg_len,
+                            &attr),
+                        res, goto proto_error
+                    );
+
+                    toparse -= sizeof(msg_update_attr_t) + attr->attr_len;
+                }
+
+                DEBUG(" %s[%d]", attr_strs[attr->attr_type], attr->attr_len);
+
+                attr_ptr = (void*)&attr->attr_val + attr->attr_len;
+            }
+
         } break;
         case MSG_TYPE_NOTIFICATION: {
             SOCK_TRY_RECV(s->fd, recv_wnd, msg_notif_t, goto sock_error);
