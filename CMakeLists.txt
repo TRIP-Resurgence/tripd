@@ -96,6 +96,14 @@ add_executable(test_serialize_update "src/tests/serialize_update.c")
 target_link_libraries(test_serialize_update protocol)
 add_test(NAME test_serialize_update COMMAND test_serialize_update)
 
+add_executable(test_parse_open "src/tests/parse_open.c")
+target_link_libraries(test_parse_open protocol)
+add_test(NAME test_parse_open COMMAND test_parse_open)
+
+add_executable(test_parse_notif "src/tests/parse_notif.c")
+target_link_libraries(test_parse_notif protocol)
+add_test(NAME test_parse_notif COMMAND test_parse_notif)
+
 add_executable(test_collision "src/tests/collision.c")
 target_link_libraries(test_collision logging command)
 add_test(NAME test_collision COMMAND test_collision)

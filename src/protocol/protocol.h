@@ -138,17 +138,17 @@ typedef uint32_t capinfo_transmode_t;
  * 3    Partial Flag
  * 4    Link-state Encapsulated Flag
  */
-#define IS_ATTR_FLAG_WELL_KNOWN(x)  ((x >> 0) & 1)
-#define IS_ATTR_FLAG_TRANSITIVE(x)  ((x >> 1) & 1)
-#define IS_ATTR_FLAG_DEPENDENT(x)   ((x >> 2) & 1)
-#define IS_ATTR_FLAG_PARTIAL(x)     ((x >> 3) & 1)
-#define IS_ATTR_FLAG_LSENCAP(x)     ((x >> 4) & 1)
+#define IS_ATTR_FLAG_WELL_KNOWN(x)  ((x >> 7) & 1)
+#define IS_ATTR_FLAG_TRANSITIVE(x)  ((x >> 6) & 1)
+#define IS_ATTR_FLAG_DEPENDENT(x)   ((x >> 5) & 1)
+#define IS_ATTR_FLAG_PARTIAL(x)     ((x >> 4) & 1)
+#define IS_ATTR_FLAG_LSENCAP(x)     ((x >> 3) & 1)
 
-#define ATTR_FLAG_WELL_KNOWN        0b00000001
-#define ATTR_FLAG_TRANSITIVE        0b00000010
-#define ATTR_FLAG_DEPENDENT         0b00000100
-#define ATTR_FLAG_PARTIAL           0b00001000
-#define ATTR_FLAG_LSENCAP           0b00010000
+#define ATTR_FLAG_WELL_KNOWN        0b10000000
+#define ATTR_FLAG_TRANSITIVE        0b01000000
+#define ATTR_FLAG_DEPENDENT         0b00100000
+#define ATTR_FLAG_PARTIAL           0b00010000
+#define ATTR_FLAG_LSENCAP           0b00001000
 
 /** \brief UPDATE attribute types */
 enum attr_type {
@@ -516,6 +516,10 @@ runtime_error_t new_msg_notif(void *buff, size_t len, uint8_t error_code,
 
 /* UPDATE attribute serializers */
 
+/** \brief Serialize route */
+runtime_error_t new_route(void *buff, size_t len, uint16_t af,
+    uint16_t app_proto, const char *addr);
+
 /** \brief Serialize WithdrawnRoutes attribute
  * routes_size is size of routes in bytes */
 runtime_error_t new_attr_withdrawnroutes(void *buff, size_t len, int lsencap,
@@ -531,12 +535,12 @@ runtime_error_t new_attr_nexthopserver(void *buff, size_t len,
     uint32_t next_itad, const char *server);
 
 /** \brief Serialize AdvertisementPath attribute */
-runtime_error_t new_attr_advertisementpath(void *buff, size_t len,
-    const itadpath_t *path);
+runtime_error_t new_attr_advertisementpath(void *buff, size_t len, uint8_t type,
+    const uint32_t *segs, uint16_t segs_size);
 
 /** \brief Serialize RoutedPath attribute */
-runtime_error_t new_attr_routedpath(void *buff, size_t len,
-    const itadpath_t *path);
+runtime_error_t new_attr_routedpath(void *buff, size_t len, uint8_t type,
+    const uint32_t *segs, uint16_t segs_size);
 
 /** \brief Serialize AtomicAggregate attribute */
 runtime_error_t new_attr_atomicaggregate(void *buff, size_t len);
@@ -564,31 +568,31 @@ runtime_error_t new_attr_convertedroute(void *buff, size_t len);
 /* messages */
 
 /** \brief Deserialize message */
-runtime_error_t parse_msg(const void *buff, size_t len, const msg_t **msg_out);
+runtime_error_t parse_msg(void *buff, size_t len, msg_t **msg_out);
 
 
 /* message OPEN
  */
 
 /** \brief Deserialize message OPEN */
-runtime_error_t parse_msg_open(const void *buff, size_t len,
-    const msg_open_t **open_out);
+runtime_error_t parse_msg_open(void *buff, size_t len,
+    msg_open_t **open_out);
 
 /** \brief Deserialize message OPEN optional parameter */
-runtime_error_t parse_msg_open_opt(const void *buff, size_t len,
-    const msg_open_opt_t **opt_out);
+runtime_error_t parse_msg_open_opt(void *buff, size_t len,
+    msg_open_opt_t **opt_out);
 
 /** \brief Deserialize option capability information */
-runtime_error_t parse_capinfo(const void *buff, size_t len,
-    const capinfo_t **capinfo_out);
+runtime_error_t parse_capinfo(void *buff, size_t len,
+    capinfo_t **capinfo_out);
 
 /** \brief Deserialize option route type */
-runtime_error_t parse_capinfo_routetype(const void *buff, size_t len,
-    const capinfo_routetype_t **routetype_out);
+runtime_error_t parse_capinfo_routetype(void *buff, size_t len,
+    capinfo_routetype_t **routetype_out);
 
 /** \brief Deserialize option transmission mode */
-runtime_error_t parse_capinfo_transmode(const void *buff, size_t len,
-    const capinfo_transmode_t **transmode_out);
+runtime_error_t parse_capinfo_transmode(void *buff, size_t len,
+    capinfo_transmode_t **transmode_out);
 
 
 /* message UPDATE
@@ -596,39 +600,39 @@ runtime_error_t parse_capinfo_transmode(const void *buff, size_t len,
  */
 
 /** \brief Deserialize UPDATE attribute */
-runtime_error_t parse_msg_update_attr(const void *buff, size_t len,
-    const msg_update_attr_t **attr_out);
+runtime_error_t parse_msg_update_attr(void *buff, size_t len,
+    msg_update_attr_t **attr_out);
 
 /** \brief Deserialize UPDATE link-state encapsulated attribute */
-runtime_error_t parse_msg_update_attr_lsencap(const void *buff, size_t len,
-    const msg_update_attr_lsencap_t **attr_out);
+runtime_error_t parse_msg_update_attr_lsencap(void *buff, size_t len,
+    msg_update_attr_lsencap_t **attr_out);
 
 
 /* attributes */
 
 /** \brief Deserialize route */
-runtime_error_t parse_route(const void *buff, size_t len,
-    const route_t **route_out);
+runtime_error_t parse_route(void *buff, size_t len,
+    route_t **route_out);
 
 /** \brief Deserialize ITAD path */
-runtime_error_t parse_itadpath(const void *buff, size_t len,
-    const itadpath_t **itadpath_out);
+runtime_error_t parse_itadpath(void *buff, size_t len,
+    itadpath_t **itadpath_out);
 
 /** \brief Deserialize LocalPreference attribute */
-runtime_error_t parse_attr_localpref(const void *buff, size_t len,
-    const attr_localpref_t **localpref_out);
+runtime_error_t parse_attr_localpref(void *buff, size_t len,
+    attr_localpref_t **localpref_out);
 
 /** \brief Deserialize MultiExitDisc attribute */
-runtime_error_t parse_attr_multiexitdisc(const void *buff, size_t len,
-    const attr_multiexitdisc_t **multiexitdisc_out);
+runtime_error_t parse_attr_multiexitdisc(void *buff, size_t len,
+    attr_multiexitdisc_t **multiexitdisc_out);
 
 /** \brief Deserialize Community */
-runtime_error_t parse_community(const void *buff, size_t len,
-    const community_t **community_out);
+runtime_error_t parse_community(void *buff, size_t len,
+    community_t **community_out);
 
 /** \brief Deserialize ITAD */
-runtime_error_t parse_itad(const void *buff, size_t len,
-    const uint32_t **itad_out);
+runtime_error_t parse_itad(void *buff, size_t len,
+    uint32_t **itad_out);
 
 
 
@@ -641,8 +645,8 @@ runtime_error_t parse_itad(const void *buff, size_t len,
  */
 
 /** \brief Deserialize NOTIFICATION message */
-runtime_error_t parse_msg_notif(const void *buff, size_t len,
-    const msg_notif_t **notif_out);
+runtime_error_t parse_msg_notif(void *buff, size_t len,
+    msg_notif_t **notif_out);
 
 /** \brief String NOTIFICATION code, subcode */
 const char *notif_code_subcode_str(int code, int subcode);
