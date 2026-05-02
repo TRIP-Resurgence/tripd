@@ -147,7 +147,7 @@ session_loop(void *arg)
         /* receive and decode message header */
         SOCK_TRY_RECV(s->fd, recv_wnd, msg_t, goto sock_error);
 
-        const msg_t *msg = NULL;
+        msg_t *msg = NULL;
         PROTO_TRY(
             parse_msg(buff, res, &msg),
             res, goto proto_error
@@ -177,7 +177,7 @@ session_loop(void *arg)
         case MSG_TYPE_NOTIFICATION: {
             SOCK_TRY_RECV(s->fd, recv_wnd, msg_notif_t, goto sock_error);
 
-            const msg_notif_t *msg_notif = NULL;
+            msg_notif_t *msg_notif = NULL;
             PROTO_TRY(
                 parse_msg_notif(msg->msg_val, sizeof(msg_notif_t), &msg_notif),
                 res, goto proto_error
@@ -213,12 +213,10 @@ serialize_routes(void *buff, size_t len, entry_group_t *group)
         if (ptr - buff > len)
             return -1;
 
-        route_t *r = ptr;
-        r->route_af = group->entries[i]->af;
-        r->route_app_proto = group->entries[i]->app_proto;
-        r->route_len = strlen(group->entries[i]->prefix);
-        memcpy(&r->route_addr, group->entries[i]->prefix, r->route_len);
-        ptr += sizeof(route_t) + r->route_len;
+        int r = new_route(ptr, len, group->entries[i]->af,
+            group->entries[i]->app_proto, group->entries[i]->prefix);
+        ptr += r;
+        len -= r;
     }
 
     return ptr - buff;
@@ -294,29 +292,20 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
 
     /* AdvertisementPath */
     if (ATTR_IS_USED_ADVERTPATH(group->attrs.use)) {
-        itadpath_t path = {
-            ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath_size
-        };
-        memcpy(&path.itadpath_segs, group->attrs.routedpath,
-            sizeof(uint32_t) * group->attrs.routedpath_size);
-
         PROTO_TRY(
             new_attr_advertisementpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-                &path),
+                ITADPATH_TYPE_AP_SEQUENCE, group->attrs.advertpath,
+                group->attrs.advertpath_size),
             r, goto proto_error
         );
     }
 
     /* RoutedPath */
     if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use)) {
-        itadpath_t path = {
-            ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath_size
-        };
-        memcpy(&path.itadpath_segs, group->attrs.routedpath,
-            sizeof(uint32_t) * group->attrs.routedpath_size);
-
         PROTO_TRY(
-            new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE, &path),
+            new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath,
+                    group->attrs.routedpath_size),
             r, goto proto_error
         );
     }

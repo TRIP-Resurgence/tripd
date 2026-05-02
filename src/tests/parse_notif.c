@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <arpa/inet.h>
 
 int
 main()
@@ -23,19 +22,25 @@ main()
         NOTIF_CODE_ERROR_OPEN, NOTIF_SUBCODE_OPEN_UNSUP_VERSION
     };
 
-    *msg = (msg_t){ htons(sizeof(msg_notif_t) + 4), MSG_TYPE_NOTIFICATION };
+    *msg = (msg_t){ sizeof(msg_notif_t) + 4, MSG_TYPE_NOTIFICATION };
 
     /* OPEN serialization */
     int r = new_msg_notif(tbuff, 4096, NOTIF_CODE_ERROR_OPEN,
         NOTIF_SUBCODE_OPEN_UNSUP_VERSION, 4, "asdf");
 
+    msg_t *msg_ = NULL;
+    msg_notif_t *msg_notif_ = NULL;
+    int s = parse_msg(tbuff, 4096, &msg);
+    s += parse_msg_notif(tbuff + s, 4096 - s, &msg_notif_);
+    s += msg->msg_len - sizeof(msg_notif_t);
+
     /* check */
-    printf("size %ld == %d = %s\n", sizeof(msg_t) + ntohs(msg->msg_len), r, strs[(sizeof(msg_t) + ntohs(msg->msg_len)) == r]);
-    if (r != sizeof(msg_t) + ntohs(msg->msg_len))
+    printf("size %ld == %d = %s\n", sizeof(msg_t) + msg->msg_len, s, strs[(sizeof(msg_t) + msg->msg_len) == s]);
+    if (r != sizeof(msg_t) + msg->msg_len)
         return 1;
 
     int fail = 0;
-    for (int i = 0; i < sizeof(msg_t) + ntohs(msg->msg_len); i++) {
+    for (int i = 0; i < sizeof(msg_t) + msg->msg_len; i++) {
         if (i == 0) printf("msg:\n");
         if (i == sizeof(msg_t)) printf("msg_notif:\n");
         if (i == sizeof(msg_t) + sizeof(msg_notif_t)) printf("data:\n");

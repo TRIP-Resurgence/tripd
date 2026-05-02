@@ -197,13 +197,13 @@ manager_collision_sessions_compare(const manager_t *m, const session_t *s1,
 
 /** \brief Handle a received OPEN message (OpenConfirm State) */
 static int
-handle_open(manager_t *m, session_t *s, const msg_t *msg,
+handle_open(manager_t *m, session_t *s, msg_t *msg,
     void *recv_wnd)
 {
     int res = 0, toread = 0;
     SOCK_TRY_RECV(s->fd, recv_wnd, msg_open_t, goto sock_error);
 
-    const msg_open_t *open = NULL;
+    msg_open_t *open = NULL;
     PROTO_TRY(
         parse_msg_open(msg->msg_val, res, &open),
         res, goto proto_error
@@ -273,12 +273,12 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
     }
 
     size_t opts_toread = open->open_opts_len;
-    const void *opt_cur = open->open_opts;
+    void *opt_cur = open->open_opts;
     while (opts_toread) {
         SOCK_TRY_RECV(s->fd, recv_wnd, msg_open_opt_t,
             goto sock_error);
 
-        const msg_open_opt_t *opt = NULL;
+        msg_open_opt_t *opt = NULL;
         PROTO_TRY(
             parse_msg_open_opt(opt_cur, res, &opt),
             res, goto proto_error
@@ -292,12 +292,12 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
         switch (opt->opt_type) {
         case OPEN_OPT_TYPE_CAPABILITY_INFO: {
             size_t capinfos_toread = opt->opt_len;
-            const void *capinfo_cur = opt->opt_val;
+            void *capinfo_cur = opt->opt_val;
             while (capinfos_toread) {
                 SOCK_TRY_RECV(s->fd, recv_wnd, capinfo_t,
                     goto sock_error);
 
-                const capinfo_t *capinfo = NULL;
+                capinfo_t *capinfo = NULL;
                 PROTO_TRY(
                     parse_capinfo(capinfo_cur, res, &capinfo),
                     res, goto proto_error
@@ -314,7 +314,7 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                 switch (capinfo->capinfo_code) {
                 case CAPINFO_CODE_ROUTETYPE: {
                     size_t routetypes_toread = capinfo->capinfo_len;
-                    const void *routetype_cur = capinfo->capinfo_val;
+                    void *routetype_cur = capinfo->capinfo_val;
 
                     s->routetypes_count = routetypes_toread /
                         sizeof(capinfo_routetype_t);
@@ -325,7 +325,7 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                         SOCK_TRY_RECV(s->fd, recv_wnd,
                             capinfo_routetype_t, goto sock_error);
 
-                        const capinfo_routetype_t *routetype = NULL;
+                        capinfo_routetype_t *routetype = NULL;
                         PROTO_TRY(
                             parse_capinfo_routetype(routetype_cur, res,
                                 &routetype),
@@ -349,7 +349,7 @@ handle_open(manager_t *m, session_t *s, const msg_t *msg,
                     SOCK_TRY_RECV(s->fd, recv_wnd,
                         capinfo_transmode_t, goto sock_error);
 
-                    const capinfo_transmode_t *transmode = NULL;
+                    capinfo_transmode_t *transmode = NULL;
                     PROTO_TRY(
                         parse_capinfo_transmode(capinfo->capinfo_val,
                             res, &transmode),
@@ -432,7 +432,7 @@ peer_handshake(void *arg)
         /* receive and decode message header */
         SOCK_TRY_RECV(s->fd, recv_wnd, msg_t, goto sock_error);
 
-        const msg_t *msg = NULL;
+        msg_t *msg = NULL;
         PROTO_TRY(
             parse_msg(buff, res, &msg),
             res, goto proto_error
@@ -463,7 +463,7 @@ peer_handshake(void *arg)
         case MSG_TYPE_NOTIFICATION: {
             SOCK_TRY_RECV(s->fd, recv_wnd, msg_notif_t, goto sock_error);
 
-            const msg_notif_t *notif= NULL;
+            msg_notif_t *notif= NULL;
             PROTO_TRY(
                 parse_msg_notif(msg->msg_val, res, &notif),
                 res, goto proto_error
