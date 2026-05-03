@@ -182,6 +182,30 @@ trib_destroy(trib_t *trib)
 }
 
 
+entry_t **
+trib_table_find(table_t *t, uint16_t af, const char *prefix)
+{
+    for (size_t i = 0; i < t->size; i++)
+        if (t->table[i]->af == af && strcmp(t->table[i]->prefix, prefix) == 0)
+            return &t->table[i];
+    return NULL;
+}
+
+const entry_t *
+trib_table_lookup(table_t *table, uint16_t af, uint16_t app_proto,
+    const char *address)
+{
+    for (size_t i = 0; i < table->size; i++) {
+        if (table->table[i]->af != af)
+            continue;
+        if (app_proto && table->table[i]->app_proto != app_proto)
+            continue;
+        if (strncmp(table->table[i]->prefix, address, strlen(address)) == 0)
+            return table->table[i];
+    }
+    return NULL;
+}
+
 void
 trib_table_insert(table_t *table, entry_t *entry)
 {
@@ -192,6 +216,22 @@ trib_table_insert(table_t *table, entry_t *entry)
     }
 
     table->table[table->size++] = entry;
+}
+
+void
+trib_table_insert_or_replace(table_t *table, entry_t *route)
+{
+    entry_t **match = trib_table_find(table, route->af, route->prefix);
+
+    if (!match) {
+        /* insert new route */
+        trib_table_insert(table, route);
+        return;
+    }
+
+    /* replace (update) existing route */
+    entry_destroy(*match);
+    *match = entry_clone(route);
 }
 
 void
@@ -236,15 +276,6 @@ entry_compare(const entry_t *e1, const entry_t *e2, uint32_t itad)
     return 0;
 }
 
-static entry_t **
-table_find(table_t *t, uint16_t af, const char *prefix)
-{
-    for (size_t i = 0; i < t->size; i++)
-        if (t->table[i]->af == af && strcmp(t->table[i]->prefix, prefix) == 0)
-            return &t->table[i];
-    return NULL;
-}
-
 /** \brief Execute route selection from table into another
  *
  * A route that exists in t2 that doesn't exist in t1 is pushed into t1,
@@ -258,7 +289,8 @@ static void
 table_select_into(table_t *t1, table_t *t2, uint32_t itad)
 {
     for (size_t i = 0; i < t2->size; i++) {
-        entry_t **match = table_find(t1, t2->table[i]->af, t2->table[i]->prefix);
+        entry_t **match = trib_table_find(t1, t2->table[i]->af,
+            t2->table[i]->prefix);
         if (!match) {
             trib_table_insert(t1, entry_clone(t2->table[i]));
             continue;

@@ -63,6 +63,31 @@ const char *capinfo_transmode_strs[] = {
     "receive-only"
 };
 
+const char *
+flags_str(uint8_t flags)
+{
+    static char flags_str[256];
+
+    static char *flags_strs[] = {
+        "Well-Known",
+        "Independent Transitive",
+        "Dependent",
+        "Partial",
+        "Link-State Encapsulated"
+    };
+
+    flags_str[0] = 0;
+    for (uint8_t i = 7; i >= 3; i >>= 1) {
+        if (!((flags >> i) & 1))
+            continue;
+        if (*flags_str)
+            strcat(flags_str, ", ");
+        strcat(flags_str, flags_strs[7 - i]);
+    }
+
+    return flags_str;
+}
+
 const char *attr_strs[] = {
     "nil",
     "WithdrawnRoutes",
@@ -979,6 +1004,24 @@ parse_route(void *buff, size_t len, route_t **route_out)
     *route_out = route;
 
     return sizeof(route_t);
+}
+
+/* attribute NextHopServer */
+
+runtime_error_t
+parse_attr_nexthopserver(void *buff, size_t len,
+    attr_nexthopserver_t **nexthop_out)
+{
+    if (len < sizeof(attr_nexthopserver_t))
+        return ERROR_INCOMPLETE;
+
+    attr_nexthopserver_t *nexthop = buff;
+    nexthop->nexthopserver_itad = ntohl(nexthop->nexthopserver_itad);
+    nexthop->nexthopserver_serverlen = ntohs(nexthop->nexthopserver_serverlen);
+
+    *nexthop_out = nexthop;
+
+    return sizeof(attr_nexthopserver_t);
 }
 
 
