@@ -97,7 +97,7 @@ typedef struct {
 
 /** \brief Route Table */
 typedef struct {
-    uint32_t    peer_itad;      /**< Peer ITAD used in Adj-TRIBs */
+    uint32_t    peer_itad, peer_id;      /**< Peer ITAD used in Adj-TRIBs */
     entry_t   **table;
     size_t      size, capacity;
     routemap_t *routemap;       /**< Insertion routemap */

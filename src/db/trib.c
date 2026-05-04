@@ -364,19 +364,57 @@ trib_update_local(trib_t *trib)
     trib_update_full(trib);
 }
 
+/** \brief Select routes eligible for announcement to peer */
+static table_t *
+select_routes_out(table_t *loc, uint32_t itad, uint32_t id)
+{
+    table_t *t = malloc(sizeof(table_t));
+    table_init(t);
+
+    for (size_t i = 0; i < loc->size; i++) {
+        if ((loc->table[i]->learn_itad == itad &&
+            loc->table[i]->learn_lsid == id))
+        {
+            continue;
+        }
+        for (int j = 0; j < loc->table[i]->attrs.advertpath_size; j++)
+            if (loc->table[i]->attrs.advertpath[j] == itad)
+                continue;
+        for (int j = 0; j < loc->table[i]->attrs.routedpath_size; j++)
+            if (loc->table[i]->attrs.routedpath[j] == itad)
+                continue;
+        if (loc->table[i]->attrs.nextitad == itad)
+            continue;
+        trib_table_insert(t, entry_clone(loc->table[i]));
+    }
+
+    return t;
+}
+
 void
 trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
 {
+    /* get eligible routes for peer */
+    table_t *eligible = select_routes_out(&trib->optimized_loc_trib,
+        adj_trib_out->peer_itad, adj_trib_out->peer_id);
+
     trib_table_clear(adj_trib_out);
+
     /* apply output policy if applicable */
     if (adj_trib_out->routemap)
-        apply_policy(adj_trib_out, &trib->optimized_loc_trib, trib->local_itad,
+        apply_policy(adj_trib_out, eligible, trib->local_itad,
             adj_trib_out->routemap);
     else
-        table_copy(adj_trib_out, &trib->optimized_loc_trib);
+        table_copy(adj_trib_out, eligible);
 
-    /* append this ITAD to outgoing routes's path
+    trib_table_deinit(eligible);
+    free(eligible);
+
+    /* append this ITAD to outgoing routes's path if external peer
      * if this LS originates the route this appends to an empty path */
+    if (adj_trib_out->peer_itad == trib->local_itad)
+        return;
+
     for (size_t i = 0; i < adj_trib_out->size; i++) {
         entry_t *e = adj_trib_out->table[i];
 

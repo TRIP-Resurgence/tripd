@@ -566,6 +566,8 @@ listen_loop(void *arg)
         trib_adj_pair_add(m->trib, &s->adj_trib_in, &s->adj_trib_out);
         s->adj_trib_in.routemap = peer->routemap_in;
         s->adj_trib_out.routemap = peer->routemap_out;
+        s->adj_trib_out.peer_itad = s->peer->itad;
+        s->adj_trib_out.peer_id = s->id;
 
         void **handshake_data = malloc(2 * sizeof(void*));
         handshake_data[0] = m;
@@ -791,6 +793,8 @@ manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     trib_adj_pair_add(manager->trib, &s->adj_trib_in, &s->adj_trib_out);
     s->adj_trib_in.routemap = peer->routemap_in;
     s->adj_trib_out.routemap = peer->routemap_out;
+    s->adj_trib_out.peer_itad = s->adj_trib_in.peer_itad = s->peer->itad;
+    s->adj_trib_out.peer_id = s->adj_trib_in.peer_id = s->id;
 
     /* add session to manager session vector */
     pthread_mutex_lock(&manager->sessions_mutex);

@@ -333,6 +333,26 @@ handle_update(manager_t *m, session_t *s, msg_t *msg)
     if (!routing_update)
         return 0;
 
+    for (int i = 0; i < ent_attrs.advertpath_size; i++) {
+        if (ent_attrs.advertpath[i] == m->itad) {
+            INFO("routes with this itad in advertisementpath rejected");
+            return 0;
+        }
+    }
+
+    for (int i = 0; i < ent_attrs.advertpath_size; i++) {
+        if (ent_attrs.advertpath[i] == m->itad) {
+            INFO("routes with this itad in routedpath rejected");
+            return 0;
+        }
+    }
+
+    if (s->peer->itad == m->itad && ent_attrs.nextitad == m->itad) {
+        INFO("external route with this itad in nexthop rejected");
+        return 0;
+    }
+
+
     if (withdrawn) {
         for (int i = 0; i < route_count; i++) {
             entry_t **match = trib_table_find(&s->adj_trib_in, entries[i].af,
@@ -343,6 +363,8 @@ handle_update(manager_t *m, session_t *s, msg_t *msg)
             }
 
             (*match)->attrs.withdrawn = 1;
+
+            free(entries[i].prefix);
         }
     } else {
         time_t learntime = time(NULL);
@@ -358,7 +380,10 @@ handle_update(manager_t *m, session_t *s, msg_t *msg)
             entries[i].sent = 0;
             trib_table_insert_or_replace(&s->adj_trib_in,
                 entry_clone(&entries[i]));
+
+            free(entries[i].prefix);
         }
+
     }
 
     DEBUG("updated %d routes", route_count);
