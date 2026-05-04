@@ -386,6 +386,8 @@ handle_update(manager_t *m, session_t *s, msg_t *msg)
 
     }
 
+    trib_update_full(m->trib);
+
     DEBUG("updated %d routes", route_count);
 
     free(ent_attrs.advertpath);
