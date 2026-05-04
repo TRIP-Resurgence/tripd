@@ -345,7 +345,10 @@ table_select_into(table_t *t1, table_t *t2, uint32_t itad)
         if (entry_compare(*match, t2->table[i], itad)) {
             entry_destroy(*match);
             *match = entry_clone(t2->table[i]);
+            continue;
         }
+
+        DEBUG("route %s left out of selection algo", t2->table[i]->prefix);
     }
 }
 
@@ -367,8 +370,10 @@ apply_policy(table_t *dst, const table_t *src, uint32_t local_itad,
     for (size_t i = 0; i < src->size; i++) {
         const routemap_statement_t *s =
             routemap_match(policy, src->table[i]->prefix);
-        if (!s)
+        if (!s || s->deny) {
+            DEBUG("route %s denied", src->table[i]->prefix);
             continue;   /* default deny */
+        }
         
         entry_t *e = entry_clone(src->table[i]);
 

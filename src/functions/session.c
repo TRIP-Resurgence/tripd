@@ -55,8 +55,8 @@ const char *session_state_strs[] = {
     "established"
 };
 
-static const char *
-session_str(session_t *s)
+const char *
+session_str(const session_t *s)
 {
     static char str[256], abuff[INET6_ADDRSTRLEN], abuff2[INET_ADDRSTRLEN];
     snprintf(str, 256, "(%s):%d:%s",
@@ -421,8 +421,8 @@ session_loop(void *arg)
             res, goto proto_error
         );
 
-        DEBUG("received msg: %s[%d]", msg_type_strs[msg->msg_type],
-            msg->msg_len);
+        DEBUG("received msg: %s[%d] from %s", msg_type_strs[msg->msg_type],
+            msg->msg_len, session_str(s));
 
         switch (msg->msg_type) {
         case MSG_TYPE_OPEN: {
@@ -688,6 +688,8 @@ session_update(const session_t *s, uint32_t local_id, uint32_t local_itad)
             continue;
 
         SOCK_TRY_SEND(send(s->fd, msg_buff, upd_size, 0), goto sock_error);
+
+        DEBUG("sent update to %s", session_str(s));
 
         /* set them as sent */
         for (size_t j = 0; j < groups[i].size; j++)

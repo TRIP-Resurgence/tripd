@@ -255,7 +255,7 @@ handle_open(manager_t *m, session_t *s, msg_t *msg,
     /* find old still initiating session pre-openconfirm if exists and stop it*/
     session_t *init_s = manager_session_lookup_peer(m, s->peer);
     if (init_s && (init_s->initiated == 1) && (init_s != s)) {
-        INFO("closing old initiating session");
+        DEBUG("closing old initiating session");
         init_s->mark_stop_init = 1;
         pthread_join(init_s->thread, NULL);
     }
@@ -485,9 +485,13 @@ peer_handshake(void *arg)
             trib_update_adj_out(m->trib, &s->adj_trib_out);
             session_update(s, m->id, m->itad);
 
+            INFO("adjacency with %s established", session_str(s));
+
             /* Hand newly established session off to session_loop
              * if this function returns, the session has died */
             session_loop(arg);
+
+            INFO("adjacency with %s lost", session_str(s));
 
             if (s->mark_stop_init)
                 goto sock_error;

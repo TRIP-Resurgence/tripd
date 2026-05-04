@@ -87,6 +87,9 @@ typedef struct {
 } session_t;
 
 
+/** \brief String that identifies session */
+const char *session_str(const session_t *s);
+
 /** \brief Change session state */
 void session_change_state(session_t *s, session_state_t new_state);
 
