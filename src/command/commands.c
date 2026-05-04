@@ -94,7 +94,6 @@ cmd_exit(parser_t *parser, int no, char *args)
     case CTX_TRIP:
         parser->state.ctx = CTX_CONFIG;
         trib_update_local(parser->manager->trib);
-        trib_update_full(parser->manager->trib);
         break;
     default: return -1;
     }

@@ -231,7 +231,52 @@ trib_table_insert_or_replace(table_t *table, entry_t *route)
 
     /* replace (update) existing route */
     entry_destroy(*match);
-    *match = entry_clone(route);
+    *match = route;
+}
+
+void
+trib_table_insert_or_replace_if_new(table_t *table, entry_t *route)
+{
+    entry_t **match = trib_table_find(table, route->af, route->prefix);
+
+    if (!match) {
+        /* insert new route */
+        trib_table_insert(table, route);
+        return;
+    }
+
+    /* check if different */
+    if (
+            ((*match)->app_proto == route->app_proto) &&
+            ((*match)->attrs.convertedroute == route->attrs.convertedroute) &&
+            ((*match)->attrs.routedpath_size == route->attrs.routedpath_size) &&
+            ((*match)->attrs.advertpath_size == route->attrs.advertpath_size) &&
+            ((*match)->attrs.communities_size == route->attrs.communities_size) &&
+            ((*match)->attrs.atomicaggregate == route->attrs.atomicaggregate) &&
+            ((*match)->attrs.local_pref == route->attrs.local_pref) &&
+            ((*match)->attrs.metric == route->attrs.metric) &&
+            ((*match)->attrs.nextitad == route->attrs.nextitad) &&
+            (strcmp((*match)->attrs.nexthop, route->attrs.nexthop) == 0) &&
+            (memcmp((*match)->attrs.advertpath, route->attrs.advertpath,
+                sizeof(uint32_t) * route->attrs.advertpath_size) == 0) &&
+            (memcmp((*match)->attrs.routedpath, route->attrs.routedpath,
+                sizeof(uint32_t) * route->attrs.routedpath_size) == 0) &&
+            (memcmp((*match)->attrs.communities, route->attrs.communities,
+                sizeof(uint32_t) * route->attrs.communities_size) == 0) &&
+            ((*match)->attrs.withdrawn == route->attrs.withdrawn) &&
+            ((*match)->attrs.use == route->attrs.use)
+        )
+    {
+        return;
+    }
+
+    /* update seq */
+    if ((*match)->seq < route->seq)
+        (*match)->seq = route->seq;
+
+    /* replace (update) existing route (marked unsent) */
+    entry_destroy(*match);
+    *match = route;
 }
 
 void
@@ -366,7 +411,7 @@ trib_update_local(trib_t *trib)
 
 /** \brief Select routes eligible for announcement to peer */
 static table_t *
-select_routes_out(table_t *loc, uint32_t itad, uint32_t id)
+select_eligible_routes_out(table_t *loc, uint32_t itad, uint32_t id)
 {
     table_t *t = malloc(sizeof(table_t));
     table_init(t);
@@ -395,18 +440,24 @@ void
 trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
 {
     /* get eligible routes for peer */
-    table_t *eligible = select_routes_out(&trib->optimized_loc_trib,
+    table_t *eligible = select_eligible_routes_out(&trib->optimized_loc_trib,
         adj_trib_out->peer_itad, adj_trib_out->peer_id);
 
-    trib_table_clear(adj_trib_out);
+    table_t policied = { };
+    table_init(&policied);
 
     /* apply output policy if applicable */
     if (adj_trib_out->routemap)
-        apply_policy(adj_trib_out, eligible, trib->local_itad,
+        apply_policy(&policied, eligible, trib->local_itad,
             adj_trib_out->routemap);
     else
-        table_copy(adj_trib_out, eligible);
+        table_copy(&policied, eligible); /* stupid copy */
 
+    for (size_t i = 0; i < policied.size; i++)
+        trib_table_insert_or_replace_if_new(adj_trib_out,
+            entry_clone(policied.table[i]));
+
+    trib_table_deinit(&policied);
     trib_table_deinit(eligible);
     free(eligible);
 

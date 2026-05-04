@@ -390,6 +390,7 @@ handle_update(manager_t *m, session_t *s, msg_t *msg)
 
     DEBUG("updated %d routes", route_count);
 
+    free(ent_attrs.nexthop);
     free(ent_attrs.advertpath);
     free(ent_attrs.routedpath);
     free(ent_attrs.communities);
@@ -687,11 +688,14 @@ session_update(const session_t *s, uint32_t local_id, uint32_t local_itad)
             continue;
 
         SOCK_TRY_SEND(send(s->fd, msg_buff, upd_size, 0), goto sock_error);
+
+        /* set them as sent */
+        for (size_t j = 0; j < groups[i].size; j++)
+            groups[i].entries[j]->sent = 1;
+        free(groups[i].entries);
     }
 
 sock_error:
-    for (size_t i = 0; i < groups_count; i++)
-        free(groups[i].entries);
     free(groups);
     free(new_ents);
 }
