@@ -390,6 +390,8 @@ handle_update(manager_t *m, session_t *s, msg_t *msg)
 
     DEBUG("updated %d routes", route_count);
 
+    manager_schedule_update(m);
+
     free(ent_attrs.nexthop);
     free(ent_attrs.advertpath);
     free(ent_attrs.routedpath);
@@ -589,24 +591,50 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
         r, goto proto_error
     );
 
-    /* AdvertisementPath */
-    if (ATTR_IS_USED_ADVERTPATH(group->attrs.use)) {
-        PROTO_TRY(
-            new_attr_advertisementpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-                ITADPATH_TYPE_AP_SEQUENCE, group->attrs.advertpath,
-                group->attrs.advertpath_size),
-            r, goto proto_error
-        );
+    /* AdvertisementPath always sent */
+    if (ATTR_IS_USED_ADVERTPATH(group->attrs.use) || 1) {
+        uint32_t path[256];
+        size_t pathsize = 0;
+        if (s->peer->itad != local_itad) {
+            path[0] = local_itad;
+            pathsize++;
+        }
+        if (ATTR_IS_USED_ADVERTPATH(group->attrs.use)) {
+            memcpy(&path[pathsize], group->attrs.advertpath,
+                sizeof(uint32_t) * group->attrs.advertpath_size);
+            pathsize += group->attrs.advertpath_size;
+        }
+        if (pathsize) {
+            PROTO_TRY(
+                new_attr_advertisementpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                    ITADPATH_TYPE_AP_SEQUENCE, path, pathsize),
+                r, goto proto_error
+            );
+        }
     }
 
-    /* RoutedPath */
-    if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use)) {
-        PROTO_TRY(
-            new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-                ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath,
-                    group->attrs.routedpath_size),
-            r, goto proto_error
-        );
+    /* RoutedPath always sent */
+    if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use) || 1) {
+        uint32_t path[256];
+        size_t pathsize = 0;
+        /* append to routed path only if we change the routing
+         * i.e. we changed the next hop to this ITAD */
+        if (s->peer->itad != local_itad && group->attrs.nextitad == local_itad) {
+            path[0] = local_itad;
+            pathsize++;
+        }
+        if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use)) {
+            memcpy(&path[pathsize], group->attrs.routedpath,
+                sizeof(uint32_t) * group->attrs.routedpath_size);
+            pathsize += group->attrs.routedpath_size;
+        }
+        if (pathsize) {
+            PROTO_TRY(
+                new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                    ITADPATH_TYPE_AP_SEQUENCE, path, pathsize),
+                r, goto proto_error
+            );
+        }
     }
 
     /* AtomicAggregate */

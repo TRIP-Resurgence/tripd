@@ -608,7 +608,7 @@ cmd_config_routemap(parser_t *parser, int no, char *args)
     routemap_t *routemap = pib_routemap_find(parser->manager->pib, name);
 
     if (!routemap)
-        routemap = pib_routemap_new(parser->manager->pib, name, deny);
+        routemap = pib_routemap_new(parser->manager->pib, name);
 
     uint32_t seq = seq_s ? atoi(seq_s) : 10;
     routemap_statement_t *statement = routemap_statement_find(routemap, seq);

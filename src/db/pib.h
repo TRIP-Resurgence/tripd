@@ -99,7 +99,7 @@ void pib_destroy(pib_t *pib);
 /** \brief Create and insert ACL into PIB */
 acl_t *pib_acl_new(pib_t *pib, const char *name);
 /** \brief Create and insert route map into PIB */
-routemap_t *pib_routemap_new(pib_t *pib, const char *name, int deny);
+routemap_t *pib_routemap_new(pib_t *pib, const char *name);
 /** \brief Find an ACL by name */
 acl_t *pib_acl_find(const pib_t *pib, const char *name);
 /** \brief Find a route map by name */

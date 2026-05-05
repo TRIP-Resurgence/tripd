@@ -30,6 +30,7 @@
 
 #include <pthread.h>
 #include <netinet/in.h>
+#include <stdatomic.h>
 
 #include "session.h"
 #include "locator.h"
@@ -39,44 +40,45 @@
 
 /** \brief Manager object */
 typedef struct {
-    int         run;                /**< run threads = 1 */
-    pthread_t   listen_thread;
-    pthread_t   maintenance_thread;
-    pthread_t   update_thread;
+    int             run;                /**< run threads = 1 */
+    pthread_t       listen_thread;
+    pthread_t       maintenance_thread;
+    pthread_t       update_thread;
     pthread_mutex_t update_mut;
-    pthread_cond_t update_cond;
+    pthread_cond_t  update_cond;
+    atomic_int      update_pending;
 
-    int         fd;
+    int             fd;
 
     /* Local */
-    uint32_t    itad;
-    uint32_t    id;
+    uint32_t        itad;
+    uint32_t        id;
 
     /* Peer information */
-    locator_t  *locator;
+    locator_t      *locator;
 
     /* Telephony Routing Information Base */
-    trib_t     *trib;
+    trib_t         *trib;
     /* Policy Information Base */
-    pib_t      *pib;
+    pib_t          *pib;
 
     /* Session instances */
-    session_t **sessions;
-    size_t      sessions_size, sessions_capacity;
+    session_t     **sessions;
+    size_t          sessions_size, sessions_capacity;
     pthread_mutex_t sessions_mutex;
 
     /* Timers peer default  */
-    uint16_t    hold;
-    uint16_t    keepalive;
-    int         connect_retry;
-    int         max_purge_time;
-    int         disable_time;
-    int         min_itad_orig_int;
-    int         min_route_advert_int;
+    uint16_t        hold;
+    uint16_t        keepalive;
+    int             connect_retry;
+    int             max_purge_time;
+    int             disable_time;
+    int             min_itad_orig_int;
+    int             min_route_advert_int;
 
     /* Default attribute values */
-    uint32_t    def_local_pref;
-    uint32_t    def_metric;
+    uint32_t        def_local_pref;
+    uint32_t        def_metric;
 } manager_t;
 
 

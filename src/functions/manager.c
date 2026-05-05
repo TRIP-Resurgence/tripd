@@ -37,6 +37,7 @@
 #include "session.h"
 #include <db/trib.h>
 #include <db/pib.h>
+#include <stdatomic.h>
 #include <util/util.h>
 
 #include <netinet/in.h>
@@ -625,6 +626,7 @@ maintenance_loop(void *arg)
     return NULL;
 }
 
+/* update worker thread */
 static void *
 update_loop(void *arg)
 {
@@ -632,20 +634,39 @@ update_loop(void *arg)
 
     while (m->run) {
         pthread_mutex_lock(&m->update_mut);
-        pthread_cond_wait(&m->update_cond, &m->update_mut);
 
-        if (!m->run)
-            return NULL;
+        while (atomic_load(&m->update_pending) == 0 && m->run)
+            pthread_cond_wait(&m->update_cond, &m->update_mut);
+
+        if (!m->run) {
+            pthread_mutex_unlock(&m->update_mut);
+            break;
+        }
+
+        int pending = atomic_exchange(&m->update_pending, 0);
+
+        pthread_mutex_unlock(&m->update_mut);
+
+        if (pending == 0)
+            continue;
+
+        struct timespec start, end;
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
 
         for (size_t i = 0; i < m->sessions_size; i++)
             session_update(m->sessions[i], m->id, m->itad);
 
-        pthread_mutex_unlock(&m->update_mut);
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
+
+        DEBUG("peers updated in %fus", (1000000.0 * (double)(end.tv_sec - start.tv_sec))
+            + (0.001 * (double)(end.tv_nsec - start.tv_nsec)));
+
+        /* if while update was running, update was queued, pending will be > 0
+         * mutex is to protect cond, cond sleeps if no pending */
     }
 
     return NULL;
 }
-
 
 manager_t *
 manager_new(const struct sockaddr_in6 *listen_addr)
@@ -664,6 +685,7 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->maintenance_thread = 0;
     m->update_mut = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     m->update_cond = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+    m->update_pending = 0;
     m->fd = 0;
 
     m->itad = 0;
@@ -831,6 +853,8 @@ manager_run(manager_t *manager)
 void
 manager_schedule_update(manager_t *manager)
 {
+    /* queue */
+    atomic_fetch_add(&manager->update_pending, 1);
     /* wake up updater thread */
     pthread_mutex_lock(&manager->update_mut);
     pthread_cond_signal(&manager->update_cond);

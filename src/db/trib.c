@@ -28,6 +28,7 @@
 #include "trib.h"
 #include "db/pib.h"
 #include "protocol/protocol.h"
+#include <time.h>
 
 #define _COMPONENT_ "db"
 
@@ -247,26 +248,25 @@ trib_table_insert_or_replace_if_new(table_t *table, entry_t *route)
 
     /* check if different */
     if (
-            ((*match)->app_proto == route->app_proto) &&
-            ((*match)->attrs.convertedroute == route->attrs.convertedroute) &&
-            ((*match)->attrs.routedpath_size == route->attrs.routedpath_size) &&
-            ((*match)->attrs.advertpath_size == route->attrs.advertpath_size) &&
-            ((*match)->attrs.communities_size == route->attrs.communities_size) &&
-            ((*match)->attrs.atomicaggregate == route->attrs.atomicaggregate) &&
-            ((*match)->attrs.local_pref == route->attrs.local_pref) &&
-            ((*match)->attrs.metric == route->attrs.metric) &&
-            ((*match)->attrs.nextitad == route->attrs.nextitad) &&
-            (strcmp((*match)->attrs.nexthop, route->attrs.nexthop) == 0) &&
-            (memcmp((*match)->attrs.advertpath, route->attrs.advertpath,
-                sizeof(uint32_t) * route->attrs.advertpath_size) == 0) &&
-            (memcmp((*match)->attrs.routedpath, route->attrs.routedpath,
-                sizeof(uint32_t) * route->attrs.routedpath_size) == 0) &&
-            (memcmp((*match)->attrs.communities, route->attrs.communities,
-                sizeof(uint32_t) * route->attrs.communities_size) == 0) &&
-            ((*match)->attrs.withdrawn == route->attrs.withdrawn) &&
-            ((*match)->attrs.use == route->attrs.use)
-        )
-    {
+        ((*match)->app_proto == route->app_proto) &&
+        ((*match)->attrs.convertedroute == route->attrs.convertedroute) &&
+        ((*match)->attrs.routedpath_size == route->attrs.routedpath_size) &&
+        ((*match)->attrs.advertpath_size == route->attrs.advertpath_size) &&
+        ((*match)->attrs.communities_size == route->attrs.communities_size) &&
+        ((*match)->attrs.atomicaggregate == route->attrs.atomicaggregate) &&
+        ((*match)->attrs.local_pref == route->attrs.local_pref) &&
+        ((*match)->attrs.metric == route->attrs.metric) &&
+        ((*match)->attrs.nextitad == route->attrs.nextitad) &&
+        (strcmp((*match)->attrs.nexthop, route->attrs.nexthop) == 0) &&
+        (memcmp((*match)->attrs.advertpath, route->attrs.advertpath,
+            sizeof(uint32_t) * route->attrs.advertpath_size) == 0) &&
+        (memcmp((*match)->attrs.routedpath, route->attrs.routedpath,
+            sizeof(uint32_t) * route->attrs.routedpath_size) == 0) &&
+        (memcmp((*match)->attrs.communities, route->attrs.communities,
+            sizeof(uint32_t) * route->attrs.communities_size) == 0) &&
+        ((*match)->attrs.withdrawn == route->attrs.withdrawn) &&
+        ((*match)->attrs.use == route->attrs.use)
+    ) {
         return;
     }
 
@@ -465,40 +465,6 @@ trib_update_adj_out(trib_t *trib, table_t *adj_trib_out)
     trib_table_deinit(&policied);
     trib_table_deinit(eligible);
     free(eligible);
-
-    /* append this ITAD to outgoing routes's path if external peer
-     * if this LS originates the route this appends to an empty path */
-    if (adj_trib_out->peer_itad == trib->local_itad)
-        return;
-
-    for (size_t i = 0; i < adj_trib_out->size; i++) {
-        entry_t *e = adj_trib_out->table[i];
-
-        /* always send paths, even if incomplete */
-        e->attrs.use |= ATTR_USED_ADVERTPATH | ATTR_USED_ROUTEDPATH;
-
-        if (ATTR_IS_USED_ADVERTPATH(e->attrs.use)) {
-            e->attrs.advertpath_size++;
-            e->attrs.advertpath = realloc(e->attrs.advertpath,
-                sizeof(uint32_t) * e->attrs.advertpath_size);
-            memmove(&e->attrs.advertpath[1], &e->attrs.advertpath[0],
-                e->attrs.advertpath_size - 1);
-            e->attrs.advertpath[0] = trib->local_itad;
-        }
-
-        /* append to routed path only if we change the routing
-         * i.e. we changed the next hop to this ITAD */
-        if (ATTR_IS_USED_ROUTEDPATH(e->attrs.use)
-            && e->attrs.nextitad == trib->local_itad)
-        {
-            e->attrs.routedpath_size++;
-            e->attrs.routedpath = realloc(e->attrs.routedpath,
-                sizeof(uint32_t) * e->attrs.routedpath_size);
-            memmove(&e->attrs.routedpath[1], &e->attrs.routedpath[0],
-                e->attrs.routedpath_size - 1);
-            e->attrs.routedpath[0] = trib->local_itad;
-        }
-    }
 }
 
 void
@@ -511,6 +477,9 @@ trib_update_full(trib_t *trib)
     /* Phase 2a: local routes and external Ext-TRIBs-in to Ext-TRIB */
     table_t scratch; /* temporary working table */
     table_init(&scratch);
+
+    struct timespec start, end;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
 
     table_select_into(&trib->ext_trib, &trib->local_routes, trib->local_itad);
     for (size_t i = 0; i < trib->adj_tribs_size; i++) {
@@ -539,9 +508,13 @@ trib_update_full(trib_t *trib)
     optimize_table(&trib->optimized_loc_trib, &trib->loc_trib);
 
     for (size_t i = 0; i < trib->adj_tribs_size; i++) {
-        trib_table_clear(trib->adj_tribs_out[i]);
         trib_update_adj_out(trib, trib->adj_tribs_out[i]);
     }
+
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
+
+    DEBUG("TRIB updated in %fus", (1000000.0 * (double)(end.tv_sec - start.tv_sec))
+        + (0.001 * (double)(end.tv_nsec - start.tv_nsec)));
 
     trib_table_deinit(&scratch);
 }
