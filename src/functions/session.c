@@ -366,24 +366,24 @@ handle_update(manager_t *m, session_t *s, msg_t *msg)
 
             free(entries[i].prefix);
         }
-    } else {
-        time_t learntime = time(NULL);
-        trib_table_clear(&s->adj_trib_in);
-        for (int i = 0; i < route_count; i++) {
-            entries[i].type = ENTRY_TYPE_TRIP;
-            entries[i].learn_itad = s->peer->itad;
-            entries[i].learn_lsid = s->id;
-            if (lsencapsulated)
-                entries[i].seq = seq;
-            entries[i].time = learntime;
-            entries[i].attrs = ent_attrs;
-            entries[i].sent = 0;
-            trib_table_insert_or_replace(&s->adj_trib_in,
-                entry_clone(&entries[i]));
 
-            free(entries[i].prefix);
-        }
+        return 0;
+    }
 
+    time_t learntime = time(NULL);
+    for (int i = 0; i < route_count; i++) {
+        entries[i].type = ENTRY_TYPE_TRIP;
+        entries[i].learn_itad = s->peer->itad;
+        entries[i].learn_lsid = s->id;
+        if (lsencapsulated)
+            entries[i].seq = seq;
+        entries[i].time = learntime;
+        entries[i].attrs = ent_attrs;
+        entries[i].sent = 0;
+        trib_table_insert_or_replace(&s->adj_trib_in,
+            entry_clone(&entries[i]));
+
+        free(entries[i].prefix);
     }
 
     trib_update_full(m->trib);
