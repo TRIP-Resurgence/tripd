@@ -7,6 +7,8 @@
 int
 main()
 {
+    logging_init(stdout, LOG_DEBUG);
+
     table_t src, dst;
     table_init(&src);
     table_init(&dst);

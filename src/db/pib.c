@@ -109,7 +109,7 @@ pib_acl_new(pib_t *pib, const char *name)
 }
 
 routemap_t *
-pib_routemap_new(pib_t *pib, const char *name, int deny)
+pib_routemap_new(pib_t *pib, const char *name)
 {
     VEC_ENSURE_CAPACITY(pib->routemaps, pib->routemaps_size,
         pib->routemaps_capacity, routemap_t);

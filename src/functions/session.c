@@ -55,8 +55,8 @@ const char *session_state_strs[] = {
     "established"
 };
 
-static const char *
-session_str(session_t *s)
+const char *
+session_str(const session_t *s)
 {
     static char str[256], abuff[INET6_ADDRSTRLEN], abuff2[INET_ADDRSTRLEN];
     snprintf(str, 256, "(%s):%d:%s",
@@ -129,6 +129,276 @@ send_notification_res(int fd, int res)
     return 0;
 }
 
+/** \brief Parse UPDATE attributes */
+int
+handle_update(manager_t *m, session_t *s, msg_t *msg)
+{
+    /* parse attribute headers */
+    size_t toparse = msg->msg_len;
+    void *attr_ptr = (void*)&msg->msg_val;
+    msg_update_attr_t *attrs[12] = { };
+    int attrs_count = 0, attrs_size_sum = 0;
+    int res = 0;
+    while (toparse) {
+        msg_update_attr_t *attr = NULL;
+        void *attr_val = NULL;
+        if (IS_ATTR_FLAG_LSENCAP(*(uint8_t*)attr_ptr)) {
+            msg_update_attr_lsencap_t *attr_lsencap = NULL;
+            PROTO_TRY(
+                parse_msg_update_attr_lsencap(attr_ptr, msg->msg_len,
+                    &attr_lsencap),
+                res, return -1
+            );
+
+            attr = (msg_update_attr_t*)attr_lsencap;
+            attrs_size_sum += sizeof(msg_update_attr_lsencap_t) + attr->attr_len;
+            toparse -= sizeof(msg_update_attr_lsencap_t) + attr->attr_len;
+        } else {
+            PROTO_TRY(
+                parse_msg_update_attr(attr_ptr, msg->msg_len,
+                    &attr),
+                res, return -1
+            );
+
+            attrs_size_sum += sizeof(msg_update_attr_t) + attr->attr_len;
+            toparse -= sizeof(msg_update_attr_t) + attr->attr_len;
+        }
+
+        DEBUG(" %s[%d] (%s)", attr_strs[attr->attr_type], attr->attr_len,
+            flags_str(attr->attr_flags));
+
+        attrs[attrs_count++] = attr;
+
+        attr_ptr = (void*)&attr->attr_val + attr->attr_len;
+    }
+
+    if (attrs_size_sum != msg->msg_len) {
+        ERROR("malformed UPDATE (attribute size)");
+        return -1;
+    }
+
+    /* handle attributes */
+    int lsencapsulated = 0, routing_update = 0, withdrawn = 0;
+    uint32_t id = 0, seq = 0;
+    for (int i = 0; i < attrs_count; i++) {
+        if (IS_ATTR_FLAG_LSENCAP(attrs[i]->attr_flags)) {
+            lsencapsulated = 1;
+            id = ((msg_update_attr_lsencap_t*)attrs[i])->attr_id;
+            seq = ((msg_update_attr_lsencap_t*)attrs[i])->attr_seq;
+        }
+        if (attrs[i]->attr_type == ATTR_TYPE_WITHDRAWNROUTES) {
+            routing_update = 1;
+            withdrawn = 1;
+        } else if (attrs[i]->attr_type == ATTR_TYPE_REACHABLEROUTES) {
+            routing_update = 1;
+            withdrawn = 0;
+        }
+    }
+
+    entry_t entries[1024] = { };
+    int route_count = 0;
+
+    entry_attrs_t ent_attrs = { };
+    for (int i = 0; i < attrs_count; i++) {
+        if (routing_update &&
+            (attrs[i]->attr_type == ATTR_TYPE_WITHDRAWNROUTES ||
+            attrs[i]->attr_type == ATTR_TYPE_REACHABLEROUTES))
+        {
+            toparse = attrs[i]->attr_len;
+            void *route_ptr = attrs[i]->attr_val;
+            while (toparse) {
+                route_t *route = NULL;
+                PROTO_TRY(parse_route(route_ptr, toparse, &route),
+                    res, return -1);
+
+                entries[route_count].af = route->route_af;
+                entries[route_count].app_proto = route->route_app_proto;
+                entries[route_count].prefix = strndup(route->route_addr,
+                    route->route_len);
+
+                route_count++;
+                route_ptr += res + route->route_len;
+                toparse -= res + route->route_len;
+            }
+        } else if (!withdrawn &&
+            attrs[i]->attr_type == ATTR_TYPE_NEXTHOPSERVER)
+        {
+            attr_nexthopserver_t *nexthop = NULL;
+            PROTO_TRY(
+                parse_attr_nexthopserver(attrs[i]->attr_val, attrs[i]->attr_len,
+                    &nexthop),
+                res, return -1
+            );
+
+            ent_attrs.nexthop = strndup(nexthop->nexthopserver_server,
+                nexthop->nexthopserver_serverlen);
+            ent_attrs.nextitad = nexthop->nexthopserver_itad;
+        } else if (!withdrawn &&
+            attrs[i]->attr_type == ATTR_TYPE_ADVERTISEMENTPATH)
+        {
+            itadpath_t *itadpath = NULL;
+            PROTO_TRY(
+                parse_itadpath(attrs[i]->attr_val, attrs[i]->attr_len,
+                    &itadpath),
+                res, return -1
+            );
+
+            ent_attrs.advertpath = malloc(itadpath->itadpath_len);
+
+            for (int j = 0; j < itadpath->itadpath_len / sizeof(uint32_t); j++) {
+                uint32_t *itad = NULL;
+                PROTO_TRY(
+                    parse_itad(&itadpath->itadpath_segs[j], sizeof(uint32_t),
+                        &itad),
+                    res, return -1
+                );
+
+                ent_attrs.advertpath[j] = *itad;
+            }
+        } else if (!withdrawn &&
+            attrs[i]->attr_type == ATTR_TYPE_ROUTEDPATH)
+        {
+            itadpath_t *itadpath = NULL;
+            PROTO_TRY(
+                parse_itadpath(attrs[i]->attr_val, attrs[i]->attr_len,
+                    &itadpath),
+                res, return -1
+            );
+
+            ent_attrs.routedpath = malloc(itadpath->itadpath_len);
+
+            for (int j = 0; j < itadpath->itadpath_len / sizeof(uint32_t); j++) {
+                uint32_t *itad = NULL;
+                PROTO_TRY(
+                    parse_itad(&itadpath->itadpath_segs[j], sizeof(uint32_t),
+                        &itad),
+                    res, return -1
+                );
+
+                ent_attrs.routedpath[j] = *itad;
+            }
+        } else if (!withdrawn &&
+            attrs[i]->attr_type == ATTR_TYPE_ATOMICAGGREGATE)
+        {
+            ent_attrs.atomicaggregate = 1;
+        } else if (!withdrawn &&
+            attrs[i]->attr_type == ATTR_TYPE_LOCALPREFERENCE)
+        {
+            attr_localpref_t *localpref = NULL;
+            PROTO_TRY(
+                parse_attr_localpref(attrs[i]->attr_val, attrs[i]->attr_len,
+                    &localpref),
+                res, return -1
+            );
+
+            ent_attrs.local_pref = *localpref;
+        } else if (!withdrawn &&
+            attrs[i]->attr_type == ATTR_TYPE_MULTIEXITDISC)
+        {
+            attr_multiexitdisc_t *multiexitdisc = NULL;
+            PROTO_TRY(
+                parse_attr_multiexitdisc(attrs[i]->attr_val, attrs[i]->attr_len,
+                    &multiexitdisc),
+                res, return -1
+            );
+
+            ent_attrs.metric = *multiexitdisc;
+        } else if (!withdrawn &&
+            attrs[i]->attr_type == ATTR_TYPE_COMMUNITIES)
+        {
+            community_t *communities = (void*)&attrs[i]->attr_val; /* preparse*/
+            community_t *community = NULL;
+
+            ent_attrs.communities_size =
+                attrs[i]->attr_len / sizeof(community_t);
+
+            for (int j = 0; j < attrs[i]->attr_len / sizeof(community_t); j++) {
+                PROTO_TRY(
+                    parse_community(&communities[j], sizeof(community_t),
+                        &community),
+                    res, return -1
+                );
+                
+                ent_attrs.communities[j] = *community;
+            }
+        } else if (attrs[i]->attr_type == ATTR_TYPE_ITADTOPOLOGY) {
+            /* TODO: this idfk */
+        } else if (!withdrawn &&
+            attrs[i]->attr_type == ATTR_TYPE_CONVERTEDROUTE)
+        {
+            ent_attrs.convertedroute = 1;
+        }
+    }
+
+    if (!routing_update)
+        return 0;
+
+    for (int i = 0; i < ent_attrs.advertpath_size; i++) {
+        if (ent_attrs.advertpath[i] == m->itad) {
+            INFO("routes with this itad in advertisementpath rejected");
+            return 0;
+        }
+    }
+
+    for (int i = 0; i < ent_attrs.advertpath_size; i++) {
+        if (ent_attrs.advertpath[i] == m->itad) {
+            INFO("routes with this itad in routedpath rejected");
+            return 0;
+        }
+    }
+
+    if (s->peer->itad == m->itad && ent_attrs.nextitad == m->itad) {
+        INFO("external route with this itad in nexthop rejected");
+        return 0;
+    }
+
+
+    if (withdrawn) {
+        for (int i = 0; i < route_count; i++) {
+            entry_t **match = trib_table_find(&s->adj_trib_in, entries[i].af,
+                entries[i].prefix);
+            if (!match) {
+                DEBUG("withdrawn update not found");
+                continue;
+            }
+
+            (*match)->attrs.withdrawn = 1;
+
+            free(entries[i].prefix);
+        }
+
+        return 0;
+    }
+
+    time_t learntime = time(NULL);
+    for (int i = 0; i < route_count; i++) {
+        entries[i].type = ENTRY_TYPE_TRIP;
+        entries[i].learn_itad = s->peer->itad;
+        entries[i].learn_lsid = s->id;
+        if (lsencapsulated)
+            entries[i].seq = seq;
+        entries[i].time = learntime;
+        entries[i].attrs = ent_attrs;
+        entries[i].sent = 0;
+        trib_table_insert_or_replace(&s->adj_trib_in,
+            entry_clone(&entries[i]));
+
+        free(entries[i].prefix);
+    }
+
+    trib_update_full(m->trib);
+
+    DEBUG("updated %d routes", route_count);
+
+    manager_schedule_update(m);
+
+    free(ent_attrs.nexthop);
+    free(ent_attrs.advertpath);
+    free(ent_attrs.routedpath);
+    free(ent_attrs.communities);
+    return 0;
+}
+
 /** \brief Session loop
  *
  * \param arg Of type (void*){ manager_t *m, session_t *s }
@@ -153,8 +423,8 @@ session_loop(void *arg)
             res, goto proto_error
         );
 
-        DEBUG("received msg: %s[%d]", msg_type_strs[msg->msg_type],
-            msg->msg_len);
+        DEBUG("received msg: %s[%d] from %s", msg_type_strs[msg->msg_type],
+            msg->msg_len, session_str(s));
 
         switch (msg->msg_type) {
         case MSG_TYPE_OPEN: {
@@ -167,12 +437,28 @@ session_loop(void *arg)
         } break;
         case MSG_TYPE_UPDATE: {
             s->last_read_time = time(NULL);
-            /* TODO: update */
-            /* flush for now */
-            if (recv(s->fd, recv_wnd, msg->msg_len, 0) < 0) {
-                ERROR("shit");
-                goto sock_error;
+
+            size_t toread = msg->msg_len;
+            while (toread) {
+                res = recv(s->fd, recv_wnd, msg->msg_len, 0);
+                if (res < 0) {
+                    ERROR("recv(): %s", strerror(errno));
+                    goto sock_error;
+                } else if (res == 0) {
+                    DEBUG("connection closed by peer");
+                    goto sock_error;
+                }
+
+                recv_wnd += res;
+                toread -= res;
             }
+            
+            if (msg->msg_len + sizeof(msg_t) > MAX_MSG_SIZE) {
+                ERROR("message too large");
+                continue; /* drop */
+            }
+
+            handle_update(m, s, msg);
         } break;
         case MSG_TYPE_NOTIFICATION: {
             SOCK_TRY_RECV(s->fd, recv_wnd, msg_notif_t, goto sock_error);
@@ -186,6 +472,21 @@ session_loop(void *arg)
             INFO("received notification: %s",
                 notif_code_subcode_str(msg_notif->notif_error_code,
                     msg_notif->notif_error_subcode));
+
+            size_t toread = msg->msg_len - sizeof(msg_notif_t);
+            while (toread) {
+                res = recv(s->fd, recv_wnd, msg->msg_len, 0);
+                if (res < 0) {
+                    ERROR("recv(): %s", strerror(errno));
+                    goto sock_error;
+                } else if (res == 0) {
+                    DEBUG("connection closed by peer");
+                    goto sock_error;
+                }
+
+                recv_wnd += res;
+                toread -= res;
+            }
 
             if (msg_notif->notif_error_code == NOTIF_CODE_ERROR_EXPIRED)
                 goto sock_error;
@@ -290,24 +591,50 @@ serialize_group(char *buff, size_t len, const session_t *s, entry_group_t *group
         r, goto proto_error
     );
 
-    /* AdvertisementPath */
-    if (ATTR_IS_USED_ADVERTPATH(group->attrs.use)) {
-        PROTO_TRY(
-            new_attr_advertisementpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-                ITADPATH_TYPE_AP_SEQUENCE, group->attrs.advertpath,
-                group->attrs.advertpath_size),
-            r, goto proto_error
-        );
+    /* AdvertisementPath always sent */
+    if (ATTR_IS_USED_ADVERTPATH(group->attrs.use) || 1) {
+        uint32_t path[256];
+        size_t pathsize = 0;
+        if (s->peer->itad != local_itad) {
+            path[0] = local_itad;
+            pathsize++;
+        }
+        if (ATTR_IS_USED_ADVERTPATH(group->attrs.use)) {
+            memcpy(&path[pathsize], group->attrs.advertpath,
+                sizeof(uint32_t) * group->attrs.advertpath_size);
+            pathsize += group->attrs.advertpath_size;
+        }
+        if (pathsize) {
+            PROTO_TRY(
+                new_attr_advertisementpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                    ITADPATH_TYPE_AP_SEQUENCE, path, pathsize),
+                r, goto proto_error
+            );
+        }
     }
 
-    /* RoutedPath */
-    if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use)) {
-        PROTO_TRY(
-            new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
-                ITADPATH_TYPE_AP_SEQUENCE, group->attrs.routedpath,
-                    group->attrs.routedpath_size),
-            r, goto proto_error
-        );
+    /* RoutedPath always sent */
+    if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use) || 1) {
+        uint32_t path[256];
+        size_t pathsize = 0;
+        /* append to routed path only if we change the routing
+         * i.e. we changed the next hop to this ITAD */
+        if (s->peer->itad != local_itad && group->attrs.nextitad == local_itad) {
+            path[0] = local_itad;
+            pathsize++;
+        }
+        if (ATTR_IS_USED_ROUTEDPATH(group->attrs.use)) {
+            memcpy(&path[pathsize], group->attrs.routedpath,
+                sizeof(uint32_t) * group->attrs.routedpath_size);
+            pathsize += group->attrs.routedpath_size;
+        }
+        if (pathsize) {
+            PROTO_TRY(
+                new_attr_routedpath(attr_bufs[attrs_count++], MAX_MSG_SIZE,
+                    ITADPATH_TYPE_AP_SEQUENCE, path, pathsize),
+                r, goto proto_error
+            );
+        }
     }
 
     /* AtomicAggregate */
@@ -389,11 +716,16 @@ session_update(const session_t *s, uint32_t local_id, uint32_t local_itad)
             continue;
 
         SOCK_TRY_SEND(send(s->fd, msg_buff, upd_size, 0), goto sock_error);
+
+        DEBUG("sent update to %s", session_str(s));
+
+        /* set them as sent */
+        for (size_t j = 0; j < groups[i].size; j++)
+            groups[i].entries[j]->sent = 1;
+        free(groups[i].entries);
     }
 
 sock_error:
-    for (size_t i = 0; i < groups_count; i++)
-        free(groups[i].entries);
     free(groups);
     free(new_ents);
 }

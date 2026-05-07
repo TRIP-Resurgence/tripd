@@ -97,7 +97,7 @@ typedef struct {
 
 /** \brief Route Table */
 typedef struct {
-    uint32_t    peer_itad;      /**< Peer ITAD used in Adj-TRIBs */
+    uint32_t    peer_itad, peer_id;      /**< Peer ITAD used in Adj-TRIBs */
     entry_t   **table;
     size_t      size, capacity;
     routemap_t *routemap;       /**< Insertion routemap */
@@ -147,9 +147,10 @@ typedef struct {
 } trib_t;
 
 
+/** \brief Clone entry */
+entry_t *entry_clone(const entry_t *entry);
 /** \brief Destroy entry */
 void entry_destroy(entry_t *entry);
-
 
 /** \brief Deinitialize table */
 void trib_table_deinit(table_t *t);
@@ -162,8 +163,21 @@ void trib_adj_pair_remove(trib_t *trib, table_t *in, table_t *out);
 /** \brief Deinit TRIB structure */
 void trib_destroy(trib_t *trib);
 
+/** \brief Find exact route in table */
+entry_t **trib_table_find(table_t *t, uint16_t af, const char *prefix);
+
+/** \brief Lookup address in table
+ * \param table Table 
+ * \param af Address family
+ * \param app_proto Optional (=0) app_proto
+ * \param address Address */
+const entry_t *trib_table_lookup(table_t *table, uint16_t af, uint16_t app_proto,
+    const char *address);
+
 /** \brief Add route to table */
 void trib_table_insert(table_t *table, entry_t *route);
+
+void trib_table_insert_or_replace(table_t *table, entry_t *route);
 
 /** \brief Destroy all entries and clear table */
 void trib_table_clear(table_t *table);

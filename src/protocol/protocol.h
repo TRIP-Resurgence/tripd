@@ -150,6 +150,8 @@ typedef uint32_t capinfo_transmode_t;
 #define ATTR_FLAG_PARTIAL           0b00010000
 #define ATTR_FLAG_LSENCAP           0b00001000
 
+const char *flags_str(uint8_t flags);
+
 /** \brief UPDATE attribute types */
 enum attr_type {
     /** RFC3219 */
@@ -176,6 +178,9 @@ enum attr_type {
     ATTR_TYPE_TRUNKGROUP,
     ATTR_TYPE_CARRIER
 };
+
+/** \brief Attribute strings */
+extern const char *attr_strs[];
 
 /** \brief UPDATE attribute */
 typedef struct __attribute__((packed)) {
@@ -609,6 +614,10 @@ runtime_error_t parse_msg_update_attr_lsencap(void *buff, size_t len,
 
 
 /* attributes */
+
+/** \brief Deserialize NextHopServer attribute */
+runtime_error_t parse_attr_nexthopserver(void *buff, size_t len,
+    attr_nexthopserver_t **nexthop_out);
 
 /** \brief Deserialize route */
 runtime_error_t parse_route(void *buff, size_t len,

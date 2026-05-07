@@ -37,6 +37,7 @@
 #include "session.h"
 #include <db/trib.h>
 #include <db/pib.h>
+#include <stdatomic.h>
 #include <util/util.h>
 
 #include <netinet/in.h>
@@ -255,7 +256,7 @@ handle_open(manager_t *m, session_t *s, msg_t *msg,
     /* find old still initiating session pre-openconfirm if exists and stop it*/
     session_t *init_s = manager_session_lookup_peer(m, s->peer);
     if (init_s && (init_s->initiated == 1) && (init_s != s)) {
-        INFO("closing old initiating session");
+        DEBUG("closing old initiating session");
         init_s->mark_stop_init = 1;
         pthread_join(init_s->thread, NULL);
     }
@@ -485,9 +486,13 @@ peer_handshake(void *arg)
             trib_update_adj_out(m->trib, &s->adj_trib_out);
             session_update(s, m->id, m->itad);
 
+            INFO("adjacency with %s established", session_str(s));
+
             /* Hand newly established session off to session_loop
              * if this function returns, the session has died */
             session_loop(arg);
+
+            INFO("adjacency with %s lost", session_str(s));
 
             if (s->mark_stop_init)
                 goto sock_error;
@@ -566,6 +571,8 @@ listen_loop(void *arg)
         trib_adj_pair_add(m->trib, &s->adj_trib_in, &s->adj_trib_out);
         s->adj_trib_in.routemap = peer->routemap_in;
         s->adj_trib_out.routemap = peer->routemap_out;
+        s->adj_trib_out.peer_itad = s->peer->itad;
+        s->adj_trib_out.peer_id = s->id;
 
         void **handshake_data = malloc(2 * sizeof(void*));
         handshake_data[0] = m;
@@ -619,6 +626,7 @@ maintenance_loop(void *arg)
     return NULL;
 }
 
+/* update worker thread */
 static void *
 update_loop(void *arg)
 {
@@ -626,20 +634,39 @@ update_loop(void *arg)
 
     while (m->run) {
         pthread_mutex_lock(&m->update_mut);
-        pthread_cond_wait(&m->update_cond, &m->update_mut);
 
-        if (!m->run)
-            return NULL;
+        while (atomic_load(&m->update_pending) == 0 && m->run)
+            pthread_cond_wait(&m->update_cond, &m->update_mut);
+
+        if (!m->run) {
+            pthread_mutex_unlock(&m->update_mut);
+            break;
+        }
+
+        int pending = atomic_exchange(&m->update_pending, 0);
+
+        pthread_mutex_unlock(&m->update_mut);
+
+        if (pending == 0)
+            continue;
+
+        struct timespec start, end;
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
 
         for (size_t i = 0; i < m->sessions_size; i++)
             session_update(m->sessions[i], m->id, m->itad);
 
-        pthread_mutex_unlock(&m->update_mut);
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
+
+        DEBUG("peers updated in %fus", (1000000.0 * (double)(end.tv_sec - start.tv_sec))
+            + (0.001 * (double)(end.tv_nsec - start.tv_nsec)));
+
+        /* if while update was running, update was queued, pending will be > 0
+         * mutex is to protect cond, cond sleeps if no pending */
     }
 
     return NULL;
 }
-
 
 manager_t *
 manager_new(const struct sockaddr_in6 *listen_addr)
@@ -658,6 +685,7 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->maintenance_thread = 0;
     m->update_mut = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
     m->update_cond = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+    m->update_pending = 0;
     m->fd = 0;
 
     m->itad = 0;
@@ -791,6 +819,8 @@ manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     trib_adj_pair_add(manager->trib, &s->adj_trib_in, &s->adj_trib_out);
     s->adj_trib_in.routemap = peer->routemap_in;
     s->adj_trib_out.routemap = peer->routemap_out;
+    s->adj_trib_out.peer_itad = s->adj_trib_in.peer_itad = s->peer->itad;
+    s->adj_trib_out.peer_id = s->adj_trib_in.peer_id = s->id;
 
     /* add session to manager session vector */
     pthread_mutex_lock(&manager->sessions_mutex);
@@ -823,6 +853,8 @@ manager_run(manager_t *manager)
 void
 manager_schedule_update(manager_t *manager)
 {
+    /* queue */
+    atomic_fetch_add(&manager->update_pending, 1);
     /* wake up updater thread */
     pthread_mutex_lock(&manager->update_mut);
     pthread_cond_signal(&manager->update_cond);

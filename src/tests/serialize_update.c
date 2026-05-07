@@ -7,21 +7,6 @@
 
 #define _COMPONENT_ "test"
 
-const char *attr_strs[] = {
-    "nil",
-    "WithdrawnRoutes",
-    "ReachableRoutes",
-    "NextHopServer",
-    "AdvertisementPath",
-    "RoutedPath",
-    "AtomicAggregate",
-    "LocalPreference",
-    "MultiExitDisc",
-    "Communities",
-    "ITADTopology",
-    "ConvertedRoute"
-};
-
 int
 main()
 {
