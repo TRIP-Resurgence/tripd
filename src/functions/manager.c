@@ -543,7 +543,8 @@ listen_loop(void *arg)
         int request_fd = accept(m->fd, (struct sockaddr*)&peer_addr,
             &peer_addr_size);
         if (request_fd < 0) {
-            ERROR("could not accept() peer: %s", strerror(errno));
+            if (!m->run)
+                ERROR("could not accept() peer: %s", strerror(errno));
             return NULL;
         }
 

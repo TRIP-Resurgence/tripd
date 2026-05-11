@@ -24,6 +24,7 @@
 
 #include "commands.h"
 
+#include "api/server.h"
 #include "cli.h"
 #include "command/parser.h"
 #include "db/pib.h"
@@ -33,6 +34,7 @@
 #include <ctype.h>
 #include <logging/logging.h>
 #include <netinet/in.h>
+#include <stdio.h>
 #include <util/util.h>
 #include <db/trib.h>
 
@@ -314,6 +316,8 @@ cmd_shutdown(parser_t *parser, int no, char *args)
         printf("shutdown: unprivileged\n");
         return -1;
     }
+
+    server_stop();
     manager_shutdown(parser->manager);
     manager_destroy(parser->manager);
     cli_reset();
@@ -404,6 +408,52 @@ cmd_config_bind(parser_t *parser, int no, char *args)
     parser->manager = manager_new(&parser->listen_addr);
     if (!parser->manager)
         return -1;
+
+    return 0;
+}
+
+int
+cmd_config_api(parser_t *parser, int no, char *args)
+{
+    args = strip(args);
+
+    char *addr = strtok(args, " ");
+    char *port = strtok(NULL, " ");
+
+    /* resolve listen address */
+    struct addrinfo *listen_addrs;
+    int res = getaddrinfo(addr, NULL, NULL, &listen_addrs);
+    if (res != 0) {
+        fprintf(parser->outf, "bind-address: getaddrinfo() error: %s for %s\n",
+            gai_strerror(res), args);
+        return -1;
+    }
+
+    struct sockaddr_in6 api_listen_addr;
+    if (listen_addrs->ai_addr->sa_family == AF_INET6) {
+        memcpy(&api_listen_addr, listen_addrs->ai_addr,
+            listen_addrs->ai_addrlen);
+        api_listen_addr.sin6_port = htons(atoi(port));
+    } else if (listen_addrs->ai_addr->sa_family == AF_INET) {
+        api_listen_addr.sin6_family = AF_INET6;
+        api_listen_addr.sin6_port = htons(atoi(port));
+        /* map IPv4 into IPv4-mapped IPv6 */
+        map_addr_inet_inet6(&api_listen_addr,
+            (struct sockaddr_in *)listen_addrs->ai_addr);
+    } else {
+        fprintf(parser->outf, "bind-address: unsupported address family: %s\n",
+            args);
+        freeaddrinfo(listen_addrs);
+        return -1;
+    }
+
+    freeaddrinfo(listen_addrs);
+
+    /* create session manager */
+    if (server_run(&api_listen_addr) < 0) {
+        fprintf(parser->outf, "api: error starting api");
+        return -1;
+    }
 
     return 0;
 }
@@ -934,7 +984,8 @@ const cmd_def_t cmds_config[] = {
     { "exit",           &cmd_exit,"exit current context", NULL },
     { "help",           &cmd_help,"show command help", NULL },
     { "log",            &cmd_config_log, "set log file", "log <log file>" },
-    { "bind-address",   &cmd_config_bind, "set bind address and port", "bind-address <addr> <port>" },
+    { "bind-address",   &cmd_config_bind, "set bind address and port for trip", "bind-address <addr> [port]" },
+    { "api",            &cmd_config_api, "set bind address and port for api", "api <addr> <port>" },
     { "route",          &cmd_config_route, "insert route into routing table", "route { add <af> <prefix> <app-proto> <server> | del <af> <prefi> }" },
     { "acl",            &cmd_config_acl, "add acl entry", "acl <acl-name> { permit | deny } <expression>" },
     { "route-map",      &cmd_config_routemap, "define route map", "route-map <map-name> [ permit | deny ]" },
