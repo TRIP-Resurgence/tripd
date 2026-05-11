@@ -36,6 +36,7 @@
 #include "locator.h"
 #include <db/trib.h>
 #include <db/pib.h>
+#include <api/server.h>
 
 
 /** \brief Manager object */
@@ -61,6 +62,9 @@ typedef struct {
     trib_t         *trib;
     /* Policy Information Base */
     pib_t          *pib;
+
+    /* API server */
+    server_t       *server;
 
     /* Session instances */
     session_t     **sessions;

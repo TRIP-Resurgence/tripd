@@ -38,20 +38,13 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <stdlib.h>
 
 #define _COMPONENT_ "api"
 
 
-typedef struct {
-    pthread_t thread;
-    int fd;
-    int run;
-} server_t;
-
-static server_t g_server;
-
 static void
-handle_request(int fd, const struct sockaddr_in6 *sa)
+handle_request(int fd, const struct sockaddr_in6 *sa, trib_t *trib)
 {
     static char buf[4096];
     ssize_t res = recv(fd, buf, 4096, 0);
@@ -64,8 +57,12 @@ handle_request(int fd, const struct sockaddr_in6 *sa)
     ioctl(fd, FIONREAD, &avail);
     if (res == 4096 && avail) {
         SOCK_TRY_SEND(send(fd, STATUS_413, sizeof(STATUS_413), 0), goto sock_error);
+        DEBUG("request %s too large", sockaddr6_str(sa));
         goto end;
     }
+
+    struct timespec start, end;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
 
     char *body = strstr(buf, "\r\n\r\n") + 4;
 
@@ -78,18 +75,33 @@ handle_request(int fd, const struct sockaddr_in6 *sa)
     char *endpoint = strtok(NULL, " ");
     char *ver = strtok(NULL, " ");
 
-    DEBUG("%s %s %s", sockaddr6_str(sa), method, endpoint);
+    DEBUG("request %s %s %s", sockaddr6_str(sa), method, endpoint);
 
     if (strcmp(ver, "HTTP/1.1") != 0) {
         SOCK_TRY_SEND(send(fd, STATUS_505, sizeof(STATUS_505), 0), goto sock_error);
+        DEBUG(" -> response 505");
         goto end;
     }
 
     for (int i = 0; api[i].endpoint; i++) {
-        if (strncmp(endpoint, api[i].endpoint, strlen(api[i].endpoint))) {
-            api[i].handler(fd, buf, res - (body - buf));
+        int len = strlen(api[i].endpoint);
+        if (strncmp(endpoint, api[i].endpoint, len) == 0) {
+            res = api[i].handler(fd, endpoint + len, buf,
+                res - (body - buf), trib);
+            if (res < 0) {
+                DEBUG(" -> socket error");
+            } else {
+                clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
+                DEBUG(" -> response %d in %fus", res,
+                    (1000000.0 * (double)(end.tv_sec - start.tv_sec))
+                    + (0.001 * (double)(end.tv_nsec - start.tv_nsec)));
+            }
+            goto end;
         }
     }
+
+    SOCK_TRY_SEND(send(fd, STATUS_404, sizeof(STATUS_404), 0), goto sock_error);
+    DEBUG(" -> response 404");
 
 end:
     close(fd);
@@ -109,22 +121,22 @@ server_loop(void *arg)
         socklen_t slen = sizeof(csa);
         int cfd = accept(server->fd, (struct sockaddr*)&csa, &slen);
         if (cfd < 0) {
-            if (!server->run)
+            if (server->run)
                 ERROR("could not accept() client: %s", strerror(errno));
             return NULL;
         }
 
-        handle_request(cfd, &csa);
+        handle_request(cfd, &csa, server->trib);
     }
 
     return NULL;
 }
 
-int
-server_run(const struct sockaddr_in6 *listen_addr)
+
+server_t *
+server_new(const struct sockaddr_in6 *listen_sa, trib_t *trib)
 {
-    if (g_server.thread)
-        return -1;
+    server_t *s = malloc(sizeof(server_t));
 
     int fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
     if (fd < 0) {
@@ -132,7 +144,7 @@ server_run(const struct sockaddr_in6 *listen_addr)
         goto error;
     }
 
-    if (bind(fd, (const struct sockaddr*)listen_addr,
+    if (bind(fd, (const struct sockaddr*)listen_sa,
         sizeof(struct sockaddr_in6)) < 0)
     {
         ERROR("could not bind() listen socket: %s", strerror(errno));
@@ -144,26 +156,33 @@ server_run(const struct sockaddr_in6 *listen_addr)
         goto error;
     }
 
-    g_server.fd = fd;
-    g_server.run = 1;
+    s->fd = fd;
+    s->run = 1;
+    s->listen_sa = *listen_sa;
+    s->trib = trib;
 
-    pthread_create(&g_server.thread, NULL, &server_loop, &g_server);
-
-    DEBUG("started session manager, listening at [%s]:%d",
-        sockaddr_str((struct sockaddr *)listen_addr),
-        ntohs(listen_addr->sin6_port));
-
-    return 0;
+    return s;
 
 error:
-    return -1;
+    return NULL;
 }
 
 void
-server_stop()
+server_run(server_t *server)
 {
-    g_server.run = 0;
-    shutdown(g_server.fd, SHUT_RDWR);
-    pthread_join(g_server.thread, NULL);
+    pthread_create(&server->thread, NULL, &server_loop, server);
+
+    DEBUG("started session manager, listening at [%s]:%d",
+        sockaddr_str((struct sockaddr *)&server->listen_sa),
+        ntohs(server->listen_sa.sin6_port));
+}
+
+void
+server_stop(server_t *server)
+{
+    server->run = 0;
+    shutdown(server->fd, SHUT_RDWR);
+    pthread_join(server->thread, NULL);
+    close(server->fd);
 }
 

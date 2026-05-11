@@ -25,6 +25,7 @@
  */
 
 #include "api.h"
+#include "protocol/protocol.h"
 
 #include <api/http_status.h>
 #include <logging/logging.h>
@@ -37,16 +38,28 @@
 
 #define _COMPONENT_ "api"
 
-void
-handle_query(int fd, char *buf, ssize_t req_len)
+int
+handle_query(int fd, char *query, char *buf, ssize_t req_len, trib_t *trib)
 {
-    char sendbuf[4096];
-    size_t sendsize = snprintf(sendbuf, 4096, "%s", STATUS_200);
-    SOCK_TRY_SEND(send(fd, sendbuf, sendsize, 0), return);
+    char sendbuf[4096], body[4096];
+
+    const entry_t *e = trib_table_lookup(&trib->loc_trib, AF_E164, 0, query);
+    if (!e) {
+        SOCK_TRY_SEND(send(fd, STATUS_404, sizeof(STATUS_404), 0), return -1);
+        return 404;
+    }
+
+    size_t bodysize = snprintf(body, 4096, "%s\r\n", e->attrs.nexthop);
+
+    size_t sendsize = snprintf(sendbuf, 4096, "%sContent-Length: %ld\r\n\r\n%s",
+        STATUS_200, bodysize, body);
+
+    SOCK_TRY_SEND(send(fd, sendbuf, sendsize, 0), return -1);
+    return 200;
 }
 
 const endpoint_t api[] = {
-    { "/query", &handle_query },
+    { "/query/", &handle_query },
     { NULL, NULL }
 };
 

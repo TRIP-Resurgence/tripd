@@ -51,7 +51,6 @@ typedef struct {
     parser_state_t      state;
     FILE               *outf;
 
-    struct sockaddr_in6 listen_addr;
     manager_t          *manager;
 } parser_t;
 

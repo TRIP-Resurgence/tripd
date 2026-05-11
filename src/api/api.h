@@ -25,9 +25,11 @@
 #ifndef _API_H
 #define _API_H
 
+#include <db/trib.h>
+
 #include <sys/types.h>
 
-typedef void(*endpoint_handler_t)(int, char *, ssize_t);
+typedef int(*endpoint_handler_t)(int, char *, char *, ssize_t, trib_t *);
 
 typedef struct {
     const char *endpoint;

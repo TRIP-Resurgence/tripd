@@ -317,7 +317,6 @@ cmd_shutdown(parser_t *parser, int no, char *args)
         return -1;
     }
 
-    server_stop();
     manager_shutdown(parser->manager);
     manager_destroy(parser->manager);
     cli_reset();
@@ -385,16 +384,16 @@ cmd_config_bind(parser_t *parser, int no, char *args)
         return -1;
     }
 
+    struct sockaddr_in6 sa;
     if (listen_addrs->ai_addr->sa_family == AF_INET6) {
-        memcpy(&parser->listen_addr, listen_addrs->ai_addr,
+        memcpy(&sa, listen_addrs->ai_addr,
             listen_addrs->ai_addrlen);
-        parser->listen_addr.sin6_port = htons(PROTO_TCP_PORT);
+        sa.sin6_port = htons(PROTO_TCP_PORT);
     } else if (listen_addrs->ai_addr->sa_family == AF_INET) {
-        parser->listen_addr.sin6_family = AF_INET6;
-        parser->listen_addr.sin6_port = htons(PROTO_TCP_PORT);
+        sa.sin6_family = AF_INET6;
+        sa.sin6_port = htons(PROTO_TCP_PORT);
         /* map IPv4 into IPv4-mapped IPv6 */
-        map_addr_inet_inet6(&parser->listen_addr,
-            (struct sockaddr_in *)listen_addrs->ai_addr);
+        map_addr_inet_inet6(&sa, (struct sockaddr_in *)listen_addrs->ai_addr);
     } else {
         fprintf(parser->outf, "bind-address: unsupported address family: %s\n",
             args);
@@ -405,7 +404,7 @@ cmd_config_bind(parser_t *parser, int no, char *args)
     freeaddrinfo(listen_addrs);
 
     /* create session manager */
-    parser->manager = manager_new(&parser->listen_addr);
+    parser->manager = manager_new(&sa);
     if (!parser->manager)
         return -1;
 
@@ -429,16 +428,16 @@ cmd_config_api(parser_t *parser, int no, char *args)
         return -1;
     }
 
-    struct sockaddr_in6 api_listen_addr;
+    struct sockaddr_in6 sa;
     if (listen_addrs->ai_addr->sa_family == AF_INET6) {
-        memcpy(&api_listen_addr, listen_addrs->ai_addr,
+        memcpy(&sa, listen_addrs->ai_addr,
             listen_addrs->ai_addrlen);
-        api_listen_addr.sin6_port = htons(atoi(port));
+        sa.sin6_port = htons(atoi(port));
     } else if (listen_addrs->ai_addr->sa_family == AF_INET) {
-        api_listen_addr.sin6_family = AF_INET6;
-        api_listen_addr.sin6_port = htons(atoi(port));
+        sa.sin6_family = AF_INET6;
+        sa.sin6_port = htons(atoi(port));
         /* map IPv4 into IPv4-mapped IPv6 */
-        map_addr_inet_inet6(&api_listen_addr,
+        map_addr_inet_inet6(&sa,
             (struct sockaddr_in *)listen_addrs->ai_addr);
     } else {
         fprintf(parser->outf, "bind-address: unsupported address family: %s\n",
@@ -450,10 +449,11 @@ cmd_config_api(parser_t *parser, int no, char *args)
     freeaddrinfo(listen_addrs);
 
     /* create session manager */
-    if (server_run(&api_listen_addr) < 0) {
-        fprintf(parser->outf, "api: error starting api");
+    server_t *s = server_new(&sa, parser->manager->trib);
+    if (!s)
         return -1;
-    }
+
+    parser->manager->server = s;
 
     return 0;
 }

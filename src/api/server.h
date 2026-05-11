@@ -27,12 +27,24 @@
 #ifndef _SERVER_H
 #define _SERVER_H
 
+#include <db/trib.h>
+
 #include <stdint.h>
 #include <netinet/in.h>
 
-int server_run(const struct sockaddr_in6 *listen_addr);
 
-void server_stop();
+typedef struct {
+    pthread_t           thread;
+    struct sockaddr_in6 listen_sa;
+    int                 fd;
+    int                 run;
+    trib_t             *trib;
+} server_t;
+
+
+server_t *server_new(const struct sockaddr_in6 *listen_sa, trib_t *trib);
+void server_run(server_t *server);
+void server_stop(server_t *server);
 
 #endif /* _SERVER_H */
 
