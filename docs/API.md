@@ -9,15 +9,27 @@
 
 tripd has a HTTP REST API for ease of querying by Asterisk and other switches
 
-## `/query/<number>/app-proto`
+## `/route`
 
-Return application layer protocol
+Return a textual list of all routes
 
-## `/query/<number>` \| `/query/<number>/nexthop-server`
+## `/route/full`
 
-Return next hop server
+Return the full Loc-TRIB with details
 
-## `/query/<number>/asterisk`
+## `/route/<number>`
+
+Return full object in JSON format
+
+## `/route/<number>/app-proto`
+
+Return raw application layer protocol
+
+## `/route/<number>/nexthop-server`
+
+Return raw next hop server
+
+## `/route/<number>/asterisk`
 
 Return an Asterisk Dial string in the format Technology/Resource/Extension.
 
@@ -35,15 +47,17 @@ Number is copied directly into Extension without context or options.
 
 Refer to [asterisk docs](https://docs.asterisk.org/Latest_API/API_Documentation/Dialplan_Applications/Dial/)
 
-## `/query/<number>/full`
+## `/route/<number>/sip-uri`
 
-Returns full details for a route in textual form
+Return a SIP URI if SIP route
 
-## `/list/<prefix>`
+ - `sip://number@host[:port]`
+
+## `/route/<number>/human`
+
+Returns full details for a route in show-like human readable form
+
+## `/route/<prefix>`
 
 Return a textual list of routes under a prefix
-
-## `/full-table`
-
-Return the full Loc-TRIB
 

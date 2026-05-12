@@ -24,30 +24,29 @@
 
 #include "commands.h"
 
-#include "api/server.h"
+#include <api/server.h>
 #include "cli.h"
-#include "command/parser.h"
-#include "db/pib.h"
-#include "functions/manager.h"
-#include "functions/session.h"
-#include "protocol/protocol.h"
-#include <ctype.h>
+#include <command/parser.h>
+#include <db/pib.h>
+#include <functions/manager.h>
+#include <functions/session.h>
+#include <protocol/protocol.h>
 #include <logging/logging.h>
-#include <netinet/in.h>
-#include <stdio.h>
 #include <util/util.h>
 #include <db/trib.h>
 
+#include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-
-#include <time.h>
 
 
 static const char *set_attr_strs[] = {
@@ -146,6 +145,48 @@ time_since(char *buff, time_t since)
         elapsed % 60);
 }
 
+ssize_t
+route_details(char *buf, size_t buflen, const entry_t *e)
+{
+    char known[256], ago[256], paths[1024];
+    paths[0] = '\0';
+    ssize_t known_len = snprintf(known, 256, "%s",
+        (const char *[]){"TRIP", "connected", "static"}[e->type]);
+    if (e->type == ENTRY_TYPE_TRIP) {
+        time_since(ago, e->time);
+        known_len += snprintf(known + known_len, 256-known_len,
+            " from %d %s, %s ago", e->learn_itad,
+            sockaddr6_str(&e->learn_peer->addr), ago);
+
+        ssize_t paths_len = snprintf(paths, 1024,
+            " advertisement path [");
+        if (e->attrs.advertpath_size)
+            paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+                "%d", e->attrs.advertpath[0]);
+        for (int i = 1; i < e->attrs.advertpath_size; i++)
+            paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+                ", %d", e->attrs.advertpath[i]);
+        paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+            "], routed path [");
+        if (e->attrs.routedpath_size)
+            paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+                "%d", e->attrs.routedpath[0]);
+        for (int i = 1; i < e->attrs.routedpath_size; i++)
+            paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+                ", %d", e->attrs.routedpath[i]);
+        paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+            "]\n");
+    }
+
+    return snprintf(buf, buflen,
+        "route %s %s\n known via %s\n local pref %d, metric %d\n"
+        " nexthop %d %s %s\n%s",
+        af_strs[e->af], e->prefix,
+        known, e->attrs.local_pref, e->attrs.metric,
+        e->attrs.nextitad, app_proto_str(e->app_proto),
+        e->attrs.nexthop, paths);
+}
+
 int
 cmd_show(parser_t *parser, int no, char *args)
 {
@@ -236,11 +277,11 @@ cmd_show(parser_t *parser, int no, char *args)
         }
     } else if (strcmp(subcmd, "route") == 0) {
         const char *for_s = strtok(NULL, " ");
+        const trib_t *t = parser->manager->trib;
 
         if (!for_s) {
-            const trib_t *t = parser->manager->trib;
             printf("\tS - static, C - connected, T - TRIP derived\n"
-                    "\tE - E.164, D - decimal, P - pentadecimal\n");
+                "\tE - E.164, D - decimal, P - pentadecimal\n");
             for (int i = 0; i < t->loc_trib.size; i++)
                 printf("%c %c %s via %s:%s\n",
                     "TCS"[t->loc_trib.table[i]->type],
@@ -249,6 +290,15 @@ cmd_show(parser_t *parser, int no, char *args)
                     app_proto_str(t->loc_trib.table[i]->app_proto),
                     t->loc_trib.table[i]->attrs.nexthop);
         } else {
+            const entry_t *e = trib_table_lookup(&t->loc_trib, 0, 0, for_s);
+            if (!e) {
+                printf("show route: not found\n");
+                return -1;
+            }
+
+            char buf[4096];
+            route_details(buf, 4096, e);
+            puts(buf);
         }
     } else if (strcmp(subcmd, "acl") == 0) {
         const pib_t *pib = parser->manager->pib;

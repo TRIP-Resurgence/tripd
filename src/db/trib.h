@@ -26,6 +26,7 @@
 #define _TRIB_H
 
 #include <protocol/protocol.h>
+#include <functions/locator.h>
 
 #include "pib.h"
 
@@ -86,6 +87,7 @@ typedef struct {
     uint32_t    learn_itad;     /**< Peer ITAD for internal or external used for
                                     Ext-TRIB and Loc-TRIB */
     uint32_t    learn_lsid;     /**< Peer LS ID */
+    const peer_t *learn_peer;   /**< Peer */
 
     int32_t     seq;            /**< Sequence number */
     time_t      time;           /**< Learn time */
@@ -171,8 +173,8 @@ entry_t **trib_table_find(table_t *t, uint16_t af, const char *prefix);
  * \param af Address family
  * \param app_proto Optional (=0) app_proto
  * \param address Address */
-const entry_t *trib_table_lookup(table_t *table, uint16_t af, uint16_t app_proto,
-    const char *address);
+const entry_t *trib_table_lookup(const table_t *table, uint16_t af,
+    uint16_t app_proto, const char *address);
 
 /** \brief Add route to table */
 void trib_table_insert(table_t *table, entry_t *route);

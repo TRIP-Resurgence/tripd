@@ -193,18 +193,26 @@ trib_table_find(table_t *t, uint16_t af, const char *prefix)
 }
 
 const entry_t *
-trib_table_lookup(table_t *table, uint16_t af, uint16_t app_proto,
+trib_table_lookup(const table_t *table, uint16_t af, uint16_t app_proto,
     const char *address)
 {
+    int specificity = 0;
+    const entry_t *e = NULL;
     for (size_t i = 0; i < table->size; i++) {
-        if (table->table[i]->af != af)
+        if (af && table->table[i]->af != af)
             continue;
         if (app_proto && table->table[i]->app_proto != app_proto)
             continue;
-        if (strncmp(table->table[i]->prefix, address, strlen(address)) == 0)
-            return table->table[i];
+        int len = strlen(table->table[i]->prefix);
+        if (strncmp(table->table[i]->prefix, address, len) == 0)
+        {
+            if (len <= specificity)
+                continue;
+            specificity = len;
+            e = table->table[i];
+        }
     }
-    return NULL;
+    return e;
 }
 
 void

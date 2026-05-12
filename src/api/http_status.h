@@ -30,6 +30,7 @@
 /* complete responses */
 #define STATUS_404 "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n"
 #define STATUS_413 "HTTP/1.1 413 Content Too Large\r\nContent-Length: 0\r\n"
+#define STATUS_422 "HTTP/1.1 422 Unprocessable Content\r\nContent-Length: 0\r\n"
 #define STATUS_505 "HTTP/1.1 505 HTTP Version Not Supported\r\nContent-Length: 0\r\n"
 
 #endif /* _HTTP_STATUS_H */
