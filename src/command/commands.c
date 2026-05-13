@@ -574,6 +574,7 @@ cmd_config_route(parser_t *parser, int no, char *args)
         e->type = ENTRY_TYPE_STATIC;
         e->learn_itad = parser->manager->itad;
         e->learn_lsid = 0;
+        e->learn_peer = NULL;
         e->seq = INITIAL_SEQUENCE_NUMBER;
         e->time = time(NULL);
         e->attrs.use = ATTR_USED_NEXTHOP | ATTR_USED_ADVERTPATH

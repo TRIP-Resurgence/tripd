@@ -7,27 +7,40 @@
 
 # API Reference
 
-tripd has a HTTP REST API for ease of querying by Asterisk and other switches
+tripd has a HTTP REST API for ease of querying by Asterisk and other switches.
 
 ## `/route`
 
-Return a textual list of all routes
+Return a textual list of all routes.
 
-## `/route/full`
+## `/route/tribdump`
 
-Return the full Loc-TRIB with details
+Return a full Loc-TRIB dump in ripe-ncc/bgpdump-like line-per-entry format:
+
+```
+TRIB_DUMP|<unix time>|<peer addr>|<itad>|<prefix>|<type>[|<advert path ' '>|<routed path ' '>|<nexthop>|<local pref>|<metric>|<communities ':'>|]
+```
+
+## `/route/<prefix>`
+
+Return a textual list of routes in the same formate as `/route` under a prefix,
+which is considered such when there are more than one matching entries.
 
 ## `/route/<number>`
 
-Return full object in JSON format
+Return full object in JSON format.
+
+## `/route/<number>/af`
+
+Return raw application layer protocol.
 
 ## `/route/<number>/app-proto`
 
-Return raw application layer protocol
+Return raw application layer protocol.
 
 ## `/route/<number>/nexthop-server`
 
-Return raw next hop server
+Return raw next hop server.
 
 ## `/route/<number>/asterisk`
 
@@ -49,15 +62,11 @@ Refer to [asterisk docs](https://docs.asterisk.org/Latest_API/API_Documentation/
 
 ## `/route/<number>/sip-uri`
 
-Return a SIP URI if SIP route
+Return a SIP URI if available.
 
- - `sip://number@host[:port]`
+ - `sip:number@host[:port]`
 
 ## `/route/<number>/human`
 
-Returns full details for a route in show-like human readable form
-
-## `/route/<prefix>`
-
-Return a textual list of routes under a prefix
+Returns full details for a route in show-like human readable form.
 
