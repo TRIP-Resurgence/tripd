@@ -13,12 +13,12 @@ tripd has a HTTP REST API for ease of querying by Asterisk and other switches.
 
 Return a textual list of all routes.
 
-## `/route/tribdump`
+## `/route/trib-dump`
 
 Return a full Loc-TRIB dump in ripe-ncc/bgpdump-like line-per-entry format:
 
 ```
-TRIB_DUMP|<unix time>|<peer addr>|<itad>|<prefix>|<type>[|<advert path ' '>|<routed path ' '>|<nexthop>|<local pref>|<metric>|<communities ':'>|]
+TRIB_DUMP|<af>|<app proto>|<prefix>|<unix time>|<nextitad>|<nexthop>|<type>[|<peer itad>|<peer addr>|<advert path ' '>|<routed path ' '>|<local pref>|<metric>|<communities ':'>|]
 ```
 
 ## `/route/<prefix>`

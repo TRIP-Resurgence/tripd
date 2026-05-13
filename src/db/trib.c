@@ -42,6 +42,11 @@
 
 static trib_t g_trib = { 0 };
 
+const char *entry_type_strs[] = {
+    "TRIP",
+    "CONNECTED",
+    "STATIC"
+};
 
 entry_t *
 entry_clone(const entry_t *entry)

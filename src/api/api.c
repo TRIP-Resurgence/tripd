@@ -66,18 +66,63 @@ handle_route(int fd, char *query, char *buf, ssize_t req_len, trib_t *trib)
 
     size_t bodysize = 0;
 
-
     if (!num) {
-        bodysize += snprintf(body + bodysize, BUF_SIZE - bodysize,
-            "%ld routes\n", loc->size);
+        bodysize += snprintf(body, BUF_SIZE, "%ld routes\n", loc->size);
         for (size_t i = 0; i < loc->size; i++) {
             bodysize += snprintf(body + bodysize, BUF_SIZE - bodysize,
                 "%s %s %s\n", af_strs[loc->table[i]->af],
                 app_proto_str(loc->table[i]->app_proto), loc->table[i]->prefix);
         }
         goto send;
-    } else if (strcmp(num, "full") == 0) {
-        /* TODO: send full TRIB dump */
+    } else if (strcmp(num, "trib-dump") == 0) {
+        char advertpath[4096], routedpath[4096], communities[4096];
+        for (size_t i = 0; i < loc->size; i++) {
+            const entry_t *e = loc->table[i];
+
+            bodysize += snprintf(body, BUF_SIZE,
+                "TRIB_DUMP|%s|%s|%s|%ld|%d|%s|%s|",
+                af_strs[e->af],
+                app_proto_str(e->app_proto),
+                e->prefix, e->time,
+                e->attrs.nextitad,
+                e->attrs.nexthop,
+                entry_type_strs[e->type]);
+
+            if (loc->table[i]->type == ENTRY_TYPE_TRIP) {
+                char *ptr = advertpath;
+                if (e->attrs.advertpath_size)
+                    snprintf(ptr, 4096, "%d", e->attrs.advertpath[0]);
+                for (size_t i = 0; i < e->attrs.advertpath_size; i++)
+                    ptr += snprintf(ptr, 4096 - (ptr - advertpath), ",%d",
+                        e->attrs.advertpath[i]);
+
+                ptr = routedpath;
+                if (e->attrs.routedpath_size)
+                    snprintf(ptr, 4096, "%d", e->attrs.routedpath[0]);
+                for (size_t i = 0; i < e->attrs.routedpath_size; i++)
+                    ptr += snprintf(ptr, 4096 - (ptr - routedpath), ",%d",
+                        e->attrs.routedpath[i]);
+
+                ptr = communities;
+                if (e->attrs.communities_size)
+                    snprintf(ptr, 4096, "{\"itad\":%d,\"id\":\"%s\"}",
+                        e->attrs.communities[0].community_itad,
+                        inaddr_str(e->attrs.communities[0].community_id));
+                for (size_t i = 0; i < e->attrs.communities_size; i++)
+                    ptr += snprintf(ptr, 4096 - (ptr - communities),
+                        ",{\"itad\":%d,\"id\":\"%s\"}",
+                        e->attrs.communities[i].community_itad,
+                        inaddr_str(e->attrs.communities[i].community_id));
+
+                bodysize += snprintf(body + bodysize, BUF_SIZE - bodysize,
+                    "%d|%s|%s|%s|%d|%d|%s|",
+                    e->learn_itad, sockaddr6_str(&e->learn_peer->addr),
+                    advertpath, routedpath, e->attrs.local_pref,
+                    e->attrs.metric, communities);
+            }
+            bodysize += snprintf(body + bodysize, BUF_SIZE - bodysize, "\n");
+        }
+        goto send;
     }
 
 #if 0
@@ -138,8 +183,10 @@ handle_route(int fd, char *query, char *buf, ssize_t req_len, trib_t *trib)
         *trip = '\0';
         if (e->type == ENTRY_TYPE_TRIP)
             snprintf(trip, 4096,
+                    "\"learn_itad\":%d,"
                     "\"learn_lsid\":\"%s\","
                     "\"learn_peer\":\"%s\",",
+                e->learn_itad,
                 inaddr_str(e->learn_lsid),
                 sockaddr6_str(&e->learn_peer->addr));
 
@@ -177,7 +224,6 @@ handle_route(int fd, char *query, char *buf, ssize_t req_len, trib_t *trib)
                 "\"app_proto\":\"%s\","
                 "\"prefix\":\"%s\","
                 "\"type\":\"%s\","
-                "\"learn_itad\":%d,"
                 "%s"
                 "\"seq\":%d,"
                 "\"time\":%ld,"
@@ -188,7 +234,7 @@ handle_route(int fd, char *query, char *buf, ssize_t req_len, trib_t *trib)
             "}\r\n",
             af_strs[e->af], app_proto_str(e->app_proto), e->prefix,
             (const char*[]){"trip", "connected", "static"}[e->type],
-            e->learn_itad, trip, e->seq, e->time, attrs, e->sent);
+            trip, e->seq, e->time, attrs, e->sent);
     } else if (strcmp(qtype,  "af") == 0)
         bodysize = snprintf(body, BUF_SIZE, "%s\r\n", af_strs[e->af]);
     else if (strcmp(qtype, "app-proto") == 0)
@@ -212,6 +258,9 @@ handle_route(int fd, char *query, char *buf, ssize_t req_len, trib_t *trib)
             num, e->attrs.nexthop);
     } else if (strcmp(qtype, "human") == 0) {
         bodysize = route_details(body, BUF_SIZE, e);
+    } else {
+        SOCK_TRY_SEND(send(fd, STATUS_404, sizeof(STATUS_404), 0), return -1);
+        return 404;
     }
 
 send:

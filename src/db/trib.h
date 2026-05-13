@@ -72,6 +72,8 @@ typedef enum {
     ENTRY_TYPE_STATIC
 } entry_type_t;
 
+extern const char *entry_type_strs[];
+
 /** \brief Route Entry */
 typedef struct {
     /* route */
