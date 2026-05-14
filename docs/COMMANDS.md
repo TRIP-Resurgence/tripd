@@ -83,6 +83,13 @@ What interface to bind to
 
  - address: address or localhost (`getaddrinfo()`)
 
+#### `api <bind-address> <port>`
+
+Where to serve the API
+
+ - bind-address: Bind address
+ - port: Bind port
+
 #### `route { add <af> <prefix> <app-proto> <server> | del <af> <prefix> }`
 
 Add or remove local routes

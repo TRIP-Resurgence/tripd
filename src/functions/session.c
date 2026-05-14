@@ -375,6 +375,7 @@ handle_update(manager_t *m, session_t *s, msg_t *msg)
         entries[i].type = ENTRY_TYPE_TRIP;
         entries[i].learn_itad = s->peer->itad;
         entries[i].learn_lsid = s->id;
+        entries[i].learn_peer = s->peer;
         if (lsencapsulated)
             entries[i].seq = seq;
         entries[i].time = learntime;

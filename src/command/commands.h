@@ -77,6 +77,9 @@ int cmd_config_trip_timers(parser_t *parser, int no, char *args);
 int cmd_config_trip_peer(parser_t *parser, int no, char *args);
 
 
+ssize_t route_details(char *buf, size_t buflen, const entry_t *e);
+
+
 /* handler function pointer type */
 typedef int(*cmd_handler_t)(parser_t *parser, int no, char *args);
 

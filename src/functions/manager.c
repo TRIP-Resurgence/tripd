@@ -543,7 +543,8 @@ listen_loop(void *arg)
         int request_fd = accept(m->fd, (struct sockaddr*)&peer_addr,
             &peer_addr_size);
         if (request_fd < 0) {
-            ERROR("could not accept() peer: %s", strerror(errno));
+            if (m->run)
+                ERROR("could not accept() peer: %s", strerror(errno));
             return NULL;
         }
 
@@ -764,14 +765,8 @@ connect_loop(void *arg)
     time_t connect_retry = m->connect_retry;
 
     while (1) {
-        if (s->mark_stop_init) {
-            close(s->fd);
-            pthread_mutex_lock(&m->sessions_mutex);
-            manager_session_remove(m, s);
-            pthread_mutex_unlock(&m->sessions_mutex);
-            free(arg);
-            return (void*)-1L;
-        }
+        if (s->mark_stop_init)
+            goto shutdown;
 
         session_change_state(s, STATE_CONNECT);
 
@@ -779,6 +774,8 @@ connect_loop(void *arg)
             sizeof(struct sockaddr_in6));
 
         if (res < 0) {
+            if (s->mark_stop_init)
+                goto shutdown;
             ERROR("connect(): %s", strerror(errno));
             session_change_state(s, STATE_IDLE);
 
@@ -795,6 +792,14 @@ connect_loop(void *arg)
 
         break;
     }
+
+shutdown:
+    close(s->fd);
+    pthread_mutex_lock(&m->sessions_mutex);
+    manager_session_remove(m, s);
+    pthread_mutex_unlock(&m->sessions_mutex);
+    free(arg);
+    return (void*)-1L;
 
     /* TCP channel established, hand off to request handler */
     peer_handshake(arg);
@@ -848,6 +853,9 @@ manager_run(manager_t *manager)
     pthread_create(&manager->maintenance_thread, NULL, &maintenance_loop,
         manager);
     pthread_create(&manager->update_thread, NULL, &update_loop, manager);
+
+    /* run API */
+    server_run(manager->server);
 }
 
 void
@@ -864,11 +872,16 @@ manager_schedule_update(manager_t *manager)
 void
 manager_stop(manager_t *manager)
 {
+    /* stop API */
+    server_stop(manager->server);
+
+    /* stop accept and maintanance */
     manager->run = 0;
     shutdown(manager->fd, SHUT_RDWR);
     pthread_join(manager->listen_thread, NULL);
     pthread_join(manager->maintenance_thread, NULL);
 
+    /* stop update */
     pthread_mutex_lock(&manager->update_mut);
     pthread_cond_signal(&manager->update_cond);
     pthread_mutex_unlock(&manager->update_mut);

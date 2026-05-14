@@ -24,28 +24,29 @@
 
 #include "commands.h"
 
+#include <api/server.h>
 #include "cli.h"
-#include "command/parser.h"
-#include "db/pib.h"
-#include "functions/manager.h"
-#include "functions/session.h"
-#include "protocol/protocol.h"
-#include <ctype.h>
+#include <command/parser.h>
+#include <db/pib.h>
+#include <functions/manager.h>
+#include <functions/session.h>
+#include <protocol/protocol.h>
 #include <logging/logging.h>
-#include <netinet/in.h>
 #include <util/util.h>
 #include <db/trib.h>
 
+#include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-
-#include <time.h>
 
 
 static const char *set_attr_strs[] = {
@@ -144,6 +145,48 @@ time_since(char *buff, time_t since)
         elapsed % 60);
 }
 
+ssize_t
+route_details(char *buf, size_t buflen, const entry_t *e)
+{
+    char known[256], ago[256], paths[1024];
+    paths[0] = '\0';
+    ssize_t known_len = snprintf(known, 256, "%s",
+        (const char *[]){"TRIP", "connected", "static"}[e->type]);
+    if (e->type == ENTRY_TYPE_TRIP) {
+        time_since(ago, e->time);
+        known_len += snprintf(known + known_len, 256-known_len,
+            " from %d %s, %s ago", e->learn_itad,
+            sockaddr6_str(&e->learn_peer->addr), ago);
+
+        ssize_t paths_len = snprintf(paths, 1024,
+            " advertisement path [");
+        if (e->attrs.advertpath_size)
+            paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+                "%d", e->attrs.advertpath[0]);
+        for (int i = 1; i < e->attrs.advertpath_size; i++)
+            paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+                ", %d", e->attrs.advertpath[i]);
+        paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+            "], routed path [");
+        if (e->attrs.routedpath_size)
+            paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+                "%d", e->attrs.routedpath[0]);
+        for (int i = 1; i < e->attrs.routedpath_size; i++)
+            paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+                ", %d", e->attrs.routedpath[i]);
+        paths_len += snprintf(paths + paths_len, 1024 - paths_len,
+            "]\n");
+    }
+
+    return snprintf(buf, buflen,
+        "route %s %s\n known via %s\n local pref %d, metric %d\n"
+        " nexthop %d %s %s\n%s",
+        af_strs[e->af], e->prefix,
+        known, e->attrs.local_pref, e->attrs.metric,
+        e->attrs.nextitad, app_proto_str(e->app_proto),
+        e->attrs.nexthop, paths);
+}
+
 int
 cmd_show(parser_t *parser, int no, char *args)
 {
@@ -234,11 +277,11 @@ cmd_show(parser_t *parser, int no, char *args)
         }
     } else if (strcmp(subcmd, "route") == 0) {
         const char *for_s = strtok(NULL, " ");
+        const trib_t *t = parser->manager->trib;
 
         if (!for_s) {
-            const trib_t *t = parser->manager->trib;
             printf("\tS - static, C - connected, T - TRIP derived\n"
-                    "\tE - E.164, D - decimal, P - pentadecimal\n");
+                "\tE - E.164, D - decimal, P - pentadecimal\n");
             for (int i = 0; i < t->loc_trib.size; i++)
                 printf("%c %c %s via %s:%s\n",
                     "TCS"[t->loc_trib.table[i]->type],
@@ -247,6 +290,15 @@ cmd_show(parser_t *parser, int no, char *args)
                     app_proto_str(t->loc_trib.table[i]->app_proto),
                     t->loc_trib.table[i]->attrs.nexthop);
         } else {
+            const entry_t *e = trib_table_lookup(&t->loc_trib, 0, 0, for_s);
+            if (!e) {
+                printf("show route: not found\n");
+                return -1;
+            }
+
+            char buf[4096];
+            route_details(buf, 4096, e);
+            puts(buf);
         }
     } else if (strcmp(subcmd, "acl") == 0) {
         const pib_t *pib = parser->manager->pib;
@@ -314,6 +366,7 @@ cmd_shutdown(parser_t *parser, int no, char *args)
         printf("shutdown: unprivileged\n");
         return -1;
     }
+
     manager_shutdown(parser->manager);
     manager_destroy(parser->manager);
     cli_reset();
@@ -381,15 +434,60 @@ cmd_config_bind(parser_t *parser, int no, char *args)
         return -1;
     }
 
+    struct sockaddr_in6 sa;
     if (listen_addrs->ai_addr->sa_family == AF_INET6) {
-        memcpy(&parser->listen_addr, listen_addrs->ai_addr,
+        memcpy(&sa, listen_addrs->ai_addr,
             listen_addrs->ai_addrlen);
-        parser->listen_addr.sin6_port = htons(PROTO_TCP_PORT);
+        sa.sin6_port = htons(PROTO_TCP_PORT);
     } else if (listen_addrs->ai_addr->sa_family == AF_INET) {
-        parser->listen_addr.sin6_family = AF_INET6;
-        parser->listen_addr.sin6_port = htons(PROTO_TCP_PORT);
+        sa.sin6_family = AF_INET6;
+        sa.sin6_port = htons(PROTO_TCP_PORT);
         /* map IPv4 into IPv4-mapped IPv6 */
-        map_addr_inet_inet6(&parser->listen_addr,
+        map_addr_inet_inet6(&sa, (struct sockaddr_in *)listen_addrs->ai_addr);
+    } else {
+        fprintf(parser->outf, "bind-address: unsupported address family: %s\n",
+            args);
+        freeaddrinfo(listen_addrs);
+        return -1;
+    }
+
+    freeaddrinfo(listen_addrs);
+
+    /* create session manager */
+    parser->manager = manager_new(&sa);
+    if (!parser->manager)
+        return -1;
+
+    return 0;
+}
+
+int
+cmd_config_api(parser_t *parser, int no, char *args)
+{
+    args = strip(args);
+
+    char *addr = strtok(args, " ");
+    char *port = strtok(NULL, " ");
+
+    /* resolve listen address */
+    struct addrinfo *listen_addrs;
+    int res = getaddrinfo(addr, NULL, NULL, &listen_addrs);
+    if (res != 0) {
+        fprintf(parser->outf, "bind-address: getaddrinfo() error: %s for %s\n",
+            gai_strerror(res), args);
+        return -1;
+    }
+
+    struct sockaddr_in6 sa;
+    if (listen_addrs->ai_addr->sa_family == AF_INET6) {
+        memcpy(&sa, listen_addrs->ai_addr,
+            listen_addrs->ai_addrlen);
+        sa.sin6_port = htons(atoi(port));
+    } else if (listen_addrs->ai_addr->sa_family == AF_INET) {
+        sa.sin6_family = AF_INET6;
+        sa.sin6_port = htons(atoi(port));
+        /* map IPv4 into IPv4-mapped IPv6 */
+        map_addr_inet_inet6(&sa,
             (struct sockaddr_in *)listen_addrs->ai_addr);
     } else {
         fprintf(parser->outf, "bind-address: unsupported address family: %s\n",
@@ -401,9 +499,11 @@ cmd_config_bind(parser_t *parser, int no, char *args)
     freeaddrinfo(listen_addrs);
 
     /* create session manager */
-    parser->manager = manager_new(&parser->listen_addr);
-    if (!parser->manager)
+    server_t *s = server_new(&sa, parser->manager->trib);
+    if (!s)
         return -1;
+
+    parser->manager->server = s;
 
     return 0;
 }
@@ -474,6 +574,7 @@ cmd_config_route(parser_t *parser, int no, char *args)
         e->type = ENTRY_TYPE_STATIC;
         e->learn_itad = parser->manager->itad;
         e->learn_lsid = 0;
+        e->learn_peer = NULL;
         e->seq = INITIAL_SEQUENCE_NUMBER;
         e->time = time(NULL);
         e->attrs.use = ATTR_USED_NEXTHOP | ATTR_USED_ADVERTPATH
@@ -934,7 +1035,8 @@ const cmd_def_t cmds_config[] = {
     { "exit",           &cmd_exit,"exit current context", NULL },
     { "help",           &cmd_help,"show command help", NULL },
     { "log",            &cmd_config_log, "set log file", "log <log file>" },
-    { "bind-address",   &cmd_config_bind, "set bind address and port", "bind-address <addr> <port>" },
+    { "bind-address",   &cmd_config_bind, "set bind address and port for trip", "bind-address <addr> [port]" },
+    { "api",            &cmd_config_api, "set bind address and port for api", "api <addr> <port>" },
     { "route",          &cmd_config_route, "insert route into routing table", "route { add <af> <prefix> <app-proto> <server> | del <af> <prefi> }" },
     { "acl",            &cmd_config_acl, "add acl entry", "acl <acl-name> { permit | deny } <expression>" },
     { "route-map",      &cmd_config_routemap, "define route map", "route-map <map-name> [ permit | deny ]" },

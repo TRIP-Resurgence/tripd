@@ -39,6 +39,7 @@ file(GLOB DB_SRC "src/db/*.c")
 file(GLOB COMMAND_SRC "src/command/*.c")
 file(GLOB LOGGING_SRC "src/logging/*.c")
 file(GLOB UTIL_SRC "src/util/*.c")
+file(GLOB API_SRC "src/api/*.c")
 file(GLOB TRIPD_SRC "src/tripd/*.c")
 
 # flags
@@ -67,10 +68,14 @@ add_library(db STATIC ${DB_SRC})
 target_link_libraries(db logging)
 
 add_library(functions STATIC ${FUNCTIONS_SRC})
-target_link_libraries(functions db protocol logging util)
+target_link_libraries(functions api db protocol logging util)
+
+add_library(api STATIC ${API_SRC})
+target_link_libraries(api functions logging)
 
 add_library(command STATIC ${COMMAND_SRC})
-target_link_libraries(command db functions logging)
+target_link_libraries(command api db functions logging)
+
 
 # main executable
 
