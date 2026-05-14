@@ -37,6 +37,7 @@
 #include <db/trib.h>
 #include <db/pib.h>
 #include <api/server.h>
+#include <enum/enum.h>
 
 
 /** \brief Manager object */
@@ -63,8 +64,9 @@ typedef struct {
     /* Policy Information Base */
     pib_t          *pib;
 
-    /* API server */
+    /* Query interfaces */
     server_t       *server;
+    enum_t         *enum_emu;
 
     /* Session instances */
     session_t     **sessions;
