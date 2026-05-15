@@ -26,9 +26,10 @@
 #define _DNS_H
 
 #include <stdint.h>
+#include <stddef.h>
+#include <sys/types.h>
 
 typedef struct {
-    uint16_t    id      : 16;
     uint8_t     qr      : 1;
     uint8_t     opcode  : 4;
     uint8_t     aa      : 1;
@@ -37,10 +38,15 @@ typedef struct {
     uint8_t     ra      : 1;
     uint8_t     z       : 3;
     uint8_t     rcode   : 4;
-    uint16_t    qdcount : 16;
-    uint16_t    ancount : 16;
-    uint16_t    nscount : 16;
-    uint16_t    arcount : 16;
+} dns_flags_t;
+
+typedef struct {
+    uint16_t    id;
+    dns_flags_t flags;
+    uint16_t    qdcount;
+    uint16_t    ancount;
+    uint16_t    nscount;
+    uint16_t    arcount;
 } dns_hdr_t;
 
 enum rcode_e {
@@ -52,7 +58,36 @@ enum rcode_e {
     RCODE_REFUSED
 };
 
+typedef struct {
+    char     qname[256];
+    uint16_t qtype;
+    uint16_t qclass;
+} dns_question_t;
+
+
+enum qtype_e {
+    TYPE_NAPTR = 35,
+    QTYPE_ALL = 255
+};
+
+enum qclass_e {
+    CLASS_IN = 1,
+    QCLASS_ANY = 256
+};
+
+
+ssize_t dns_parse_hdr(void *buf, size_t len, dns_hdr_t *out);
+
+size_t dns_parse_question(void *buf, size_t len, dns_question_t *q);
+
+ssize_t dns_serialize_error(void *buf, size_t len, uint16_t id, uint8_t opcode,
+    int error);
+
+ssize_t dns_serialize_rr(void *buf, size_t len, const char *qto,
+    uint16_t type, uint16_t class, uint32_t ttl, uint16_t rdlength, void *rdata);
+
+ssize_t dns_serialize_answer(void *buf, uint16_t id, uint8_t opcode,
+    void *rr, size_t rrlen);
+
 #endif /* _DNS_H */
-
-
 

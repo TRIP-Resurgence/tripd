@@ -35,6 +35,7 @@ typedef struct {
     struct sockaddr_in6 listen_sa;
     int                 fd;
     int                 run;
+    char               *zone;
     trib_t             *trib;
 } enum_t;
 
@@ -43,6 +44,7 @@ enum_t *enum_new(const char *zone, const struct sockaddr_in6 *listen_sa,
     trib_t *trib);
 void enum_run(enum_t *en);
 void enum_stop(enum_t *en);
+void enum_destroy(enum_t *en);
 
 #endif /* _ENUM_H */
 

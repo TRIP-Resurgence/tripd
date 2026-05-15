@@ -696,6 +696,9 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     m->trib = trib_new(m->itad);
     m->pib = pib_new();
 
+    m->server = NULL;
+    m->enum_emu = NULL;
+
     m->sessions_size = 0;
     m->sessions_capacity = 16;
     m->sessions = malloc(m->sessions_capacity * sizeof(session_t*));
@@ -855,7 +858,11 @@ manager_run(manager_t *manager)
     pthread_create(&manager->update_thread, NULL, &update_loop, manager);
 
     /* run API */
-    server_run(manager->server);
+    if (manager->server)
+        server_run(manager->server);
+
+    if (manager->enum_emu)
+        enum_run(manager->enum_emu);
 }
 
 void
@@ -873,7 +880,11 @@ void
 manager_stop(manager_t *manager)
 {
     /* stop API */
-    server_stop(manager->server);
+    if (manager->server)
+        server_stop(manager->server);
+
+    if (manager->enum_emu)
+        enum_stop(manager->enum_emu);
 
     /* stop accept and maintanance */
     manager->run = 0;
@@ -912,6 +923,10 @@ manager_shutdown(manager_t *manager)
 void
 manager_destroy(manager_t *manager)
 {
+    if (manager->server)
+        server_destroy(manager->server);
+    if (manager->enum_emu)
+        enum_destroy(manager->enum_emu);
     locator_destroy(manager->locator);
     trib_destroy(manager->trib);
     pib_destroy(manager->pib);

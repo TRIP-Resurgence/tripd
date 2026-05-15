@@ -520,12 +520,12 @@ cmd_config_enum(parser_t *parser, int no, char *args)
 {
     args = strip(args);
 
-    const char *zone= strtok(args, " ");
+    const char *zone = strtok(args, " ");
     const char *addr = strtok(NULL, " ");
     const char *port = strtok(NULL, " ");
 
     if (!zone)
-        zone = "e164.arpa";
+        zone = "e164.arpa.";
 
     if (!addr)
         addr = "::";
@@ -567,7 +567,7 @@ cmd_config_enum(parser_t *parser, int no, char *args)
     if (!s)
         return -1;
 
-    parser->manager->enum_emu= s;
+    parser->manager->enum_emu = s;
 
     return 0;
 }
@@ -1100,7 +1100,8 @@ const cmd_def_t cmds_config[] = {
     { "help",           &cmd_help,"show command help", NULL },
     { "log",            &cmd_config_log, "set log file", "log <log file>" },
     { "bind-address",   &cmd_config_bind, "set bind address and port for trip", "bind-address <addr> [port]" },
-    { "api",            &cmd_config_api, "set bind address and port for api", "api <addr> <port>" },
+    { "api",            &cmd_config_api, "set bind address and port for http api", "api [addr] [port]" },
+    { "enum",           &cmd_config_enum, "set zone, bind address and port for enum query interface", "enum [zone] [addr] [port]" },
     { "route",          &cmd_config_route, "insert route into routing table", "route { add <af> <prefix> <app-proto> <server> | del <af> <prefi> }" },
     { "acl",            &cmd_config_acl, "add acl entry", "acl <acl-name> { permit | deny } <expression>" },
     { "route-map",      &cmd_config_routemap, "define route map", "route-map <map-name> [ permit | deny ]" },

@@ -94,9 +94,9 @@ Configure HTTP API
 
 Configure ENUM-emulated query interface
 
+ - zone: Base zone to serve NAPTR records on (default e164.arpa.), must have final '.'
  - bind-address: Bind address (default ::)
  - port: Bind port (default 8080)
- - zone: Base zone to serve NAPTR records on (default e164.arpa)
 
 #### `route { add <af> <prefix> <app-proto> <server> | del <af> <prefix> }`
 

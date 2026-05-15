@@ -45,6 +45,7 @@ typedef struct {
 server_t *server_new(const struct sockaddr_in6 *listen_sa, trib_t *trib);
 void server_run(server_t *server);
 void server_stop(server_t *server);
+void server_destroy(server_t *server);
 
 #endif /* _SERVER_H */
 

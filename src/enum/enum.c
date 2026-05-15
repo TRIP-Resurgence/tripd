@@ -25,10 +25,12 @@
  */
 
 #include "enum.h"
+#include "db/trib.h"
 #include "enum/dns.h"
 
 #include <logging/logging.h>
 #include <netinet/in.h>
+#include <stdint.h>
 #include <sys/socket.h>
 #include <util/util.h>
 
@@ -43,47 +45,83 @@
 
 
 static void
-make_error_msg(void *buf, uint16_t id, uint8_t opcode, int error)
-{
-    dns_hdr_t *sendhdr = buf;
-    sendhdr->id = id;
-    sendhdr->qr = 0;
-    sendhdr->opcode = opcode;
-    sendhdr->aa = 0;
-    sendhdr->tc = 0;
-    sendhdr->rd = 0;
-    sendhdr->ra = 0;
-    sendhdr->z= 0;
-    sendhdr->rcode = error;
-    sendhdr->qdcount = 0;
-    sendhdr->qdcount = 0;
-    sendhdr->qdcount = 0;
-    sendhdr->qdcount = 0;
-}
-
-static void
-handle_request(int fd, void *buf, size_t len, const struct sockaddr_in6 *sa,
+handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
     socklen_t salen, trib_t *trib)
 {
-    dns_hdr_t *hdr = buf;
+    dns_hdr_t hdr;
     char sendbuf[4096];
     size_t sendsize = 0;
 
-    if (hdr->qr != 1) {
+    if (dns_parse_hdr(buf, len, &hdr) < 0) {
+        ERROR("dns header too short");
+        return;
+    }
+
+
+    if (hdr.flags.qr != 0) {
         DEBUG("not a query");
-        make_error_msg(sendbuf, hdr->id, hdr->opcode, RCODE_FORMAT_ERROR);
-        sendsize = sizeof(dns_hdr_t);
-    }
-
-    DEBUG("query %d %d", hdr->id, hdr->opcode);
-
-    if (hdr->opcode == 1 || hdr->opcode == 2) {
-        make_error_msg(sendbuf, hdr->id, hdr->opcode, RCODE_NOT_IMPLEMENTED);
-        sendsize = sizeof(dns_hdr_t);
+        sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), hdr.id,
+            hdr.flags.opcode, RCODE_FORMAT_ERROR);
     }
 
 
-    if (sendto(fd, sendbuf, sendsize, 0, (struct sockaddr*)sa, salen) != sendsize) {
+    DEBUG("query id %d opcode %d qcount %d", hdr.id, hdr.flags.opcode,
+        hdr.qdcount);
+
+    if (hdr.flags.opcode != 0) {
+        sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), hdr.id,
+            hdr.flags.opcode, RCODE_NOT_IMPLEMENTED);
+    }
+
+    int zonelen = zonelen = strlen(en->zone);
+
+    char *qptr = buf + sizeof(dns_hdr_t);
+    for (int i = 0; i < hdr.qdcount; i++) {
+        dns_question_t q;
+        qptr += dns_parse_question(qptr, len, &q);
+        DEBUG(" question %s %d %d", q.qname, q.qtype, q.qclass);
+
+        if (q.qtype != TYPE_NAPTR && q.qtype != QTYPE_ALL)
+            continue;
+
+        if (q.qclass != CLASS_IN && q.qtype != QCLASS_ANY)
+            continue;
+
+        int qlen = strlen(q.qname);
+        char *zone = NULL;
+        if (qlen >= zonelen)
+            zone = q.qname + (qlen - zonelen);
+        if (!zone || (strcmp(zone, en->zone) != 0)) {
+            sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), hdr.id,
+                hdr.flags.opcode, RCODE_NAME_ERROR);
+            break;
+        }
+
+        char num[256];
+        int tlen = qlen - zonelen, numlen = tlen / 2;
+        for (int i = 0; i < numlen; i++) {
+            num[numlen - i - 1] = q.qname[2 * i];
+        }
+        num[numlen] = '\0';
+
+        /* lookup query */
+        DEBUG("num %s", num);
+
+        const entry_t *e = trib_table_lookup(&trib->loc_trib, 0, 0, num);
+
+        if (!e) {
+            sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), hdr.id,
+                hdr.flags.opcode, RCODE_NAME_ERROR);
+            break;
+        }
+
+        /* make response */
+    }
+
+
+    if (sendto(en->fd, sendbuf, sendsize, 0, (struct sockaddr*)sa, salen)
+        != sendsize)
+    {
         DEBUG("sendto(): %s", strerror(errno));
     }
 }
@@ -94,18 +132,19 @@ enum_loop(void *arg)
     enum_t *en = arg;
     char buf[4096];
     struct sockaddr_in6 csa;
-    socklen_t csa_len;
+    socklen_t csa_len = sizeof(csa);
 
     while (en->run) {
         int res = recvfrom(en->fd, buf, 4096, 0, (struct sockaddr*)&csa, 
             &csa_len);
-        if (res <= 0) {
+        if (res <= 0 && en->run) {
             ERROR("recvfrom(): %s", strerror(errno));
             continue;
         }
 
+        DEBUG("msg[%ld] from %s", res, sockaddr6_str(&csa));
 
-        handle_request(en->fd, buf, res, &csa, csa_len, en->trib);
+        handle_request(en, buf, res, &csa, csa_len, en->trib);
     }
 
     return NULL;
@@ -132,6 +171,7 @@ enum_new(const char *zone, const struct sockaddr_in6 *listen_sa, trib_t *trib)
 
     s->fd = fd;
     s->run = 1;
+    s->zone = strdup(zone);
     s->listen_sa = *listen_sa;
     s->trib = trib;
 
@@ -158,5 +198,12 @@ enum_stop(enum_t *en)
     shutdown(en->fd, SHUT_RDWR);
     pthread_join(en->thread, NULL);
     close(en->fd);
+}
+
+void
+enum_destroy(enum_t *en)
+{
+    free(en->zone);
+    free(en);
 }
 

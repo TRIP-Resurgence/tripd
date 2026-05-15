@@ -186,3 +186,9 @@ server_stop(server_t *server)
     close(server->fd);
 }
 
+void
+server_destroy(server_t *server)
+{
+    free(server);
+}
+
