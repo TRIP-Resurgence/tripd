@@ -57,20 +57,18 @@ handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
         return;
     }
 
-
     if (hdr.flags.qr != 0) {
         DEBUG("not a query");
-        sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), hdr.id,
-            hdr.flags.opcode, RCODE_FORMAT_ERROR);
+        sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), &hdr,
+            buf, len, RCODE_FORMAT_ERROR);
     }
-
 
     DEBUG("query id %d opcode %d qcount %d", hdr.id, hdr.flags.opcode,
         hdr.qdcount);
 
     if (hdr.flags.opcode != 0) {
-        sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), hdr.id,
-            hdr.flags.opcode, RCODE_NOT_IMPLEMENTED);
+        sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), &hdr,
+            buf, len, RCODE_NOT_IMPLEMENTED);
     }
 
     int zonelen = zonelen = strlen(en->zone);
@@ -92,8 +90,8 @@ handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
         if (qlen >= zonelen)
             zone = q.qname + (qlen - zonelen);
         if (!zone || (strcmp(zone, en->zone) != 0)) {
-            sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), hdr.id,
-                hdr.flags.opcode, RCODE_NAME_ERROR);
+            sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), &hdr,
+                buf, len, RCODE_NAME_ERROR);
             break;
         }
 
@@ -108,14 +106,26 @@ handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
         DEBUG("num %s", num);
 
         const entry_t *e = trib_table_lookup(&trib->loc_trib, 0, 0, num);
-
         if (!e) {
-            sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), hdr.id,
-                hdr.flags.opcode, RCODE_NAME_ERROR);
+            sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), &hdr,
+                buf, len, RCODE_NAME_ERROR);
+            DEBUG("not found");
             break;
         }
 
-        /* make response */
+        DEBUG("got %s", e->attrs.nexthop);
+
+        /* construct answer */
+        char rr[4096], naptr[512];
+
+        size_t rdlength = snprintf(naptr, sizeof(naptr), "%s",
+            e->attrs.nexthop);
+
+        size_t rrsize = dns_serialize_rr(rr, sizeof(rr), q.qname, TYPE_NAPTR,
+            CLASS_IN, 1, rdlength, naptr);
+        DEBUG("rrsize %d", rrsize);
+        sendsize = dns_serialize_answer(sendbuf, sizeof(sendbuf), &hdr,
+            buf, len, rr, rrsize);
     }
 
 

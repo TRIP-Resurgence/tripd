@@ -26,8 +26,12 @@
 
 #include "dns.h"
 
+#include <logging/logging.h>
+
 #include <string.h>
 #include <arpa/inet.h>
+
+#define _COMPONENT_ "enum"
 
 
 typedef struct {
@@ -36,7 +40,12 @@ typedef struct {
     uint32_t ttl;
     uint16_t rdlength;
     char     rdata[];
-} dns_rr_fields_t;
+} dns_rr_naptr_fields_t;
+
+typedef struct {
+    uint16_t order;
+    uint16_t preference;
+} dns_naptr_fields_t;
 
 
 ssize_t
@@ -79,30 +88,48 @@ dns_parse_question(void *buf, size_t len, dns_question_t *q)
     return (void*)src - buf;
 }
 
-
-ssize_t
-dns_serialize_error(void *buf, size_t len, uint16_t id, uint8_t opcode,
-    int error)
+size_t
+dns_section_size(void *sec, size_t len, size_t rrc)
 {
-    if (len < sizeof(dns_hdr_t))
-        return -1;
-    dns_hdr_t *sendhdr = buf;
-    sendhdr->id = id;
-    sendhdr->flags.qr = 0;
-    sendhdr->flags.opcode = opcode;
-    sendhdr->flags.aa = 0;
-    sendhdr->flags.tc = 0;
-    sendhdr->flags.rd = 0;
-    sendhdr->flags.ra = 0;
-    sendhdr->flags.z= 0;
-    sendhdr->flags.rcode = error;
-    sendhdr->qdcount = 0;
-    sendhdr->qdcount = 0;
-    sendhdr->qdcount = 0;
-    sendhdr->qdcount = 0;
-    return sizeof(dns_hdr_t);
+    size_t s = 0;
+
+    char *ptr = sec;
+
+    for (size_t i = 0; i < rrc; i++) {
+        while (*ptr && (void*)ptr < sec + len - 4) {
+            ptr += *ptr + 1;
+        }
+        ptr += 4;
+    }
+    ptr++;
+
+    return ptr - (char*)sec;
 }
 
+
+ssize_t
+dns_serialize_error(void *buf, size_t len, const dns_hdr_t *recvhdr, void *recv,
+    size_t recv_size, int error)
+{
+    if (len < recv_size)
+        return -1;
+    
+    dns_hdr_t *sendhdr = buf;
+    
+    /* copy query */
+    memcpy(buf, recv, recv_size);
+
+    /* make answer */
+    dns_flags_t flags = recvhdr->flags;
+    flags.qr = 1; /* response */
+    flags.aa = 1;
+    flags.tc = 0;
+    flags.ra = 0;
+    flags.rcode = error;
+    *(uint16_t*)&sendhdr->flags = htons(*(uint16_t*)&flags);
+
+    return recv_size; /* same size */
+}
 
 ssize_t
 dns_serialize_rr(void *buf, size_t len, const char *qto,
@@ -118,19 +145,61 @@ dns_serialize_rr(void *buf, size_t len, const char *qto,
         qto += *dst + 1;
         dst += *dst + 1;
     }
+    *dst++ = 0; /* terminator */
 
-    size_t rrlen = (dst - (uint8_t*)buf) + sizeof(dns_rr_fields_t) + rdlength;
+    size_t rrlen = (dst - (uint8_t*)buf) + sizeof(dns_rr_naptr_fields_t) + rdlength;
     if (len < rrlen)
         return -1;
 
-    dns_rr_fields_t *rrf = (dns_rr_fields_t*)dst;
-    rrf->type = type;
-    rrf->class = class;
-    rrf->ttl = ttl;
-    rrf->rdlength = rdlength;
+    dns_rr_naptr_fields_t *rrf = (dns_rr_naptr_fields_t*)dst;
+    rrf->type = htons(type);
+    rrf->class = htons(class);
+    rrf->ttl = htonl(ttl);
+    //rrf->order = htons(10);
+    //rrf->preference = htons(10);
+    rrf->rdlength = htons(rdlength);
 
     memcpy(&rrf->rdata, rdata, rdlength);
 
     return rrlen;
+}
+
+ssize_t
+dns_serialize_answer(void *buf, size_t len, const dns_hdr_t *recvhdr,
+    void *recv, size_t recv_size, void *rr, size_t rrsize)
+{
+    if (len < sizeof(dns_hdr_t) + rrsize)
+        return -1;
+
+    dns_hdr_t *sendhdr = buf;
+
+    /* copy header */
+    memcpy(buf, recv, sizeof(dns_hdr_t));
+
+    /* set flags and answer count */
+    dns_flags_t flags = recvhdr->flags;
+    flags.qr = 1; /* response */
+    flags.aa = 1;
+    flags.tc = 0;
+    flags.ra = 0;
+    flags.rcode = RCODE_NO_ERROR;
+    *(uint16_t*)&sendhdr->flags = htons(*(uint16_t*)&flags);
+    sendhdr->ancount = htons(1);
+
+    /* copy question section */
+    size_t qsecsize = dns_section_size(recv + sizeof(dns_hdr_t),
+            recv_size - sizeof(dns_hdr_t), recvhdr->qdcount);
+    DEBUG("q seciton size %ld", qsecsize);
+    memcpy(buf + sizeof(dns_hdr_t), recv + sizeof(dns_hdr_t), qsecsize);
+
+    /* copy rr into answer section */
+    memcpy(buf + sizeof(dns_hdr_t) + qsecsize, rr, rrsize);
+
+    /* copy additional section */
+    memcpy(buf + sizeof(dns_hdr_t) + qsecsize + rrsize,
+        recv + sizeof(dns_hdr_t) + qsecsize,
+        recv_size - sizeof(dns_hdr_t) - qsecsize);
+
+    return recv_size + rrsize;
 }
 

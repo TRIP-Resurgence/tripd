@@ -29,18 +29,37 @@
 #include <stddef.h>
 #include <sys/types.h>
 
-typedef struct {
-    uint8_t     qr      : 1;
-    uint8_t     opcode  : 4;
-    uint8_t     aa      : 1;
-    uint8_t     tc      : 1;
-    uint8_t     rd      : 1;
-    uint8_t     ra      : 1;
-    uint8_t     z       : 3;
+#define DNS_FLAG_QR(x)      (((x) >> 15) & 1)
+#define DNS_FLAG_OPCODE(x)  (((x) >> 11) & 0b1111)
+#define DNS_FLAG_AA(x)      (((x) >> 10) & 1)
+#define DNS_FLAG_TC(x)      (((x) >> 9) & 1)
+#define DNS_FLAG_RD(x)      (((x) >> 8) & 1)
+#define DNS_FLAG_RA(x)      (((x) >> 7) & 1)
+#define DNS_FLAG_Z(x)       (((x) >> 4) & 1)
+#define DNS_FLAG_RCODE(x)   ((x) & 0b1111)
+
+#define DNS_SET_FLAG_QR(x)      (((x) << 15) &  0b0111111111111111)
+#define DNS_SET_FLAG_OPCODE(x)  (((x) << 11) &  0b1000011111111111)
+#define DNS_SET_FLAG_AA(x)      (((x) << 10) &  0b1111101111111111)
+#define DNS_SET_FLAG_TC(x)      (((x) << 9) &   0b1111110111111111)
+#define DNS_SET_FLAG_RD(x)      (((x) << 8) &   0b1111111011111111)
+#define DNS_SET_FLAG_RA(x)      (((x) << 7) &   0b1111111101111111)
+#define DNS_SET_FLAG_Z(x)       (((x) << 4) &   0b1111111110001111)
+#define DNS_SET_FLAG_RCODE(x)   ((x) &          0b1111111111110000)
+
+
+typedef struct __attribute__((packed)) {
     uint8_t     rcode   : 4;
+    uint8_t     z       : 3;
+    uint8_t     ra      : 1;
+    uint8_t     rd      : 1;
+    uint8_t     tc      : 1;
+    uint8_t     aa      : 1;
+    uint8_t     opcode  : 4;
+    uint8_t     qr      : 1;
 } dns_flags_t;
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint16_t    id;
     dns_flags_t flags;
     uint16_t    qdcount;
@@ -64,7 +83,6 @@ typedef struct {
     uint16_t qclass;
 } dns_question_t;
 
-
 enum qtype_e {
     TYPE_NAPTR = 35,
     QTYPE_ALL = 255
@@ -80,14 +98,15 @@ ssize_t dns_parse_hdr(void *buf, size_t len, dns_hdr_t *out);
 
 size_t dns_parse_question(void *buf, size_t len, dns_question_t *q);
 
-ssize_t dns_serialize_error(void *buf, size_t len, uint16_t id, uint8_t opcode,
-    int error);
+ssize_t dns_serialize_error(void *buf, size_t len, const dns_hdr_t *recvhdr,
+    void *recv, size_t recv_size, int error);
 
 ssize_t dns_serialize_rr(void *buf, size_t len, const char *qto,
-    uint16_t type, uint16_t class, uint32_t ttl, uint16_t rdlength, void *rdata);
+    uint16_t type, uint16_t class, uint32_t ttl, uint16_t rdlength, 
+    void *rdata);
 
-ssize_t dns_serialize_answer(void *buf, uint16_t id, uint8_t opcode,
-    void *rr, size_t rrlen);
+ssize_t dns_serialize_answer(void *buf, size_t len, const dns_hdr_t *recvhdr,
+    void *recv, size_t recv_size, void *rr, size_t rrsize);
 
 #endif /* _DNS_H */
 
