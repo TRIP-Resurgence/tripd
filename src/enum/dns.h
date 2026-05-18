@@ -101,6 +101,11 @@ size_t dns_parse_question(void *buf, size_t len, dns_question_t *q);
 ssize_t dns_serialize_error(void *buf, size_t len, const dns_hdr_t *recvhdr,
     void *recv, size_t recv_size, int error);
 
+
+ssize_t dns_serialize_rdata_naptr(void *buf, size_t len, uint16_t order,
+    uint16_t preference, const char *flags, const char *services,
+    const char *regex);
+
 ssize_t dns_serialize_rr(void *buf, size_t len, const char *qto,
     uint16_t type, uint16_t class, uint32_t ttl, uint16_t rdlength, 
     void *rdata);

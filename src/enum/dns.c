@@ -34,18 +34,22 @@
 #define _COMPONENT_ "enum"
 
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint16_t type;
     uint16_t class;
     uint32_t ttl;
     uint16_t rdlength;
     char     rdata[];
-} dns_rr_naptr_fields_t;
+} dns_rr_fields_t;
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint16_t order;
     uint16_t preference;
-} dns_naptr_fields_t;
+    /* <character-string> flags */
+    /* <character-string> services */
+    /* <character-string> refexp */
+    /* <domain-name> replacement */
+} dns_rdata_naptr_fields_t;
 
 
 ssize_t
@@ -67,29 +71,39 @@ dns_parse_hdr(void *buf, size_t len, dns_hdr_t *out)
 }
 
 size_t
-dns_parse_question(void *buf, size_t len, dns_question_t *q)
+dns_parse_domain_name(void *buf, size_t len, char *out, size_t outlen)
 {
     uint8_t *src = buf;
-    char *dst = q->qname;
-    while (*src && (void*)src < buf + len - 4) {
+    char *dst = out;
+    while (*src && ((void*)src < buf + len) && (dst < out + outlen)) {
         uint8_t lablen = *src;
         memcpy(dst, src + 1, lablen);
         src += lablen + 1;
         dst[lablen] = '.';
         dst += lablen + 1;
     };
-
     *dst = '\0';
     src++;
-    q->qtype = ntohs(*(uint16_t*)src);
-    src += 2;
-    q->qclass = ntohs(*(uint16_t*)src);
 
     return (void*)src - buf;
 }
 
 size_t
-dns_section_size(void *sec, size_t len, size_t rrc)
+dns_parse_question(void *buf, size_t len, dns_question_t *q)
+{
+    void *ptr = buf +
+        dns_parse_domain_name(buf, len, q->qname, sizeof(q->qname));
+
+    q->qtype = ntohs(*(uint16_t*)ptr);
+    ptr += 2;
+    q->qclass = ntohs(*(uint16_t*)ptr);
+    ptr += 2;
+
+    return (void*)ptr - buf;
+}
+
+size_t
+dns_q_section_size(void *sec, size_t len, size_t rrc)
 {
     size_t s = 0;
 
@@ -132,31 +146,66 @@ dns_serialize_error(void *buf, size_t len, const dns_hdr_t *recvhdr, void *recv,
 }
 
 ssize_t
-dns_serialize_rr(void *buf, size_t len, const char *qto,
-    uint16_t type, uint16_t class, uint32_t ttl, uint16_t rdlength, void *rdata)
+dns_serialize_domain_name(void *buf, size_t len, const char *name)
 {
     char *nextdot = NULL;
     uint8_t *dst = buf;
-    while (*qto && (nextdot = strchr(qto, '.'))) {
+    while (*name && (nextdot = strchr(name, '.'))) {
         if ((void*)dst >= buf + len)
             return -1;
-        *dst = nextdot - qto;
-        memcpy(dst + 1, qto, *dst);
-        qto += *dst + 1;
+        *dst = nextdot - name;
+        memcpy(dst + 1, name, *dst);
+        name += *dst + 1;
         dst += *dst + 1;
     }
     *dst++ = 0; /* terminator */
 
-    size_t rrlen = (dst - (uint8_t*)buf) + sizeof(dns_rr_naptr_fields_t) + rdlength;
+    return (void*)dst - buf;
+}
+
+ssize_t
+dns_serialize_rdata_naptr(void *buf, size_t len, uint16_t order,
+    uint16_t preference, const char *flags, const char *services,
+    const char *regex)
+{
+    dns_rdata_naptr_fields_t *fields = buf;
+    fields->order = htons(order);
+    fields->preference = htons(preference);
+
+    uint8_t *ptr = buf + sizeof(dns_rdata_naptr_fields_t);
+
+    *ptr = strlen(flags);
+    memcpy(ptr + 1, flags, *ptr);
+    ptr += *ptr + 1;
+
+    *ptr = strlen(services);
+    memcpy(ptr + 1, services, *ptr);
+    ptr += *ptr + 1;
+
+    *ptr = strlen(regex);
+    memcpy(ptr + 1, regex, *ptr);
+    ptr += *ptr + 1;
+
+    *ptr++ = '\0';
+
+    return (void*)ptr - buf;
+}
+
+ssize_t
+dns_serialize_rr(void *buf, size_t len, const char *qto,
+    uint16_t type, uint16_t class, uint32_t ttl, uint16_t rdlength, void *rdata)
+{
+    /* compressed domain-name */
+    *(uint16_t*)buf = htons(0b1100000000001100);
+
+    size_t rrlen = 2 + sizeof(dns_rr_fields_t) + rdlength;
     if (len < rrlen)
         return -1;
 
-    dns_rr_naptr_fields_t *rrf = (dns_rr_naptr_fields_t*)dst;
+    dns_rr_fields_t *rrf = (dns_rr_fields_t*)(buf + 2);
     rrf->type = htons(type);
     rrf->class = htons(class);
     rrf->ttl = htonl(ttl);
-    //rrf->order = htons(10);
-    //rrf->preference = htons(10);
     rrf->rdlength = htons(rdlength);
 
     memcpy(&rrf->rdata, rdata, rdlength);
@@ -185,21 +234,17 @@ dns_serialize_answer(void *buf, size_t len, const dns_hdr_t *recvhdr,
     flags.rcode = RCODE_NO_ERROR;
     *(uint16_t*)&sendhdr->flags = htons(*(uint16_t*)&flags);
     sendhdr->ancount = htons(1);
+    sendhdr->nscount = htons(0);
+    sendhdr->arcount = htons(0);
 
     /* copy question section */
-    size_t qsecsize = dns_section_size(recv + sizeof(dns_hdr_t),
+    size_t qsecsize = dns_q_section_size(recv + sizeof(dns_hdr_t),
             recv_size - sizeof(dns_hdr_t), recvhdr->qdcount);
-    DEBUG("q seciton size %ld", qsecsize);
     memcpy(buf + sizeof(dns_hdr_t), recv + sizeof(dns_hdr_t), qsecsize);
 
     /* copy rr into answer section */
     memcpy(buf + sizeof(dns_hdr_t) + qsecsize, rr, rrsize);
 
-    /* copy additional section */
-    memcpy(buf + sizeof(dns_hdr_t) + qsecsize + rrsize,
-        recv + sizeof(dns_hdr_t) + qsecsize,
-        recv_size - sizeof(dns_hdr_t) - qsecsize);
-
-    return recv_size + rrsize;
+    return sizeof(dns_hdr_t) + qsecsize + rrsize;
 }
 

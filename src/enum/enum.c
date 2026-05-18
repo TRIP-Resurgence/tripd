@@ -27,6 +27,7 @@
 #include "enum.h"
 #include "db/trib.h"
 #include "enum/dns.h"
+#include "protocol/protocol.h"
 
 #include <logging/logging.h>
 #include <netinet/in.h>
@@ -43,6 +44,16 @@
 
 #define _COMPONENT_ "enum"
 
+
+static const char *
+service(uint16_t app_proto)
+{
+    switch (app_proto) {
+        case APP_PROTO_SIP: return "E2U+sip";
+        case APP_PROTO_IAX2: return "E2U+iax";
+        default: return NULL;
+    }
+}
 
 static void
 handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
@@ -63,7 +74,8 @@ handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
             buf, len, RCODE_FORMAT_ERROR);
     }
 
-    DEBUG("query id %d opcode %d qcount %d", hdr.id, hdr.flags.opcode,
+    DEBUG("query[%ld] from %s id %d opcode %d qcount %d",
+        len, sockaddr6_str((struct sockaddr_in6*)&sa), hdr.id, hdr.flags.opcode,
         hdr.qdcount);
 
     if (hdr.flags.opcode != 0) {
@@ -77,7 +89,6 @@ handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
     for (int i = 0; i < hdr.qdcount; i++) {
         dns_question_t q;
         qptr += dns_parse_question(qptr, len, &q);
-        DEBUG(" question %s %d %d", q.qname, q.qtype, q.qclass);
 
         if (q.qtype != TYPE_NAPTR && q.qtype != QTYPE_ALL)
             continue;
@@ -102,9 +113,10 @@ handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
         }
         num[numlen] = '\0';
 
-        /* lookup query */
-        DEBUG("num %s", num);
+        DEBUG(" question %s type %d class %d -> num %s",
+            q.qname, q.qtype, q.qclass, num);
 
+        /* lookup query */
         const entry_t *e = trib_table_lookup(&trib->loc_trib, 0, 0, num);
         if (!e) {
             sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), &hdr,
@@ -113,26 +125,27 @@ handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
             break;
         }
 
-        DEBUG("got %s", e->attrs.nexthop);
-
         /* construct answer */
-        char rr[4096], naptr[512];
+        char rr[4096], rdata[1024], regex[512];
 
-        size_t rdlength = snprintf(naptr, sizeof(naptr), "%s",
-            e->attrs.nexthop);
+        size_t regexlen = snprintf(regex, sizeof(regex),
+            "!^.*$!sip:%s@%s!", num, e->attrs.nexthop);
 
+        size_t rdlength = dns_serialize_rdata_naptr(rdata, sizeof(rdata),
+            100, 10, "u", service(e->app_proto), regex);
         size_t rrsize = dns_serialize_rr(rr, sizeof(rr), q.qname, TYPE_NAPTR,
-            CLASS_IN, 1, rdlength, naptr);
-        DEBUG("rrsize %d", rrsize);
+            CLASS_IN, 1, rdlength, rdata);
         sendsize = dns_serialize_answer(sendbuf, sizeof(sendbuf), &hdr,
             buf, len, rr, rrsize);
+
+        DEBUG(" answer %s", regex);
     }
 
 
     if (sendto(en->fd, sendbuf, sendsize, 0, (struct sockaddr*)sa, salen)
         != sendsize)
     {
-        DEBUG("sendto(): %s", strerror(errno));
+        ERROR("sendto(): %s", strerror(errno));
     }
 }
 
@@ -151,8 +164,6 @@ enum_loop(void *arg)
             ERROR("recvfrom(): %s", strerror(errno));
             continue;
         }
-
-        DEBUG("msg[%ld] from %s", res, sockaddr6_str(&csa));
 
         handle_request(en, buf, res, &csa, csa_len, en->trib);
     }
