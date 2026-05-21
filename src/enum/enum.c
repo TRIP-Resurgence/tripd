@@ -50,7 +50,7 @@ service(uint16_t app_proto)
 {
     switch (app_proto) {
         case APP_PROTO_SIP: return "E2U+sip";
-        case APP_PROTO_IAX2: return "E2U+iax";
+        case APP_PROTO_IAX2: return "E2U+iax2";
         default: return NULL;
     }
 }
@@ -117,7 +117,7 @@ handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
             q.qname, q.qtype, q.qclass, num);
 
         /* lookup query */
-        const entry_t *e = trib_table_lookup(&trib->loc_trib, 0, 0, num);
+        const entry_t *e = trib_table_lookup(&trib->loc_trib, AF_E164, 0, num);
         if (!e) {
             sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), &hdr,
                 buf, len, RCODE_NAME_ERROR);
@@ -128,8 +128,20 @@ handle_request(enum_t *en, void *buf, size_t len, const struct sockaddr_in6 *sa,
         /* construct answer */
         char rr[4096], rdata[1024], regex[512];
 
-        size_t regexlen = snprintf(regex, sizeof(regex),
-            "!^.*$!sip:%s@%s!", num, e->attrs.nexthop);
+        size_t regexlen = 0;
+
+        if (e->app_proto == APP_PROTO_SIP) {
+            snprintf(regex, sizeof(regex),
+                "!^.*$!sip:%s@%s!", num, e->attrs.nexthop);
+        } else if (e->app_proto == APP_PROTO_IAX2) {
+            snprintf(regex, sizeof(regex),
+                "!^.*$!iax2:%s/%s!", e->attrs.nexthop, num);
+        } else {
+            sendsize = dns_serialize_error(sendbuf, sizeof(sendbuf), &hdr,
+                buf, len, RCODE_NAME_ERROR);
+            DEBUG("not found");
+            break;
+        }
 
         size_t rdlength = dns_serialize_rdata_naptr(rdata, sizeof(rdata),
             100, 10, "u", service(e->app_proto), regex);

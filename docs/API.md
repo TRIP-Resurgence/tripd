@@ -9,6 +9,8 @@
 
 tripd has a HTTP REST API for ease of querying by Asterisk and other switches.
 
+See [configuration](/ref commands) for how to configure.
+
 ## `/route`
 
 Return a textual list of all routes.
@@ -48,7 +50,7 @@ Return an Asterisk Dial string in the format Technology/Resource/Extension.
 
 Application protocol is mapped to Technology as the following:
 
- - SIP -> PJSIP 
+ - SIP -> PJSIP
  - IAX2 -> IAX2
 
 Next hop server is copied directly into Resource. This allows specification of
@@ -60,11 +62,12 @@ Number is copied directly into Extension without context or options.
 
 Refer to [asterisk docs](https://docs.asterisk.org/Latest_API/API_Documentation/Dialplan_Applications/Dial/)
 
-## `/route/<number>/sip-uri`
+## `/route/<number>/uri`
 
-Return a SIP URI if available.
+Return a SIP or IAX2 URI if available.
 
  - `sip:number@host[:port]`
+ - `iax2:[username[:password[:pubkey]]@]host[:port][/number]` equivalent to `iax2:AsteriskIAXResource` without context.
 
 ## `/route/<number>/human`
 
