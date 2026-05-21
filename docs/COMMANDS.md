@@ -83,12 +83,20 @@ What interface to bind to
 
  - address: address or localhost (`getaddrinfo()`)
 
-#### `api <bind-address> <port>`
+#### `api [bind-address] [port]`
 
-Where to serve the API
+Configure HTTP API
 
- - bind-address: Bind address
- - port: Bind port
+ - bind-address: Bind address (default ::)
+ - port: Bind port (default 8080)
+
+#### `enum [zone] [bind-address] [port]`
+
+Configure ENUM-emulated query interface
+
+ - zone: Base zone to serve NAPTR records on (default e164.arpa.), must have final '.'
+ - bind-address: Bind address (default ::)
+ - port: Bind port (default 8080)
 
 #### `route { add <af> <prefix> <app-proto> <server> | del <af> <prefix> }`
 

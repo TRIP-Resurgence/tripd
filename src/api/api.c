@@ -249,13 +249,17 @@ handle_route(int fd, char *query, char *buf, ssize_t req_len, trib_t *trib)
         }
         bodysize = snprintf(body, BUF_SIZE, "%s/%s/%s\r\n", tech,
             e->attrs.nexthop, num);
-    } else if (strcmp(qtype, "sip-uri") == 0) {
-        if (e->app_proto != APP_PROTO_SIP) {
+    } else if (strcmp(qtype, "uri") == 0) {
+        if (e->app_proto == APP_PROTO_SIP) {
+            bodysize = snprintf(body, BUF_SIZE, "sip:%s@%s\r\n",
+                num, e->attrs.nexthop);
+        } else if (e->app_proto == APP_PROTO_IAX2) {
+            bodysize = snprintf(body, BUF_SIZE, "iax2:%s/%s\r\n",
+                e->attrs.nexthop, num);
+        } else {
             SOCK_TRY_SEND(send(fd, STATUS_422, sizeof(STATUS_422), 0), return -1);
             return 422;
         }
-        bodysize = snprintf(body, BUF_SIZE, "sip:%s@%s\r\n",
-            num, e->attrs.nexthop);
     } else if (strcmp(qtype, "human") == 0) {
         bodysize = route_details(body, BUF_SIZE, e);
     } else {

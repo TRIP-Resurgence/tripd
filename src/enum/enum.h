@@ -19,18 +19,15 @@
 */
 
 /** \file
- * \brief HTTP API server
- *
- * HTTP server
+ * \brief ENUM emulation query interface
  */
 
-#ifndef _SERVER_H
-#define _SERVER_H
+#ifndef _ENUM_H
+#define _ENUM_H
 
 #include <db/trib.h>
 
-#include <stdint.h>
-#include <netinet/in.h>
+#include <sys/types.h>
 
 
 typedef struct {
@@ -38,14 +35,16 @@ typedef struct {
     struct sockaddr_in6 listen_sa;
     int                 fd;
     int                 run;
+    char               *zone;
     trib_t             *trib;
-} server_t;
+} enum_t;
 
 
-server_t *server_new(const struct sockaddr_in6 *listen_sa, trib_t *trib);
-void server_run(server_t *server);
-void server_stop(server_t *server);
-void server_destroy(server_t *server);
+enum_t *enum_new(const char *zone, const struct sockaddr_in6 *listen_sa,
+    trib_t *trib);
+void enum_run(enum_t *en);
+void enum_stop(enum_t *en);
+void enum_destroy(enum_t *en);
 
-#endif /* _SERVER_H */
+#endif /* _ENUM_H */
 

@@ -40,6 +40,7 @@ file(GLOB COMMAND_SRC "src/command/*.c")
 file(GLOB LOGGING_SRC "src/logging/*.c")
 file(GLOB UTIL_SRC "src/util/*.c")
 file(GLOB API_SRC "src/api/*.c")
+file(GLOB ENUM_SRC "src/enum/*.c")
 file(GLOB TRIPD_SRC "src/tripd/*.c")
 
 # flags
@@ -73,8 +74,11 @@ target_link_libraries(functions api db protocol logging util)
 add_library(api STATIC ${API_SRC})
 target_link_libraries(api functions logging)
 
+add_library(enum STATIC ${ENUM_SRC})
+target_link_libraries(enum functions logging)
+
 add_library(command STATIC ${COMMAND_SRC})
-target_link_libraries(command api db functions logging)
+target_link_libraries(command enum api db functions logging)
 
 
 # main executable
