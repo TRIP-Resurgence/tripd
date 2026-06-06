@@ -181,12 +181,11 @@ app_proto_str(int app_proto)
         "H.323-H.225.0-Q.931",
         "H.323-H.225.0-RAS",
         "H.323-H.225.0-Annex-G",
+        "IAX2",
     };
 
-    if (app_proto >= APP_PROTO_SIP && app_proto <= APP_PROTO_H323_225_0_ANNEXG)
+    if (app_proto >= APP_PROTO_SIP && app_proto <= APP_PROTO_IAX2)
         return app_proto_strs[app_proto - 1];
-    else if (app_proto == APP_PROTO_IAX2)
-        return "IAX2";
     else return "invalid";
 }
 
@@ -238,9 +237,7 @@ const size_t supported_routetypes_size = sizeof(supported_routetypes) /
 
 #define CHECK_HOLD(x) ((x == 0) || (x < 3))
 #define CHECK_AF(x) ((x < AF_DECIMAL) || (x > AF_CARRIER))
-#define CHECK_APP_PROTO(x) (((x < APP_PROTO_SIP) \
-    || (x > APP_PROTO_H323_225_0_ANNEXG)) && \
-    (x != APP_PROTO_IAX2))
+#define CHECK_APP_PROTO(x) ((x < APP_PROTO_SIP) || (x > APP_PROTO_IAX2))
 #define CHECK_ITADPATH_TYPE(x) ((x < ITADPATH_TYPE_AP_SET) || \
     (x > ITADPATH_TYPE_AP_SEQUENCE))
 
@@ -890,8 +887,7 @@ parse_capinfo_routetype(void *buff, size_t len,
     }
 
     if (!((routetype->routetype_app_proto >= APP_PROTO_SIP &&
-        routetype->routetype_app_proto <= APP_PROTO_H323_225_0_ANNEXG) ||
-        routetype->routetype_app_proto == APP_PROTO_IAX2))
+        routetype->routetype_app_proto <= APP_PROTO_IAX2)))
     {
         return ERROR_APP_PROTO;
     }

@@ -223,14 +223,12 @@ extern const char *af_strs[];
 
 /** \brief Application protocols */
 enum app_proto {
-    /** RFC3219 */
+    /* RFC3219 */
     APP_PROTO_SIP = 1,              /**< SIP */
     APP_PROTO_H323_225_0_Q931,      /**< H.323-H.225.0-Q.931 */
     APP_PROTO_H323_225_0_RAS,       /**< H.323-H.225.0-RAS */
     APP_PROTO_H323_225_0_ANNEXG,    /**< H.323-H.225.0-Annex-G */
-    /** Vendor */
-    APP_PROTO_IAX2 = 32768          /**< vendor specific asterisk IAX2
-                                      (RFC 5456) */
+    APP_PROTO_IAX2                  /**< IAX2 (Angel R. Fernandez) */
 };
 
 /** \brief Application protocol to string */
