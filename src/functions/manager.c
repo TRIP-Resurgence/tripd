@@ -812,11 +812,11 @@ shutdown:
 
 void
 manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
-    uint32_t itad)
+    uint32_t itad, int transmode)
 {
     /* add peer to peer locator */
     const peer_t *peer = locator_add(manager->locator, addr, itad,
-        manager->hold, CAPINFO_TRANS_SEND_RECV);
+        manager->hold, transmode);
     
     /* create session object and hand off to connect loop */
     session_t *s = malloc(sizeof(session_t));

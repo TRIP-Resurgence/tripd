@@ -1028,6 +1028,8 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
 
     if (strcmp(subcmd, "remote-itad") == 0) {
         char *remote_itad = strtok(NULL, " ");
+        char *transmode_cmd = strtok(NULL, " ");
+        char *transmode_str = strtok(NULL, " ");
 
         /* check args */
         if (!remote_itad) {
@@ -1042,8 +1044,23 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
             return -1;
         }
 
+        int transmode = CAPINFO_TRANS_SEND_RECV;
+        if (transmode_cmd && (strcmp(transmode_cmd, "trans-mode") != 0)) {
+            if (!transmode_str) {
+                fprintf(parser->outf, "error: missing transmode");
+                return -1;
+            } else if (strcmp(transmode_str, "bidi") == 0) {
+                transmode = CAPINFO_TRANS_SEND_RECV;
+            } else if (strcmp(transmode_str, "send") == 0) {
+                transmode = CAPINFO_TRANS_SEND;
+            } else if (strcmp(transmode_str, "recv") == 0) {
+                transmode = CAPINFO_TRANS_RECV;
+            }
+        }
+
         /* pick first */
-        manager_peer_add(parser->manager, &peer_addr, remote_itad_num);
+        manager_peer_add(parser->manager, &peer_addr,
+            remote_itad_num, transmode);
     } else if (strcmp(subcmd, "route-map") == 0) {
         char *routemap_name = strtok(NULL, " ");
         if (!routemap_name) {
@@ -1125,7 +1142,7 @@ const cmd_def_t cmds_trip[] = {
     { "ls-id",          &cmd_config_trip_lsid, "set local id", "ls-id <id in dotted notation" },
     { "timers",         &cmd_config_trip_timers, "set timers", "timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]" },
     { "default",        &cmd_config_trip_default, "set defaults", "default { local-preference | metric } <value>" },
-    { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> { remote-itad <itad> | route-map <map-name> }" },
+    { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> { remote-itad <itad> [ trans-mode { send | recv | bidi } ] | route-map <map-name> }" },
     { NULL,             NULL, NULL, NULL }
 };
 

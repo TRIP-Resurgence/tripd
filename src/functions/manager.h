@@ -97,7 +97,7 @@ manager_t *manager_new(const struct sockaddr_in6 *listen_addr);
 
 /** \brief Add known peer to underlaying locator */
 void manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
-    uint32_t itad);
+    uint32_t itad, int transmode);
 
 /** \brief Find known peer by address */
 peer_t *manager_peer_find(manager_t *manager, const struct sockaddr_in6 *addr);

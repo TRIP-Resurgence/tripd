@@ -133,6 +133,12 @@ send_notification_res(int fd, int res)
 int
 handle_update(manager_t *m, session_t *s, msg_t *msg)
 {
+    /* ignore if peer is send only */
+    if (s->peer->transmode == CAPINFO_TRANS_SEND) {
+        DEBUG("update ignored from send only peer %s", session_str(s));
+        return 0;
+    }
+
     /* parse attribute headers */
     size_t toparse = msg->msg_len;
     void *attr_ptr = (void*)&msg->msg_val;
@@ -335,20 +341,20 @@ handle_update(manager_t *m, session_t *s, msg_t *msg)
 
     for (int i = 0; i < ent_attrs.advertpath_size; i++) {
         if (ent_attrs.advertpath[i] == m->itad) {
-            INFO("routes with this itad in advertisementpath rejected");
+            INFO("routes with our itad in advertisementpath rejected");
             return 0;
         }
     }
 
     for (int i = 0; i < ent_attrs.advertpath_size; i++) {
         if (ent_attrs.advertpath[i] == m->itad) {
-            INFO("routes with this itad in routedpath rejected");
+            INFO("routes with our itad in routedpath rejected");
             return 0;
         }
     }
 
     if (s->peer->itad == m->itad && ent_attrs.nextitad == m->itad) {
-        INFO("external route with this itad in nexthop rejected");
+        INFO("external route with our itad in nexthop rejected");
         return 0;
     }
 
@@ -698,6 +704,10 @@ void
 session_update(const session_t *s, uint32_t local_id, uint32_t local_itad)
 {
     entry_t **new_ents = NULL;
+
+    /* don't do anything if peer is receive only */
+    if (s->peer->transmode == CAPINFO_TRANS_RECV)
+        return;
 
     /* entries that havent been sent UPDATE'd */
     size_t new_ents_count = get_new_entries(&s->adj_trib_out, &new_ents);
