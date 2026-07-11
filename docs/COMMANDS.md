@@ -77,7 +77,7 @@ Where to write the log. Default level is `debug`.
  - file: `stdout`, `stderr` or a filename
  - loglevel: { `error` | `warning` | `info` | `debug` | `trace` }
 
-#### `bind-address <address>`
+#### `bind-address <address> [port]`
 
 What interface to bind to
 

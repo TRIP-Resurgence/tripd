@@ -426,12 +426,25 @@ cmd_config_bind(parser_t *parser, int no, char *args)
 {
     args = strip(args);
 
+    char *addr_str = strtok(args, " ");
+    char *port_str = strtok(NULL, " ");
+
+    if (!addr_str) {
+        fprintf(parser->outf, "bind-address: missing bind address");
+        return -1;
+    }
+
+    uint16_t port = PROTO_TCP_PORT;
+    if (port_str) {
+        port = atoi(port_str);
+    }
+
     /* resolve listen address */
     struct addrinfo *listen_addrs;
-    int res = getaddrinfo(args, NULL, NULL, &listen_addrs);
+    int res = getaddrinfo(addr_str, NULL, NULL, &listen_addrs);
     if (res != 0) {
         fprintf(parser->outf, "bind-address: getaddrinfo() error: %s for %s\n",
-            gai_strerror(res), args);
+            gai_strerror(res), addr_str);
         return -1;
     }
 
@@ -439,10 +452,10 @@ cmd_config_bind(parser_t *parser, int no, char *args)
     if (listen_addrs->ai_addr->sa_family == AF_INET6) {
         memcpy(&sa, listen_addrs->ai_addr,
             listen_addrs->ai_addrlen);
-        sa.sin6_port = htons(PROTO_TCP_PORT);
+        sa.sin6_port = htons(port);
     } else if (listen_addrs->ai_addr->sa_family == AF_INET) {
         sa.sin6_family = AF_INET6;
-        sa.sin6_port = htons(PROTO_TCP_PORT);
+        sa.sin6_port = htons(port);
         /* map IPv4 into IPv4-mapped IPv6 */
         map_addr_inet_inet6(&sa, (struct sockaddr_in *)listen_addrs->ai_addr);
     } else {
