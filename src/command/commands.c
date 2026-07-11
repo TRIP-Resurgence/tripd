@@ -1102,6 +1102,33 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
             fprintf(parser->outf, "peer: unrecognized direction\n");
             return -1;
         }
+    } else if (strcmp(subcmd, "timers") == 0) {
+        args = strip(subcmd + 7);
+
+        if (strlen(args) == 0 || !isdigit(*args)) {
+            printf("peer timers: number expected\n");
+            return -1;
+        }
+        
+        char *end = NULL;
+        peer->hold = strtoul(args, &end, 10);
+        if (end == args) {
+            printf("peer timers: number expected\n");
+        }
+        if (*end == '\0') return 0;
+        parser->manager->keepalive = strtoul(end, &end, 10);
+        if (*end == '\0') return 0;
+        if (parser->manager->keepalive < 3)
+            printf("peer timers: keepalive too low\n");
+        parser->manager->connect_retry = strtoul(end, &end, 10);
+        if (*end == '\0') return 0;
+        parser->manager->max_purge_time = strtoul(end, &end, 10);
+        if (*end == '\0') return 0;
+        parser->manager->disable_time = strtoul(end, &end, 10);
+        if (*end == '\0') return 0;
+        parser->manager->min_itad_orig_int = strtoul(end, &end, 10);
+        if (*end == '\0') return 0;
+        parser->manager->min_route_advert_int = strtoul(end, &end, 10);
     } else {
         fprintf(parser->outf, "peer: unrecognized argument: %s\n", subcmd);
         return -1;
@@ -1153,9 +1180,9 @@ const cmd_def_t cmds_trip[] = {
     { "exit",           &cmd_exit,"exit current context", NULL },
     { "help",           &cmd_help,"show command help", NULL },
     { "ls-id",          &cmd_config_trip_lsid, "set local id", "ls-id <id in dotted notation" },
-    { "timers",         &cmd_config_trip_timers, "set timers", "timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]" },
+    { "timers",         &cmd_config_trip_timers, "set default timers", "timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]" },
     { "default",        &cmd_config_trip_default, "set defaults", "default { local-preference | metric } <value>" },
-    { "peer",           &cmd_config_trip_peer, "add peer", "peer <host> { remote-itad <itad> [ trans-mode { send | recv | bidi } ] | route-map <map-name> }" },
+    { "peer",           &cmd_config_trip_peer, "add or edit peer", "peer <host> { remote-itad <itad> [ trans-mode { send | recv | bidi } ] | route-map <map-name> | timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]}" },
     { NULL,             NULL, NULL, NULL }
 };
 
