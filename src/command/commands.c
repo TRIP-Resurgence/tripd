@@ -203,7 +203,7 @@ cmd_show(parser_t *parser, int no, char *args)
         for (int i = 0; i < locator->peers_size; i++)
             printf("  %8d  %-30s %-6d %-12s\n", locator->peers[i].itad,
                 sockaddr6_str(&locator->peers[i].addr),
-                locator->peers[i].hold,
+                locator->peers[i].timers.hold,
                 capinfo_transmode_strs[locator->peers[i].transmode]);
     } else if (strcmp(subcmd, "session") == 0) {
         const manager_t *manager = parser->manager;
@@ -953,24 +953,24 @@ cmd_config_trip_timers(parser_t *parser, int no, char *args)
     }
 
     char *end = NULL;
-    parser->manager->hold = strtoul(args, &end, 10);
+    parser->manager->timers.hold = strtoul(args, &end, 10);
     if (end == args) {
         printf("timers: number expected\n");
     }
     if (*end == '\0') return 0;
-    parser->manager->keepalive = strtoul(end, &end, 10);
+    parser->manager->timers.keepalive = strtoul(end, &end, 10);
     if (*end == '\0') return 0;
-    if (parser->manager->keepalive < 3)
+    if (parser->manager->timers.keepalive < 3)
         printf("timers: keepalive too low\n");
-    parser->manager->connect_retry = strtoul(end, &end, 10);
+    parser->manager->timers.connect_retry = strtoul(end, &end, 10);
     if (*end == '\0') return 0;
-    parser->manager->max_purge_time = strtoul(end, &end, 10);
+    parser->manager->timers.max_purge_time = strtoul(end, &end, 10);
     if (*end == '\0') return 0;
-    parser->manager->disable_time = strtoul(end, &end, 10);
+    parser->manager->timers.disable_time = strtoul(end, &end, 10);
     if (*end == '\0') return 0;
-    parser->manager->min_itad_orig_int = strtoul(end, &end, 10);
+    parser->manager->timers.min_itad_orig_int = strtoul(end, &end, 10);
     if (*end == '\0') return 0;
-    parser->manager->min_route_advert_int = strtoul(end, &end, 10);
+    parser->manager->timers.min_route_advert_int = strtoul(end, &end, 10);
     return 0;
 }
 
@@ -1111,24 +1111,24 @@ cmd_config_trip_peer(parser_t *parser, int no, char *args)
         }
         
         char *end = NULL;
-        peer->hold = strtoul(args, &end, 10);
+        peer->timers.hold = strtoul(args, &end, 10);
         if (end == args) {
             printf("peer timers: number expected\n");
         }
         if (*end == '\0') return 0;
-        parser->manager->keepalive = strtoul(end, &end, 10);
+        peer->timers.keepalive = strtoul(end, &end, 10);
         if (*end == '\0') return 0;
-        if (parser->manager->keepalive < 3)
+        if (peer->timers.keepalive < 3)
             printf("peer timers: keepalive too low\n");
-        parser->manager->connect_retry = strtoul(end, &end, 10);
+        peer->timers.connect_retry = strtoul(end, &end, 10);
         if (*end == '\0') return 0;
-        parser->manager->max_purge_time = strtoul(end, &end, 10);
+        peer->timers.max_purge_time = strtoul(end, &end, 10);
         if (*end == '\0') return 0;
-        parser->manager->disable_time = strtoul(end, &end, 10);
+        peer->timers.disable_time = strtoul(end, &end, 10);
         if (*end == '\0') return 0;
-        parser->manager->min_itad_orig_int = strtoul(end, &end, 10);
+        peer->timers.min_itad_orig_int = strtoul(end, &end, 10);
         if (*end == '\0') return 0;
-        parser->manager->min_route_advert_int = strtoul(end, &end, 10);
+        peer->timers.min_route_advert_int = strtoul(end, &end, 10);
     } else {
         fprintf(parser->outf, "peer: unrecognized argument: %s\n", subcmd);
         return -1;

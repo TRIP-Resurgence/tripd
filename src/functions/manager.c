@@ -263,7 +263,7 @@ handle_open(manager_t *m, session_t *s, msg_t *msg,
 
 
     s->id = open->open_id;
-    s->hold = MIN(s->peer->hold, open->open_hold);
+    s->hold = MIN(s->peer->timers.hold, open->open_hold);
     s->keepalive = s->hold / 3;
 
     /* now add session to manager */
@@ -414,7 +414,7 @@ peer_handshake(void *arg)
     /* send OPEN */
     PROTO_TRY(
         new_msg_open(buff, MAX_MSG_SIZE,
-            s->peer->hold, m->itad, m->id,
+            s->peer->timers.hold, m->itad, m->id,
             supported_routetypes, supported_routetypes_size,
             s->peer->transmode),
         res, goto proto_error
@@ -705,13 +705,13 @@ manager_new(const struct sockaddr_in6 *listen_addr)
     memset(m->sessions, 0, m->sessions_capacity * sizeof(session_t*));
     m->sessions_mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 
-    m->connect_retry = TIMER_CONNECT_RETRY;
-    m->hold = TIMER_HOLD_TIME;
-    m->keepalive = TIMER_KEEPALIVE;
-    m->max_purge_time = TIMER_MAX_PURGE_TIME;
-    m->disable_time = TIMER_DISABLE_TIME;
-    m->min_itad_orig_int = TIMER_MIN_ITAD_ORIG_INT;
-    m->min_route_advert_int = TIMER_MIN_ROUTE_ADVERT_INT;
+    m->timers.connect_retry = TIMER_CONNECT_RETRY;
+    m->timers.hold = TIMER_HOLD_TIME;
+    m->timers.keepalive = TIMER_KEEPALIVE;
+    m->timers.max_purge_time = TIMER_MAX_PURGE_TIME;
+    m->timers.disable_time = TIMER_DISABLE_TIME;
+    m->timers.min_itad_orig_int = TIMER_MIN_ITAD_ORIG_INT;
+    m->timers.min_route_advert_int = TIMER_MIN_ROUTE_ADVERT_INT;
 
     m->def_local_pref = DEF_LOCAL_PREF;
     m->def_metric = DEF_METRIC;
@@ -765,7 +765,7 @@ connect_loop(void *arg)
     /* create socket every time we try to connect */
     s->fd = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
 
-    time_t connect_retry = m->connect_retry;
+    time_t connect_retry = m->timers.connect_retry;
 
     while (1) {
         if (s->mark_stop_init)
@@ -815,8 +815,8 @@ manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
     uint32_t itad, int transmode)
 {
     /* add peer to peer locator */
-    const peer_t *peer = locator_add(manager->locator, addr, itad,
-        manager->hold, transmode);
+    peer_t *peer = locator_add(manager->locator, addr, itad,
+        &manager->timers, transmode);
     
     /* create session object and hand off to connect loop */
     session_t *s = malloc(sizeof(session_t));

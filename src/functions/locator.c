@@ -45,7 +45,7 @@ locator_new()
 
 peer_t *
 locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
-    uint32_t itad, uint16_t hold, capinfo_transmode_t transmode)
+    uint32_t itad, const timers_t *timers, capinfo_transmode_t transmode)
 {
     if (locator->peers_size + 1 > locator->peers_capacity) {
         locator->peers_capacity *= 2;
@@ -53,13 +53,14 @@ locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
             locator->peers_capacity * sizeof(peer_t));
     }
 
-    peer_t *p= &locator->peers[locator->peers_size++];
+    peer_t *p = &locator->peers[locator->peers_size++];
+    memset(p, 0, sizeof(peer_t));
     memcpy(&p->addr, addr, sizeof(struct sockaddr_in6));
     p->itad = itad;
-    p->hold = hold;
     p->transmode = transmode;
     p->routemap_in = NULL;
     p->routemap_out = NULL;
+    p->timers = *timers;
     
     return p;
 }

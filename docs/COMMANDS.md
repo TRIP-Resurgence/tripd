@@ -206,6 +206,12 @@ Define route map
  - map-tag: map identifier to apply
  - `{ in | out }`: direction
 
+#### `peer <host> timers <hold> [keep-alive] [connect-retry] [max-purge-time] [disable-time] [min-itad-orig-int] [min-route-advert-int]`
+
+Define timers for a specific peer
+
+Refer to `timers` in TRIP context
+
 ## Doubts
 
  - Should peer be neighbor
