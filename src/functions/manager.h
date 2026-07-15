@@ -28,40 +28,79 @@
 #ifndef _MANAGER_H
 #define _MANAGER_H
 
+#include <pthread.h>
 #include <netinet/in.h>
+#include <stdatomic.h>
 
 #include "session.h"
 #include "locator.h"
+#include <db/trib.h>
+#include <db/pib.h>
+#include <api/server.h>
+#include <enum/enum.h>
 
 
 /** \brief Manager object */
 typedef struct {
-    pthread_t   thread;
-    int         fd;
+    int             run;                /**< run threads = 1 */
+    pthread_t       listen_thread;
+    pthread_t       maintenance_thread;
+    pthread_t       update_thread;
+    pthread_mutex_t update_mut;
+    pthread_cond_t  update_cond;
+    atomic_int      update_pending;
 
-    uint32_t    itad;
-    uint32_t    id;
-    uint16_t    hold;
-    locator_t  *locator;
+    int             fd;
 
-    session_t **sessions;
-    size_t      sessions_size;
+    /* Local */
+    uint32_t        itad;
+    uint32_t        id;
+
+    /* Peer information */
+    locator_t      *locator;
+
+    /* Telephony Routing Information Base */
+    trib_t         *trib;
+    /* Policy Information Base */
+    pib_t          *pib;
+
+    /* Query interfaces */
+    server_t       *server;
+    enum_t         *enum_emu;
+
+    /* Session instances */
+    session_t     **sessions;
+    size_t          sessions_size, sessions_capacity;
+    pthread_mutex_t sessions_mutex;
+
+    /* Timers peer default  */
+    timers_t        timers;
+
+    /* Default attribute values */
+    uint32_t        def_local_pref;
+    uint32_t        def_metric;
 } manager_t;
 
+
+/** \brief Lookup session by locator peer */
+session_t *manager_session_lookup_address(const manager_t *m,
+    const struct sockaddr_in6 *addr);
 
 /** \brief Create manager and bind socket */
 manager_t *manager_new(const struct sockaddr_in6 *listen_addr);
 
 /** \brief Add known peer to underlaying locator */
-void manager_add_peer(manager_t *manager, const struct sockaddr_in6 *addr,
-    uint32_t itad);
+void manager_peer_add(manager_t *manager, const struct sockaddr_in6 *addr,
+    uint32_t itad, int transmode);
 
-/** \brief Lookup session by ITAD and ID */
-session_t *manager_lookup_itad_id(manager_t manager, uint32_t itad,
-    uint32_t id);
+/** \brief Find known peer by address */
+peer_t *manager_peer_find(manager_t *manager, const struct sockaddr_in6 *addr);
 
 /** \brief Run accept loop in thread */
 void manager_run(manager_t *manager);
+
+/** \brief Schedule UPDATEs */
+void manager_schedule_update(manager_t *manager);
 
 /** \brief Stop accept loop */
 void manager_stop(manager_t *manager);

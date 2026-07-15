@@ -1,0 +1,73 @@
+name: linux-build
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+env:
+  BUILD_TYPE: Release
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: sudo apt-get install -y build-essential cmake graphviz
+
+    - name: Install doxygen
+      run: |
+        wget https://www.doxygen.nl/files/doxygen-1.16.1.linux.bin.tar.gz
+        tar xf doxygen-1.16.1.linux.bin.tar.gz 
+        echo "doxygen-1.16.1/bin" >> "$GITHUB_PATH"
+
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_INSTALL_PREFIX=/usr
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+    - name: Upload docs
+      id: deployment
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: ${{github.workspace}}/build/doxygen/html
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: ctest -C ${{env.BUILD_TYPE}} -T test -T coverage
+
+    - name: Package
+      run: cpack --config build/CPackConfig.cmake --verbose -G "TGZ;DEB"
+
+    - name: Upload DEB artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tripd-linux-deb
+        path: ./tripd*.deb
+
+    - name: Upload TGZ artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tripd-linux-tarball
+        path: ./tripd*.tar.gz
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

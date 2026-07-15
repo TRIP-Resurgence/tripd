@@ -27,46 +27,13 @@
 #ifndef _SESSION_H
 #define _SESSION_H
 
+#include "locator.h"
 #include <protocol/protocol.h>
+#include <util/util.h>
+#include <db/trib.h>
 
 #include <netinet/in.h>
 
-/** \brief Send helper macro 
- *
- * \param o Operation
- * \param a Error condition action
- * */
-#define SOCK_TRY_SEND(o, a) \
-    if (o < 0) { \
-        ERROR("send(): %s", strerror(errno)); \
-        a; \
-    }
-
-/** \brief Receive helper macro
- *
- * \param fd Socket
- * \param buff Receive buffer
- * \param type Typename to receive
- * \param ation Error condition action
- */
-#define SOCK_TRY_RECV(fd, buff, type, action) \
-    toread = sizeof(type); \
-    while (1) { \
-        res = recv(fd, buff, toread, 0); \
-        if (res < 0) { \
-            ERROR("recv(): %s", strerror(errno)); \
-            action; break; \
-        } else if (res == 0) { \
-            DEBUG("connection closed by peer"); \
-            action; break; \
-        } else if (res < sizeof(type)) { \
-            buff += res; break; \
-            toread -= res; \
-            continue; \
-        } \
-        toread -= res; \
-        buff += res; break; \
-    }
 
 
 
@@ -85,20 +52,46 @@ extern const char *session_state_strs[];
 
 /** \brief Session object */
 typedef struct {
-    pthread_t               thread;
-    session_state_t         state;
-    uint32_t                itad, id;
-    uint16_t                hold;
+    pthread_t               thread;     /**< Session thread ID */
+    session_state_t         state;      /**< Session state */
+    int                     initiated;  /**< Initiated by local -> nonzero */
+    int                     mark_stop_init; /**< Tell initiating thread to
+                                            destroy its session and quit */
 
-    capinfo_transmode_t     transmode;
+    int                     fd;         /**< Session socket */
 
-    struct sockaddr_in6    *addr;
-    int                     fd;
+    /* negotiated */
+    uint16_t                hold;       /**< Negotiated hold timer */
+    uint16_t                keepalive;  /**< Negotiated hold timer */
 
-    uint32_t                peer_itad, peer_id;
+
+    const peer_t           *peer;       /**< From address */
+    uint32_t                id;         /**< Found in OPEN */
+
+    /* times */
+    time_t                  state_time;         /**< Time since entered state */
+    time_t                  last_read_time;     /**< Time of last read */
+    time_t                  last_write_time;    /**< Time of last write */
+
+    time_t                  last_orig_time;     /**< Last origination time */
+    time_t                  last_advert_time;   /**< Last advertisement time */
+
+    /* capabilities */
+    capinfo_transmode_t     transmode;        /**< Peer transmode */
+    capinfo_routetype_t    *routetypes;       /**< Supported route types */
+    size_t                  routetypes_count; /**< Supported route types count*/
+
+    /* adj tables */
+    table_t                 adj_trib_in;    /**< Adj-TRIB-in */
+    table_t                 adj_trib_out;   /**< Adj-TRIB-out */
 } session_t;
 
 
+/** \brief String that identifies session */
+const char *session_str(const session_t *s);
+
+/** \brief Change session state */
+void session_change_state(session_t *s, session_state_t new_state);
 
 /** \brief Send notification helper */
 int send_notification(int fd, int code, int subcode);
@@ -108,6 +101,12 @@ const char *id_str(uint32_t id);
 
 /** \brief Session loop */
 void *session_loop(void *arg);
+
+/** \brief Update session
+ *
+ * Send UPDATEs to peer according to new entries in Adj-TRIB-Out
+ */
+void session_update(const session_t *s, uint32_t local_id, uint32_t local_itad);
 
 /** \brief Shutdown socket, terminate connection and thread */
 void session_shutdown(session_t *session);

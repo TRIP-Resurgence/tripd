@@ -31,60 +31,6 @@
 #include <string.h>
 
 
-/* handler function pointer type */
-typedef int(*cmd_handler_t)(parser_t *parser, int no, char *args);
-
-/* command definition type */
-typedef struct {
-    const char     *cmd;
-    cmd_handler_t   cmd_handler;
-} cmd_def_t;
-
-/* command definitions per context */
-const cmd_def_t cmds_base[] = {
-    { "end",            &cmd_end },
-    { "exit",           &cmd_exit },
-    { "enable",         &cmd_enable },
-    { "configure",      &cmd_configure },
-    { "show",           &cmd_show },
-    { "shutdown",       &cmd_shutdown },
-    { NULL,             NULL }
-};
-
-const cmd_def_t cmds_config[] = {
-    { "end",            &cmd_end },
-    { "exit",           &cmd_exit },
-    { "log",            &cmd_config_log },
-    { "bind-address",   &cmd_config_bind },
-    { "prefix-list",    &cmd_config_prefixlist },
-    { "trip",           &cmd_config_trip },
-    { NULL,             NULL }
-};
-
-const cmd_def_t cmds_prefixlist[] = {
-    { "end",            &cmd_end },
-    { "exit",           &cmd_exit },
-    { "prefix",         &cmd_config_prefixlist_prefix },
-    { NULL,             NULL }
-};
-
-const cmd_def_t cmds_trip[] = {
-    { "end",            &cmd_end },
-    { "exit",           &cmd_exit },
-    { "ls-id",          &cmd_config_trip_lsid },
-    { "timers",         &cmd_config_trip_timers },
-    { "peer",           &cmd_config_trip_peer },
-    { NULL,             NULL }
-};
-
-const cmd_def_t *cmds[] = {
-    cmds_base,
-    cmds_config,
-    cmds_prefixlist,
-    cmds_trip
-};
-
-
 char *
 strip(char *s)
 {
@@ -100,7 +46,7 @@ parser_init(FILE *outf)
     static parser_t parser;
 
     parser.state.enabled = 0;
-    parser.state.ctx = CTX_BASE;
+    parser.state.ctx = CTX_ROOT;
 
     parser.outf = outf;
 
@@ -115,10 +61,12 @@ parser_parse_cmd(parser_t *parser, char *cmd)
     if (!*cmd || *cmd == '!' || *cmd == '#')
         return 0;
 
-    const cmd_def_t *ctx_cmds = cmds[parser->state.ctx];
+    const cmd_def_t *cmds = ctx_cmds[parser->state.ctx];
+
+    size_t cmdlen = strchr(cmd, ' ') - cmd;
 
     int no = 0;
-    if (strcmp("no", cmd) == 0) {
+    if (strlen(cmd) > 2 && strncmp("no", cmd, 2) == 0 && cmd[2] == ' ') {
         no = 1;
         cmd = strip(cmd + 2);
     }
@@ -129,10 +77,10 @@ parser_parse_cmd(parser_t *parser, char *cmd)
         return -1;
     }
 
-    for (size_t i = 0; ctx_cmds[i].cmd; i++)
-        if (strncmp(cmd, ctx_cmds[i].cmd, strlen(ctx_cmds[i].cmd)) == 0)
-            return ctx_cmds[i].cmd_handler(parser, no,
-                cmd + strlen(ctx_cmds[i].cmd));
+    for (size_t i = 0; cmds[i].cmd; i++)
+        if (strncmp(cmd, cmds[i].cmd, cmdlen) == 0)
+            return cmds[i].cmd_handler(parser, no,
+                cmd + strlen(cmds[i].cmd));
 
     fprintf(parser->outf, "unknown command: %s\n", cmd);
     return -1;
@@ -148,7 +96,8 @@ parser_parse_file(parser_t *parser, FILE *f)
 
     while (fgets(line, sizeof(line), f)) {
         line[strlen(line) - 1] = '\0';
-        parser_parse_cmd(parser, line);
+        if (parser_parse_cmd(parser, line) < 0)
+            return -1;
     }
 
     return 0;

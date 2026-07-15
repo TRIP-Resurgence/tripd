@@ -1,3 +1,5 @@
+<!--! [TOC] -->
+
 # tripd
 
 Modern TRIP (RFC 3219) LS routing daemon implementation in C99
@@ -13,11 +15,12 @@ make
 ./tripd <config file>
 ```
 
-## [Design](docs/DESIGN.md)
+## [Design](\ref autotoc_md19)
 
-## [Install](docs/INSTALL.md)
+## [Install](\ref autotoc_md22)
 
 ## [Homepage](https://tripresurgence.org)
 
 ## [Documentation](https://docs.tripresurgence.org)
+
 

@@ -20,12 +20,14 @@
 
 */
 
-/** \file */
+/** \file
+ * \brief Main entry point
+ */
 
 #include <protocol/protocol.h>
-
 #include <command/parser.h>
 #include <command/commands.h>
+#include <command/cli.h>
 #include <logging/logging.h>
 
 #include <stdlib.h>
@@ -36,7 +38,7 @@
 
 #include <unistd.h>
 
-#define DEFAULT_CONFIG_PATH "/usr/local/etc/tripd.conf"
+#define DEFAULT_CONFIG_PATH TRIPD_CONFIG
 
 
 static parser_t *g_parser = NULL;
@@ -46,7 +48,11 @@ static parser_t *g_parser = NULL;
 void
 print_usage(char *name)
 {
-    printf("usage: %s [config file]\n", name);
+    printf("usage: %s [options]\n"
+        "  --daemon|-d          daemonize (fork, detach controlling terminal)\n"
+        "  --console|-c         provide control console on calling terminal\n"
+        "  --config|-C file     config file\n"
+        , name);
 }
 
 /** \brief SIGINT handler
@@ -56,6 +62,7 @@ print_usage(char *name)
 void
 sigint_handler(int dummy)
 {
+    g_parser->state.enabled = 1;
     cmd_shutdown(g_parser, 0, NULL);
     exit(0);
 }
@@ -64,26 +71,45 @@ sigint_handler(int dummy)
 int
 main(int argc, char **argv)
 {
+    signal(SIGINT, sigint_handler);
+
     printf(
-        "tripd  Copyright (C) 2025  TRIP Resurgence Project\n"
+        "tripd " TRIPD_VERSION "\n"
+        "Copyright (C) 2025  TRIP Resurgence Project\n"
         "This program comes with ABSOLUTELY NO WARRANTY;\n"
         "This is free software, and you are welcome to redistribute it\n"
         "under certain conditions; type `show license' for details.\n\n");
 
-    if (argc > 2) {
-        print_usage(*argv);
-        return 1;
-    }
-
+    char *name = argv[0]; argv++;
+    int std_console = 0, daemonize = 0;
     const char *config_path = DEFAULT_CONFIG_PATH;
 
-    if (argc == 2)
-        config_path = argv[1];
+    while (*argv) {
+        if (strcmp(*argv, "--daemon") == 0 || strcmp(*argv, "-d") == 0) {
+            argv++;
+            daemonize = 1;
+        } else if (strcmp(*argv, "--console") == 0 || strcmp(*argv, "-c") == 0) {
+            argv++;
+            std_console = 1;
+        } else if (strcmp(*argv, "--config") == 0 || strcmp(*argv, "-C") == 0) {
+            argv++;
+            if (*argv) {
+                config_path = *argv;
+                argv++;
+            } else
+                goto arg_err;
+        } else {
+            goto arg_err;
+        }
+    }
 
-    signal(SIGINT, sigint_handler);
+    logging_init(stderr, LOG_DEBUG);    /* initialize in stderr debug */
 
-
-    logging_init(stderr, LOG_DEBUG);
+    /* fork off if prompted */
+    if (daemonize) {
+        if (daemon(1, 1) < 0)
+            fprintf(stderr, "daemon() failed: %s\n", strerror(errno));
+    }
 
     g_parser = parser_init(stdout);
 
@@ -97,13 +123,28 @@ main(int argc, char **argv)
             config_path, strerror(errno));
         return 1;
     }
-    parser_parse_file(g_parser, conff);
-    fclose(conff);
 
-    while (1) {
-        sleep(1000);
+    if (parser_parse_file(g_parser, conff) < 0)
+        return 1;
+    
+    fclose(conff);
+    
+    parser_parse_cmd(g_parser, "end");
+
+    if (std_console) {
+        /* run interactive command line interface */
+        if (cli_run(g_parser))
+            return 1;
     }
 
+    /* TODO: control socket */
+    while (1)
+        sleep(1);
+
     return 0;
+
+arg_err:
+    print_usage(name);
+    return 1;
 }
 
