@@ -33,6 +33,17 @@
 #include <netinet/in.h>
 
 
+/** \brief Timers */
+typedef struct {
+    uint16_t                hold;
+    uint16_t                keepalive;
+    int                     connect_retry;
+    int                     max_purge_time;
+    int                     disable_time;
+    int                     min_itad_orig_int;
+    int                     min_route_advert_int;
+} timers_t;
+
 /** \brief Known peer info object */
 typedef struct {
     struct sockaddr_in6     addr;
@@ -41,7 +52,7 @@ typedef struct {
     capinfo_transmode_t     transmode;
 
     /* timers */
-    uint16_t                hold;
+    timers_t                timers;
 
     /* policy */
     routemap_t             *routemap_in, *routemap_out;
@@ -59,7 +70,7 @@ locator_t *locator_new();
 
 /** \brief Add a known peer */
 peer_t *locator_add(locator_t *locator, const struct sockaddr_in6 *addr,
-    uint32_t itad, uint16_t hold, capinfo_transmode_t transmode);
+    uint32_t itad, const timers_t *timers, capinfo_transmode_t transmode);
 
 /** \brief Lookup peer by its address */
 peer_t *locator_lookup(locator_t *locator,
